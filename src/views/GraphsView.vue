@@ -533,6 +533,161 @@ const formattedMinValue = computed(() => (hasData.value ? formatValue(minValue.v
   flex-wrap: wrap;
   gap: 1.5rem;
   color: #52606d;
+  max-width: 32rem;
+}
+
+.graphs__controls {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 1rem;
+  align-items: flex-end;
+}
+
+.control {
+  display: flex;
+  flex-direction: column;
+  font-size: 0.875rem;
+  color: #52606d;
+  gap: 0.35rem;
+}
+
+.control select {
+  min-width: 7rem;
+  border-radius: 0.5rem;
+  border: 1px solid #d3dae6;
+  padding: 0.45rem 0.75rem;
+  font-size: 0.95rem;
+  color: #1f2933;
+  background: #f8fafc;
+}
+
+.graphs__body {
+  min-height: 20rem;
+}
+
+.state {
+  display: grid;
+  place-items: center;
+  text-align: center;
+  gap: 0.5rem;
+  color: #52606d;
+  padding: 3rem 1rem;
+  border: 1px dashed #d3dae6;
+  border-radius: 0.75rem;
+}
+
+.state--error {
+  color: #b42318;
+  border-color: rgba(180, 35, 24, 0.35);
+  background: rgba(180, 35, 24, 0.06);
+}
+
+.state--loading {
+  color: #1f2933;
+}
+
+.loader {
+  width: 2rem;
+  height: 2rem;
+  border-radius: 50%;
+  border: 3px solid rgba(37, 99, 235, 0.2);
+  border-top-color: #2563eb;
+  animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.chart-wrapper {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+
+.chart {
+  width: 100%;
+  max-width: 100%;
+  height: auto;
+  overflow: visible;
+}
+
+.axes line {
+  stroke: #cbd5f5;
+  stroke-width: 1;
+}
+
+.axis-label {
+  fill: #1f2933;
+  font-size: 0.9rem;
+  font-weight: 600;
+}
+
+.axis-label--y {
+  writing-mode: vertical-rl;
+  transform: rotate(180deg);
+}
+
+.ticks line {
+  stroke: rgba(148, 163, 184, 0.4);
+  stroke-width: 1;
+}
+
+.tick-label {
+  fill: #475569;
+  font-size: 0.75rem;
+  text-anchor: middle;
+}
+
+.y-ticks .tick-label {
+  text-anchor: end;
+}
+
+.line {
+  fill: none;
+  stroke: #2563eb;
+  stroke-width: 2.5;
+  stroke-linejoin: round;
+  stroke-linecap: round;
+}
+
+.area {
+  fill: rgba(37, 99, 235, 0.12);
+}
+
+.chart-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 1.5rem;
+  color: #52606d;
+}
+
+.chart-meta span {
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  font-size: 0.7rem;
+}
+
+.chart-meta strong {
+  display: block;
+  font-size: 1.05rem;
+  color: #1f2933;
+  margin-top: 0.25rem;
+}
+
+@media (max-width: 768px) {
+  .graphs {
+    padding: 1.5rem;
+  }
+
+  .control select {
+    min-width: 6rem;
+  }
 }
 
 .chart-meta span {
