@@ -168,7 +168,7 @@ async function safeClose() {
 // Import principal
 // ───────────────────────────────────────────────────────────────────────────────
 async function importFolder(dir) {
-  const files = await globby(['**/*'], { cwd: dir, absolute: true, onlyFiles: true });
+    const files = await globby(['**/*.m'], { cwd: dir, absolute: true, onlyFiles: true });
 
   // Ordena por nombre para tener progresión temporal predecible (suele ayudar al servidor)
   files.sort((a, b) => a.localeCompare(b, undefined, { numeric: true, sensitivity: 'base' }));
