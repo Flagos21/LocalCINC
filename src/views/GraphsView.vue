@@ -3,20 +3,19 @@
     <header class="graphs__header">
       <div class="graphs__intro">
         <h2>Evolución magnética</h2>
-        <p>Serie temporal de la componente {{ componentLabel }} registrada por la estación CHI.</p>
+        <p>Serie temporal de las componentes H y ΔH registradas por la estación CHI.</p>
       </div>
       <form class="graphs__controls" @submit.prevent>
         <label class="control control--range">
           <span>Rango de fechas</span>
           <DateRangePicker v-model="dateRange" :max="today" />
         </label>
-        <label class="control control--component">
-          <span>Componente</span>
-          <select v-model="component">
-            <option value="H">H</option>
-            <option value="deltaH">ΔH</option>
-          </select>
-        </label>
+        <ul v-if="legendEntries.length" class="graphs__legend" aria-label="Series visualizadas">
+          <li v-for="entry in legendEntries" :key="entry.id">
+            <span class="graphs__legend-dot" :style="{ '--legend-color': entry.color }" aria-hidden="true" />
+            <span>{{ entry.name }}</span>
+          </li>
+        </ul>
         <div class="control control--status" role="status">
           <span>Rango visible</span>
           <strong>{{ visibleRangeLabel }}</strong>
@@ -51,7 +50,7 @@
         v-else
         ref="chartRef"
         class="graphs__chart"
-        :points="chartPoints"
+        :series="chartSeries"
         unit="nT"
         :y-label="chartYLabel"
         x-label="Tiempo"
@@ -81,7 +80,6 @@ const today = toInputDate(todayDate);
 
 const chartRef = ref();
 const visibleDomain = ref({ start: null, end: null });
-const component = ref('H');
 
 const toStartOfDayISO = (value) => {
   if (!value) return '';
@@ -152,55 +150,90 @@ const rawPoints = computed(() => {
 
 const hasData = computed(() => rawPoints.value.length > 0);
 
-const componentLabel = computed(() => (component.value === 'deltaH' ? 'ΔH' : 'H'));
-
 const deltaBaseline = computed(() => {
-  if (component.value !== 'deltaH') return 0;
   const data = rawPoints.value;
   if (!data.length) return 0;
   const total = data.reduce((acc, point) => acc + point.value, 0);
   return total / data.length;
 });
 
-const chartPoints = computed(() => {
+const chartSeries = computed(() => {
   const data = rawPoints.value;
   if (!data.length) return [];
 
-  if (component.value === 'deltaH') {
-    const baseline = deltaBaseline.value;
-    return data.map((point) => ({
-      date: point.date,
-      value: point.value - baseline,
-      rawValue: point.value,
-      baseline
-    }));
-  }
+  const baseline = deltaBaseline.value;
 
-  return data.map((point) => ({ ...point, rawValue: point.value }));
+  return [
+    {
+      id: 'h',
+      name: 'H',
+      color: '#2563eb',
+      points: data.map((point) => ({
+        date: point.date,
+        value: point.value,
+        rawValue: point.value
+      }))
+    },
+    {
+      id: 'deltaH',
+      name: 'ΔH',
+      color: '#f97316',
+      points: data.map((point) => ({
+        date: point.date,
+        value: point.value - baseline,
+        rawValue: point.value,
+        baseline
+      }))
+    }
+  ];
 });
 
-const chartYLabel = computed(() => `${componentLabel.value} (nT)`);
+const legendEntries = computed(() =>
+  chartSeries.value.map((serie) => ({
+    id: serie.id,
+    name: serie.name,
+    color: serie.color
+  }))
+);
 
-const tooltipFormatter = (point, { formatValue }) => {
-  if (!point) return '';
+const chartYLabel = computed(() => 'H y ΔH (nT)');
+
+const tooltipFormatter = (payload, { formatValue }) => {
+  if (!payload || !payload.entries?.length) return '';
+
   const timeFormatter = new Intl.DateTimeFormat('es-CL', {
     dateStyle: 'medium',
     timeStyle: 'short'
   });
 
-  const formattedDate = timeFormatter.format(point.date);
+  const formattedDate = timeFormatter.format(payload.date);
 
-  if (component.value === 'deltaH') {
-    return `
-      <strong>${formattedDate}</strong>
-      <div>ΔH: ${formatValue(point.value)}</div>
-      <div>H: ${formatValue(point.rawValue)}</div>
-    `.trim();
-  }
+  const lines = payload.entries
+    .map(({ series, point }) => {
+      if (series.id === 'deltaH') {
+        return `
+          <div class="chart-tooltip__item">
+            <span class="chart-tooltip__indicator" style="background:${series.color}"></span>
+            <div class="chart-tooltip__item-content">
+              <span>${series.name}: ${formatValue(point.value)}</span>
+              <small>H: ${formatValue(point.rawValue)}</small>
+            </div>
+          </div>
+        `;
+      }
+
+      return `
+        <div class="chart-tooltip__item">
+          <span class="chart-tooltip__indicator" style="background:${series.color}"></span>
+          <span>${series.name}: ${formatValue(point.value)}</span>
+        </div>
+      `;
+    })
+    .join('');
 
   return `
     <strong>${formattedDate}</strong>
-    <div>H: ${formatValue(point.value)}</div>
+    ${lines}
   `.trim();
 };
 
@@ -305,6 +338,34 @@ const isResetDisabled = computed(() => {
   align-items: center;
 }
 
+.graphs__legend {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  list-style: none;
+  margin: 0;
+  padding: 0.45rem 0.85rem;
+  border-radius: 0.65rem;
+  background: rgba(148, 163, 184, 0.15);
+  color: #1f2933;
+  font-size: 0.85rem;
+  font-weight: 500;
+}
+
+.graphs__legend li {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+}
+
+.graphs__legend-dot {
+  width: 0.75rem;
+  height: 0.75rem;
+  border-radius: 999px;
+  background: var(--legend-color, #2563eb);
+  box-shadow: 0 0 0 2px rgba(255, 255, 255, 0.7);
+}
+
 .control {
   display: flex;
   flex-direction: column;
@@ -320,24 +381,6 @@ const isResetDisabled = computed(() => {
 .control--status {
   font-size: 0.85rem;
   color: #4b5563;
-}
-
-.control--component select {
-  min-width: 8rem;
-  padding: 0.55rem 0.75rem;
-  border-radius: 0.65rem;
-  border: 1px solid rgba(148, 163, 184, 0.4);
-  background: #f8fafc;
-  color: #1f2933;
-  font-size: 0.9rem;
-  font-weight: 500;
-  transition: border-color 0.2s ease, box-shadow 0.2s ease;
-}
-
-.control--component select:focus-visible {
-  outline: none;
-  border-color: rgba(37, 99, 235, 0.8);
-  box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.15);
 }
 
 .control--status strong {

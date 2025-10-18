@@ -3,7 +3,7 @@ import { onBeforeUnmount, onMounted, ref, watch } from 'vue';
 import * as d3 from 'd3';
 
 const props = defineProps({
-  points: {
+  series: {
     type: Array,
     default: () => []
   },
@@ -13,7 +13,7 @@ const props = defineProps({
   },
   yLabel: {
     type: String,
-    default: 'H (nT)'
+    default: 'Valor (nT)'
   },
   xLabel: {
     type: String,
@@ -39,9 +39,9 @@ let width = 0;
 let svg;
 let xAxisGroup;
 let yAxisGroup;
-let linePath;
+let linesGroup;
 let pointsGroup;
-let focusCircle;
+let focusGroup;
 let overlay;
 let tooltip;
 let zoomBehavior;
@@ -52,23 +52,105 @@ let zeroLine;
 let gridGroup;
 
 const clipPathId = `clip-${Math.random().toString(36).slice(2, 10)}`;
-const gradientId = `gradient-${Math.random().toString(36).slice(2, 10)}`;
 const MS_IN_DAY = 1000 * 60 * 60 * 24;
+
+const DEFAULT_COLORS = ['#2563eb', '#f97316', '#14b8a6', '#8b5cf6', '#f973ab', '#facc15'];
 
 const xScaleBase = d3.scaleTime();
 const yScale = d3.scaleLinear();
 
-let basePoints = [];
+let baseSeries = [];
+let primarySeries = null;
+let timePoints = [];
 let currentTransform = d3.zoomIdentity;
 let effectiveX = xScaleBase.copy();
 
-const sanitizePoints = (points) => {
-  if (!Array.isArray(points)) return [];
-  return points
-    .filter((point) =>
-      point && point.date instanceof Date && !Number.isNaN(point.date.getTime()) && Number.isFinite(point.value)
-    )
-    .sort((a, b) => a.date.getTime() - b.date.getTime());
+const sanitizeSeries = (series) => {
+  if (!Array.isArray(series)) return [];
+
+  return series
+    .map((serie, index) => {
+      const rawPoints = Array.isArray(serie?.points) ? serie.points : [];
+      const sanitizedPoints = rawPoints
+        .filter(
+          (point) =>
+            point && point.date instanceof Date && !Number.isNaN(point.date.getTime()) && Number.isFinite(point.value)
+        )
+        .sort((a, b) => a.date.getTime() - b.date.getTime())
+        .map((point) => ({ ...point }));
+
+      if (!sanitizedPoints.length) {
+        return null;
+      }
+
+      const color = serie?.color || DEFAULT_COLORS[index % DEFAULT_COLORS.length];
+      const id = serie?.id ?? `serie-${index}`;
+      const name = serie?.name ?? `Serie ${index + 1}`;
+
+      return {
+        id,
+        name,
+        color,
+        points: sanitizedPoints
+      };
+    })
+    .filter(Boolean);
+};
+
+const computeUnifiedTimes = (series) => {
+  const times = new Set();
+  series.forEach((serie) => {
+    serie.points.forEach((point) => {
+      times.add(point.date.getTime());
+    });
+  });
+
+  return Array.from(times)
+    .sort((a, b) => a - b)
+    .map((timestamp) => new Date(timestamp));
+};
+
+const getTimeExtentFromSeries = (series) => {
+  if (!series.length) return null;
+
+  const allDates = series.flatMap((serie) => serie.points.map((point) => point.date));
+  if (!allDates.length) return null;
+
+  const extent = d3.extent(allDates);
+  const [start, end] = extent;
+
+  if (!start || !end) return null;
+
+  if (start.getTime() === end.getTime()) {
+    const padding = 30 * 60 * 1000;
+    return [new Date(start.getTime() - padding), new Date(end.getTime() + padding)];
+  }
+
+  return extent;
+};
+
+const getValueExtentFromSeries = (series) => {
+  if (!series.length) return [-1, 1];
+
+  const allValues = series.flatMap((serie) => serie.points.map((point) => point.value));
+  if (!allValues.length) return [-1, 1];
+
+  const extent = d3.extent(allValues);
+  let [min, max] = extent;
+
+  if (min === undefined || max === undefined) {
+    min = 0;
+    max = 1;
+  }
+
+  if (min === max) {
+    const padding = Math.max(Math.abs(min), 1) * 0.1;
+    return [min - padding, max + padding];
+  }
+
+  const range = max - min;
+  const padding = range * 0.1;
+  return [min - padding, max + padding];
 };
 
 const createTimeTickConfig = (start, end) => {
@@ -133,46 +215,6 @@ const createTimeTickConfig = (start, end) => {
   };
 };
 
-const getTimeExtent = (points) => {
-  if (!points.length) {
-    return null;
-  }
-  const extent = d3.extent(points, (point) => point.date);
-  const [start, end] = extent;
-  if (!start || !end) {
-    return null;
-  }
-
-  if (start.getTime() === end.getTime()) {
-    const padding = 30 * 60 * 1000; // 30 minutos a cada lado
-    return [new Date(start.getTime() - padding), new Date(end.getTime() + padding)];
-  }
-
-  return extent;
-};
-
-const getValueExtent = (points) => {
-  if (!points.length) {
-    return [-1, 1];
-  }
-
-  const extent = d3.extent(points, (point) => point.value);
-  let [min, max] = extent;
-  if (min === undefined || max === undefined) {
-    min = 0;
-    max = 1;
-  }
-
-  if (min === max) {
-    const padding = Math.max(Math.abs(min), 1) * 0.1;
-    return [min - padding, max + padding];
-  }
-
-  const range = max - min;
-  const padding = range * 0.1;
-  return [min - padding, max + padding];
-};
-
 const updateScales = () => {
   const { height, margin } = dimensions;
   xScaleBase.range([margin.left, width - margin.right]);
@@ -180,7 +222,12 @@ const updateScales = () => {
 
   if (svg) {
     svg.attr('width', width).attr('height', height);
-    svg.select(`#${clipPathId}-rect`).attr('x', margin.left).attr('y', margin.top).attr('width', Math.max(0, width - margin.left - margin.right)).attr('height', Math.max(0, height - margin.top - margin.bottom));
+    svg
+      .select(`#${clipPathId}-rect`)
+      .attr('x', margin.left)
+      .attr('y', margin.top)
+      .attr('width', Math.max(0, width - margin.left - margin.right))
+      .attr('height', Math.max(0, height - margin.top - margin.bottom));
     if (xLabelElement) {
       xLabelElement
         .attr('x', margin.left + Math.max(0, width - margin.left - margin.right) / 2)
@@ -209,10 +256,12 @@ const renderChart = (transform = currentTransform) => {
     return;
   }
 
-  if (!basePoints.length) {
-    linePath?.attr('d', null);
-    pointsGroup?.selectAll('circle').remove();
-    focusCircle?.attr('display', 'none');
+  const { margin } = dimensions;
+
+  if (!baseSeries.length) {
+    linesGroup?.selectAll('.chart-line').remove();
+    pointsGroup?.selectAll('.chart-points-series').remove();
+    focusGroup?.selectAll('circle').remove();
     tooltip?.style('opacity', 0);
     zeroLine?.attr('display', 'none');
     gridGroup?.selectAll('line').remove();
@@ -222,24 +271,73 @@ const renderChart = (transform = currentTransform) => {
     return;
   }
 
-  const { margin } = dimensions;
   effectiveX = transform.rescaleX(xScaleBase);
-  const line = d3
+
+  const lineGenerator = d3
     .line()
-    .defined((d) => Number.isFinite(d.value))
-    .x((d) => effectiveX(d.date))
-    .y((d) => yScale(d.value));
+    .defined((point) => Number.isFinite(point.value))
+    .x((point) => effectiveX(point.date))
+    .y((point) => yScale(point.value));
 
-  linePath.datum(basePoints).attr('d', line);
+  const lines = linesGroup.selectAll('.chart-line').data(baseSeries, (serie) => serie.id);
 
-  pointsGroup
-    .selectAll('circle')
-    .data(basePoints)
-    .join('circle')
-    .attr('class', 'chart-point')
-    .attr('r', 3)
-    .attr('cx', (d) => effectiveX(d.date))
-    .attr('cy', (d) => yScale(d.value));
+  lines
+    .join(
+      (enter) =>
+        enter
+          .append('path')
+          .attr('class', 'chart-line')
+          .attr('stroke', (serie) => serie.color),
+      (update) => update,
+      (exit) => exit.remove()
+    )
+    .attr('d', (serie) => lineGenerator(serie.points));
+
+  const seriesPoints = pointsGroup.selectAll('.chart-points-series').data(baseSeries, (serie) => serie.id);
+
+  seriesPoints.exit().remove();
+
+  seriesPoints
+    .join((enter) => enter.append('g').attr('class', 'chart-points-series'), (update) => update)
+    .each(function (serie) {
+      const selection = d3
+        .select(this)
+        .selectAll('circle')
+        .data(serie.points, (point) => point.date.getTime());
+
+      selection
+        .join(
+          (enter) =>
+            enter
+              .append('circle')
+              .attr('class', 'chart-point')
+              .attr('r', 3),
+          (update) => update,
+          (exit) => exit.remove()
+        )
+        .attr('fill', serie.color)
+        .attr('stroke', () => {
+          const color = d3.color(serie.color) ?? d3.color('#ffffff');
+          return color ? color.brighter(1.5).formatHex() : '#ffffff';
+        })
+        .attr('cx', (point) => effectiveX(point.date))
+        .attr('cy', (point) => yScale(point.value));
+    });
+
+  const focusSelection = focusGroup.selectAll('circle').data(baseSeries, (serie) => serie.id);
+
+  focusSelection
+    .join(
+      (enter) =>
+        enter
+          .append('circle')
+          .attr('class', 'chart-focus')
+          .attr('r', 5)
+          .attr('display', 'none'),
+      (update) => update,
+      (exit) => exit.remove()
+    )
+    .attr('fill', (serie) => serie.color);
 
   const [domainStart, domainEnd] = effectiveX.domain();
   const tickConfig = createTimeTickConfig(domainStart, domainEnd);
@@ -304,11 +402,26 @@ const renderChart = (transform = currentTransform) => {
   emit('update:visible-domain', effectiveX.domain());
 };
 
-const applyData = (points) => {
+const applyData = (series) => {
   hideTooltip();
-  basePoints = sanitizePoints(points);
-  const timeExtent = getTimeExtent(basePoints);
-  const valueExtent = getValueExtent(basePoints);
+  baseSeries = sanitizeSeries(series);
+
+  if (!baseSeries.length) {
+    primarySeries = null;
+    timePoints = [];
+    renderChart();
+    return;
+  }
+
+  primarySeries = baseSeries.reduce((acc, serie) => {
+    if (!acc) return serie;
+    return serie.points.length > acc.points.length ? serie : acc;
+  }, null);
+
+  timePoints = computeUnifiedTimes(baseSeries);
+
+  const timeExtent = getTimeExtentFromSeries(baseSeries);
+  const valueExtent = getValueExtentFromSeries(baseSeries);
 
   if (!timeExtent) {
     renderChart();
@@ -336,73 +449,142 @@ const formatValue = (value) => {
   return `${d3.format('+.2f')(value)} ${props.unit}`;
 };
 
-const getTooltipContent = (point) => {
-  if (!point) return '';
+const getTooltipContent = (payload) => {
+  if (!payload || !payload.entries?.length) return '';
+
   if (typeof props.tooltipFormatter === 'function') {
-    return props.tooltipFormatter(point, { formatValue, unit: props.unit });
+    return props.tooltipFormatter(payload, { formatValue, unit: props.unit });
   }
 
   const dateFormatter = d3.timeFormat('%d/%m/%Y %H:%M');
+  const items = payload.entries
+    .map(
+      ({ series, point }) => `
+        <div class="chart-tooltip__item">
+          <span class="chart-tooltip__indicator" style="background:${series.color}"></span>
+          <span>${series.name}: ${formatValue(point.value)}</span>
+        </div>
+      `
+    )
+    .join('');
+
   return `
-    <strong>${dateFormatter(point.date)}</strong>
-    <div>${formatValue(point.value)}</div>
+    <strong>${dateFormatter(payload.date)}</strong>
+    ${items}
   `;
 };
 
 const hideTooltip = () => {
   tooltip?.style('opacity', 0);
-  focusCircle?.attr('display', 'none');
+  focusGroup?.selectAll('circle').attr('display', 'none');
 };
 
 const pointerMove = (event) => {
-  if (!basePoints.length || !overlay) {
+  if (!baseSeries.length || !overlay || !primarySeries || !timePoints.length) {
     hideTooltip();
     return;
   }
 
   const [pointerX] = d3.pointer(event, svg.node());
   const { margin } = dimensions;
+
   if (pointerX < margin.left || pointerX > width - margin.right) {
     hideTooltip();
     return;
   }
-  const x0 = effectiveX.invert(pointerX);
-  const bisect = d3.bisector((d) => d.date).center;
-  const index = bisect(basePoints, x0);
-  const point = basePoints[index];
 
-  if (!point) {
+  const x0 = effectiveX.invert(pointerX);
+  const bisectTime = d3.bisector((date) => date.getTime()).center;
+  const index = bisectTime(timePoints, x0);
+  const targetDate = timePoints[index];
+
+  if (!targetDate) {
     hideTooltip();
     return;
   }
 
-  const cx = effectiveX(point.date);
-  const cy = yScale(point.value);
+  const entries = baseSeries
+    .map((serie) => {
+      const bisectSerie = d3.bisector((point) => point.date).center;
+      const pointIndex = bisectSerie(serie.points, targetDate);
+      const candidate = serie.points[pointIndex];
+      if (!candidate) return null;
 
-  focusCircle
-    .attr('display', null)
-    .attr('cx', cx)
-    .attr('cy', cy);
+      const neighbours = [
+        candidate,
+        serie.points[Math.max(0, pointIndex - 1)],
+        serie.points[Math.min(serie.points.length - 1, pointIndex + 1)]
+      ].filter(Boolean);
 
-  if (tooltip) {
-    const bounds = containerRef.value?.getBoundingClientRect();
-    const tooltipWidth = tooltip.node()?.offsetWidth ?? 0;
-    const scrollX = typeof window !== 'undefined' ? window.scrollX : 0;
-    const scrollY = typeof window !== 'undefined' ? window.scrollY : 0;
-    const offsetX = bounds ? bounds.left + scrollX : 0;
-    const offsetY = bounds ? bounds.top + scrollY : 0;
+      const { point } = neighbours.reduce(
+        (acc, current) => {
+          const diff = Math.abs(current.date.getTime() - targetDate.getTime());
+          if (diff < acc.diff) {
+            return { diff, point: current };
+          }
+          return acc;
+        },
+        { diff: Number.POSITIVE_INFINITY, point: candidate }
+      );
 
-    const left = Math.min(
-      offsetX + cx + 16,
-      offsetX + (width - dimensions.margin.right) - tooltipWidth - 12
-    );
+      return { series: serie, point };
+    })
+    .filter(Boolean);
 
-    tooltip
-      .style('opacity', 1)
-      .style('left', `${left}px`)
-      .style('top', `${offsetY + cy - 24}px`)
-      .html(getTooltipContent(point));
+  if (!entries.length) {
+    hideTooltip();
+    return;
   }
+
+  const entriesMap = new Map(entries.map((entry) => [entry.series.id, entry]));
+  const primaryEntry = entriesMap.get(primarySeries.id) ?? entries[0];
+
+  focusGroup
+    .selectAll('circle')
+    .each(function (serie) {
+      const entry = entriesMap.get(serie.id);
+      const selection = d3.select(this);
+      if (!entry) {
+        selection.attr('display', 'none');
+        return;
+      }
+      selection
+        .attr('display', null)
+        .attr('cx', effectiveX(entry.point.date))
+        .attr('cy', yScale(entry.point.value));
+    });
+
+  if (!tooltip || !primaryEntry) {
+    return;
+  }
+
+  const bounds = containerRef.value?.getBoundingClientRect();
+  const tooltipWidth = tooltip.node()?.offsetWidth ?? 0;
+  const scrollX = typeof window !== 'undefined' ? window.scrollX : 0;
+  const scrollY = typeof window !== 'undefined' ? window.scrollY : 0;
+  const offsetX = bounds ? bounds.left + scrollX : 0;
+  const offsetY = bounds ? bounds.top + scrollY : 0;
+
+  const cx = effectiveX(primaryEntry.point.date);
+  const cy = yScale(primaryEntry.point.value);
+
+  const left = Math.min(
+    offsetX + cx + 16,
+    offsetX + (width - dimensions.margin.right) - tooltipWidth - 12
+  );
+
+  const content = getTooltipContent({ date: primaryEntry.point.date, entries });
+
+  if (!content) {
+    hideTooltip();
+    return;
+  }
+
+  tooltip
+    .style('opacity', 1)
+    .style('left', `${left}px`)
+    .style('top', `${offsetY + cy - 24}px`)
+    .html(content);
 };
 
 onMounted(() => {
@@ -412,19 +594,6 @@ onMounted(() => {
   svg.attr('height', height).attr('width', '100%').style('touch-action', 'none');
 
   const defs = svg.append('defs');
-  const gradient = defs.append('linearGradient').attr('id', gradientId);
-  gradient
-    .append('stop')
-    .attr('offset', '0%')
-    .attr('stop-color', '#38bdf8');
-  gradient
-    .append('stop')
-    .attr('offset', '50%')
-    .attr('stop-color', '#3b82f6');
-  gradient
-    .append('stop')
-    .attr('offset', '100%')
-    .attr('stop-color', '#6366f1');
   defs
     .append('clipPath')
     .attr('id', clipPathId)
@@ -446,9 +615,9 @@ onMounted(() => {
   const content = root.append('g').attr('clip-path', `url(#${clipPathId})`);
   gridGroup = content.append('g').attr('class', 'chart-grid');
   zeroLine = content.append('line').attr('class', 'chart-zero-line').attr('display', 'none');
-  linePath = content.append('path').attr('class', 'chart-line').attr('stroke', `url(#${gradientId})`);
+  linesGroup = content.append('g').attr('class', 'chart-lines');
   pointsGroup = content.append('g').attr('class', 'chart-points');
-  focusCircle = content.append('circle').attr('class', 'chart-focus').attr('r', 5).attr('display', 'none');
+  focusGroup = content.append('g').attr('class', 'chart-focus-group');
 
   yLabelElement = svg
     .append('text')
@@ -457,7 +626,7 @@ onMounted(() => {
     .attr('x', -(height / 2))
     .attr('y', margin.left - 48)
     .attr('text-anchor', 'middle')
-    .text(props.yLabel || `H (${props.unit})`);
+    .text(props.yLabel || `Valor (${props.unit})`);
 
   xLabelElement = svg
     .append('text')
@@ -512,7 +681,7 @@ watch(
   () => props.yLabel,
   (label) => {
     if (yLabelElement) {
-      yLabelElement.text(label || `H (${props.unit})`);
+      yLabelElement.text(label || `Valor (${props.unit})`);
     }
   },
   { immediate: true }
@@ -522,7 +691,7 @@ watch(
   () => props.unit,
   (unit) => {
     if (!props.yLabel && yLabelElement) {
-      yLabelElement.text(`H (${unit})`);
+      yLabelElement.text(`Valor (${unit})`);
     }
   }
 );
@@ -538,11 +707,11 @@ watch(
 );
 
 watch(
-  () => props.points,
-  (points) => {
-    applyData(points);
+  () => props.series,
+  (series) => {
+    applyData(series);
   },
-  { immediate: true }
+  { immediate: true, deep: true }
 );
 
 const resetZoom = () => {
@@ -557,7 +726,12 @@ defineExpose({
 
 <template>
   <div ref="containerRef" class="magnetometer-chart">
-    <svg ref="svgRef" class="magnetometer-chart__svg" role="img" aria-label="Serie temporal de la componente H" />
+    <svg
+      ref="svgRef"
+      class="magnetometer-chart__svg"
+      role="img"
+      aria-label="Serie temporal de las componentes magnéticas"
+    />
   </div>
 </template>
 
@@ -593,15 +767,12 @@ defineExpose({
 }
 
 .chart-point {
-  fill: #1d4ed8;
-  stroke: #e0f2fe;
   stroke-width: 1.5;
   pointer-events: none;
 }
 
 .chart-focus {
-  fill: #f97316;
-  stroke: #fff;
+  stroke: #ffffff;
   stroke-width: 2.5;
   pointer-events: none;
 }
@@ -644,7 +815,7 @@ defineExpose({
 .chart-tooltip {
   position: absolute;
   min-width: 12rem;
-  max-width: 16rem;
+  max-width: 18rem;
   pointer-events: none;
   background: rgba(15, 23, 42, 0.92);
   color: #e2e8f0;
@@ -654,12 +825,39 @@ defineExpose({
   transform: translateY(-50%);
   transition: opacity 120ms ease;
   font-size: 0.8125rem;
-  line-height: 1.2;
+  line-height: 1.25;
 }
 
 .chart-tooltip strong {
   display: block;
   font-weight: 600;
-  margin-bottom: 0.25rem;
+  margin-bottom: 0.35rem;
+}
+
+.chart-tooltip__item {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  margin-top: 0.25rem;
+}
+
+.chart-tooltip__indicator {
+  width: 0.75rem;
+  height: 0.75rem;
+  border-radius: 999px;
+  flex-shrink: 0;
+  box-shadow: 0 0 0 2px rgba(255, 255, 255, 0.3);
+}
+
+.chart-tooltip__item-content {
+  display: flex;
+  flex-direction: column;
+  gap: 0.15rem;
+}
+
+.chart-tooltip small {
+  display: block;
+  font-size: 0.7rem;
+  color: rgba(226, 232, 240, 0.8);
 }
 </style>
