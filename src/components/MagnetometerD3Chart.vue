@@ -53,6 +53,7 @@ let gridGroup;
 
 const clipPathId = `clip-${Math.random().toString(36).slice(2, 10)}`;
 const gradientId = `gradient-${Math.random().toString(36).slice(2, 10)}`;
+const MS_IN_DAY = 1000 * 60 * 60 * 24;
 
 const xScaleBase = d3.scaleTime();
 const yScale = d3.scaleLinear();
@@ -68,6 +69,68 @@ const sanitizePoints = (points) => {
       point && point.date instanceof Date && !Number.isNaN(point.date.getTime()) && Number.isFinite(point.value)
     )
     .sort((a, b) => a.date.getTime() - b.date.getTime());
+};
+
+const createTimeTickConfig = (start, end) => {
+  if (!(start instanceof Date) || !(end instanceof Date)) {
+    return null;
+  }
+
+  const totalDays = Math.max(0, (end.getTime() - start.getTime()) / MS_IN_DAY);
+
+  if (totalDays >= 365 * 4) {
+    return {
+      interval: d3.timeMonth.every(2),
+      format: d3.timeFormat('%b %Y')
+    };
+  }
+
+  if (totalDays >= 365) {
+    return {
+      interval: d3.timeMonth.every(1),
+      format: d3.timeFormat('%b %Y')
+    };
+  }
+
+  if (totalDays >= 120) {
+    return {
+      interval: d3.timeWeek.every(2),
+      format: d3.timeFormat('%d %b %Y')
+    };
+  }
+
+  if (totalDays >= 30) {
+    return {
+      interval: d3.timeWeek.every(1),
+      format: d3.timeFormat('%d %b')
+    };
+  }
+
+  if (totalDays >= 10) {
+    return {
+      interval: d3.timeDay.every(2),
+      format: d3.timeFormat('%d %b')
+    };
+  }
+
+  if (totalDays >= 2) {
+    return {
+      interval: d3.timeDay.every(1),
+      format: d3.timeFormat('%d %b')
+    };
+  }
+
+  if (totalDays >= 1) {
+    return {
+      interval: d3.timeHour.every(6),
+      format: d3.timeFormat('%d %b %H:%M')
+    };
+  }
+
+  return {
+    interval: d3.timeHour.every(1),
+    format: d3.timeFormat('%H:%M')
+  };
 };
 
 const getTimeExtent = (points) => {
@@ -178,18 +241,32 @@ const renderChart = (transform = currentTransform) => {
     .attr('cx', (d) => effectiveX(d.date))
     .attr('cy', (d) => yScale(d.value));
 
-  const xTicks = Math.min(12, Math.max(4, Math.floor(width / 120)));
-  const xAxis = d3.axisBottom(effectiveX).ticks(xTicks).tickFormat(d3.timeFormat('%d/%m %H:%M'));
+  const [domainStart, domainEnd] = effectiveX.domain();
+  const tickConfig = createTimeTickConfig(domainStart, domainEnd);
+  let xAxis = d3.axisBottom(effectiveX);
+  let xTickValuesList;
+
+  if (tickConfig) {
+    xAxis = xAxis.ticks(tickConfig.interval).tickFormat(tickConfig.format);
+    xTickValuesList = effectiveX.ticks(tickConfig.interval);
+  } else {
+    const fallbackTicks = Math.min(12, Math.max(4, Math.floor(width / 120)));
+    xAxis = xAxis.ticks(fallbackTicks);
+    xTickValuesList = effectiveX.ticks(fallbackTicks);
+  }
+
   xAxisGroup.call(xAxis);
 
   const yTicks = Math.min(8, Math.max(3, Math.floor(dimensions.height / 70)));
-  const yAxis = d3.axisLeft(yScale).ticks(yTicks).tickFormat((value) => d3.format('.2f')(value));
+  const [yMin, yMax] = yScale.domain();
+  const hasLargeValues = Math.max(Math.abs(yMin ?? 0), Math.abs(yMax ?? 0)) >= 100;
+  const yFormatter = hasLargeValues ? d3.format(',.0f') : d3.format(',.2f');
+  const yAxis = d3.axisLeft(yScale).ticks(yTicks).tickFormat((value) => yFormatter(value));
   yAxisGroup.call(yAxis);
 
   if (gridGroup) {
     const innerWidth = Math.max(0, width - margin.left - margin.right);
     const innerHeight = Math.max(0, dimensions.height - margin.top - margin.bottom);
-    const xTickValues = effectiveX.ticks(xTicks);
     const yTickValues = yScale.ticks(yTicks);
 
     gridGroup
@@ -204,7 +281,7 @@ const renderChart = (transform = currentTransform) => {
 
     gridGroup
       .selectAll('.grid-line--x')
-      .data(xTickValues)
+      .data(xTickValuesList ?? [])
       .join('line')
       .attr('class', 'grid-line grid-line--x')
       .attr('y1', margin.top)
@@ -495,7 +572,8 @@ defineExpose({
   width: 100%;
   height: 100%;
   font-family: 'Inter', system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
-  background: linear-gradient(180deg, rgba(255, 255, 255, 1) 0%, rgba(241, 245, 249, 0.9) 65%, rgba(226, 232, 240, 0.8) 100%);
+  background-color: #f8fafc;
+  background-image: linear-gradient(180deg, rgba(255, 255, 255, 1) 0%, rgba(241, 245, 249, 0.85) 65%, rgba(226, 232, 240, 0.8) 100%);
   border-radius: 0.75rem;
   border: 1px solid rgba(148, 163, 184, 0.35);
   box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.6);
@@ -549,8 +627,8 @@ defineExpose({
 }
 
 .chart-axis :deep(.tick text) {
-  fill: #475569;
-  font-size: 0.75rem;
+  fill: #1f2933;
+  font-size: 0.8rem;
 }
 
 .chart-axis-label {

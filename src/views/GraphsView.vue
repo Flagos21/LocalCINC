@@ -73,7 +73,7 @@ const toInputDate = (date) => date.toISOString().slice(0, 10);
 const todayDate = new Date();
 const defaultEnd = toInputDate(todayDate);
 const defaultStartDate = new Date(todayDate);
-defaultStartDate.setDate(defaultStartDate.getDate() - 7);
+defaultStartDate.setFullYear(defaultStartDate.getFullYear() - 5);
 const defaultStart = toInputDate(defaultStartDate);
 
 const dateRange = ref({ start: defaultStart, end: defaultEnd });
@@ -120,7 +120,9 @@ const aggregation = computed(() => {
   if (diffDays <= 90) return '1h';
   if (diffDays <= 180) return '2h';
   if (diffDays <= 365) return '6h';
-  return '12h';
+  if (diffDays <= 365 * 2) return '12h';
+  if (diffDays <= 365 * 5) return '1d';
+  return '2d';
 });
 
 const { labels, series, isLoading, errorMessage } = useMagnetometerSeries({
