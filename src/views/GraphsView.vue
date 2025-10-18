@@ -1,7 +1,7 @@
 <template>
   <section class="graphs">
     <header class="graphs__header">
-      <div>
+      <div class="graphs__intro">
         <h2>Evolución magnética</h2>
         <p>Serie temporal de la componente H registrada por la estación CHI.</p>
       </div>
@@ -10,44 +10,53 @@
           <span>Rango de fechas</span>
           <DateRangePicker v-model="dateRange" :max="today" />
         </label>
+        <div class="control control--status" role="status">
+          <span>Rango visible</span>
+          <strong>{{ visibleRangeLabel }}</strong>
+        </div>
+        <button
+          type="button"
+          class="control control--reset"
+          :disabled="isResetDisabled"
+          @click="onResetZoom"
+        >
+          Restablecer vista
+        </button>
       </form>
     </header>
 
     <section class="graphs__body" aria-live="polite">
-      <div v-if="!hasGrafanaConfig" class="state state--warning">
-        <strong>Configura Grafana para continuar.</strong>
-        <p>
-          Asegúrate de definir las variables de entorno
-          <code>VITE_GRAFANA_BASE_URL</code>, <code>VITE_GRAFANA_DASHBOARD_UID</code>,
-          <code>VITE_GRAFANA_DASHBOARD_SLUG</code> y <code>VITE_GRAFANA_PANEL_ID</code>.
-        </p>
-      </div>
-      <div v-else-if="!hasValidRange" class="state">
+      <div v-if="!hasValidRange" class="state">
         <p>Selecciona un rango de fechas válido para visualizar la serie.</p>
       </div>
-      <GrafanaPanel
+      <div v-else-if="errorMessage" class="state state--error">
+        <strong>Hubo un problema al cargar los datos.</strong>
+        <p>{{ errorMessage }}</p>
+      </div>
+      <div v-else-if="isLoading" class="state state--loading">
+        <span class="loader" aria-hidden="true" />
+        <p>Cargando datos…</p>
+      </div>
+      <div v-else-if="!hasData" class="state">
+        <p>No hay datos disponibles para este periodo.</p>
+      </div>
+      <MagnetometerD3Chart
         v-else
-        :key="grafanaKey"
-        class="graphs__grafana"
-        :base-url="grafanaConfig.baseUrl"
-        :dashboard-uid="grafanaConfig.dashboardUid"
-        :dashboard-slug="grafanaConfig.dashboardSlug"
-        :panel-id="grafanaConfig.panelId"
-        :org-id="grafanaConfig.orgId"
-        :from="fromTimestamp"
-        :to="toTimestamp"
-        :theme="grafanaConfig.theme"
-        :refresh="grafanaConfig.refresh"
-        panel-title="Componente H"
+        ref="chartRef"
+        class="graphs__chart"
+        :points="points"
+        unit="nT"
+        @update:visible-domain="onVisibleDomainUpdate"
       />
     </section>
   </section>
 </template>
 
 <script setup>
-import { computed, ref } from 'vue';
+import { computed, ref, watch } from 'vue';
 import DateRangePicker from '@/components/DateRangePicker.vue';
-import GrafanaPanel from '@/components/GrafanaPanel.vue';
+import MagnetometerD3Chart from '@/components/MagnetometerD3Chart.vue';
+import { useMagnetometerSeries } from '@/composables/useMagnetometerSeries';
 
 const toInputDate = (date) => date.toISOString().slice(0, 10);
 
@@ -60,57 +69,134 @@ const defaultStart = toInputDate(defaultStartDate);
 const dateRange = ref({ start: defaultStart, end: defaultEnd });
 const today = toInputDate(todayDate);
 
-const grafanaConfig = {
-  baseUrl: import.meta.env.VITE_GRAFANA_BASE_URL ?? '',
-  dashboardUid: import.meta.env.VITE_GRAFANA_DASHBOARD_UID ?? '',
-  dashboardSlug: import.meta.env.VITE_GRAFANA_DASHBOARD_SLUG ?? '',
-  panelId: import.meta.env.VITE_GRAFANA_PANEL_ID ?? '',
-  orgId: import.meta.env.VITE_GRAFANA_ORG_ID ?? '1',
-  theme: import.meta.env.VITE_GRAFANA_THEME ?? 'light',
-  refresh: import.meta.env.VITE_GRAFANA_REFRESH ?? ''
-};
+const chartRef = ref();
+const visibleDomain = ref({ start: null, end: null });
 
-const hasGrafanaConfig = computed(
-  () =>
-    Boolean(
-      grafanaConfig.baseUrl &&
-        grafanaConfig.dashboardUid &&
-        grafanaConfig.dashboardSlug &&
-        grafanaConfig.panelId
-    )
-);
-
-const toStartOfDay = (value) => {
-  if (!value) return null;
+const toStartOfDayISO = (value) => {
+  if (!value) return '';
   const date = new Date(`${value}T00:00:00Z`);
-  return Number.isNaN(date.getTime()) ? null : date;
+  return Number.isNaN(date.getTime()) ? '' : date.toISOString();
 };
 
-const toEndOfDay = (value) => {
-  if (!value) return null;
+const toEndOfDayISO = (value) => {
+  if (!value) return '';
   const date = new Date(`${value}T23:59:59.999Z`);
-  return Number.isNaN(date.getTime()) ? null : date;
+  return Number.isNaN(date.getTime()) ? '' : date.toISOString();
 };
 
-const fromTimestamp = computed(() => {
-  const start = toStartOfDay(dateRange.value.start);
-  return start ? start.getTime() : null;
-});
-
-const toTimestamp = computed(() => {
-  const end = toEndOfDay(dateRange.value.end);
-  return end ? end.getTime() : null;
-});
+const fromISO = computed(() => toStartOfDayISO(dateRange.value.start));
+const toISO = computed(() => toEndOfDayISO(dateRange.value.end));
 
 const hasValidRange = computed(() => {
-  if (fromTimestamp.value === null || toTimestamp.value === null) {
-    return false;
-  }
-
-  return fromTimestamp.value < toTimestamp.value;
+  if (!fromISO.value || !toISO.value) return false;
+  const start = new Date(fromISO.value);
+  const end = new Date(toISO.value);
+  return start.getTime() < end.getTime();
 });
 
-const grafanaKey = computed(() => `${fromTimestamp.value}-${toTimestamp.value}`);
+const normalizedFrom = computed(() => (hasValidRange.value ? fromISO.value : ''));
+const normalizedTo = computed(() => (hasValidRange.value ? toISO.value : ''));
+
+const aggregation = computed(() => {
+  if (!hasValidRange.value) return '1h';
+  const diffMs = new Date(normalizedTo.value).getTime() - new Date(normalizedFrom.value).getTime();
+  const diffDays = diffMs / (1000 * 60 * 60 * 24);
+
+  if (diffDays <= 1) return '1m';
+  if (diffDays <= 3) return '5m';
+  if (diffDays <= 7) return '15m';
+  if (diffDays <= 31) return '30m';
+  if (diffDays <= 90) return '1h';
+  if (diffDays <= 180) return '2h';
+  if (diffDays <= 365) return '6h';
+  return '12h';
+});
+
+const { labels, series, isLoading, errorMessage } = useMagnetometerSeries({
+  station: 'CHI',
+  unit: 'nT',
+  every: aggregation,
+  from: normalizedFrom,
+  to: normalizedTo,
+  range: '24h'
+});
+
+const points = computed(() => {
+  const length = Math.min(labels.value.length, series.value.length);
+  if (!length) return [];
+
+  const result = [];
+  for (let index = 0; index < length; index += 1) {
+    const time = new Date(labels.value[index]);
+    const value = Number(series.value[index]);
+    if (!Number.isNaN(time.getTime()) && Number.isFinite(value)) {
+      result.push({ date: time, value });
+    }
+  }
+
+  return result;
+});
+
+const hasData = computed(() => points.value.length > 0);
+
+const rangeFormatter = new Intl.DateTimeFormat('es-CL', {
+  dateStyle: 'medium',
+  timeStyle: 'short'
+});
+
+const visibleRangeLabel = computed(() => {
+  const { start, end } = visibleDomain.value;
+  if (!start || !end) return '—';
+
+  try {
+    return `${rangeFormatter.format(start)} — ${rangeFormatter.format(end)}`;
+  } catch {
+    return '—';
+  }
+});
+
+const fullDomain = computed(() => {
+  if (!hasData.value) return null;
+  return {
+    start: points.value[0].date,
+    end: points.value[points.value.length - 1].date
+  };
+});
+
+watch(points, (newPoints) => {
+  if (!newPoints.length) {
+    visibleDomain.value = { start: null, end: null };
+    return;
+  }
+
+  visibleDomain.value = {
+    start: newPoints[0].date,
+    end: newPoints[newPoints.length - 1].date
+  };
+});
+
+const onVisibleDomainUpdate = (domain) => {
+  if (!Array.isArray(domain) || domain.length !== 2) return;
+  const [start, end] = domain;
+  if (!(start instanceof Date) || !(end instanceof Date)) return;
+  visibleDomain.value = { start, end };
+};
+
+const onResetZoom = () => {
+  chartRef.value?.resetZoom();
+};
+
+const isResetDisabled = computed(() => {
+  if (!hasData.value) return true;
+  const domain = fullDomain.value;
+  const { start, end } = visibleDomain.value;
+  if (!domain || !start || !end) return true;
+
+  return (
+    domain.start.getTime() === start.getTime() &&
+    domain.end.getTime() === end.getTime()
+  );
+});
 </script>
 
 <style scoped>
@@ -128,26 +214,30 @@ const grafanaKey = computed(() => `${fromTimestamp.value}-${toTimestamp.value}`)
   display: flex;
   flex-wrap: wrap;
   justify-content: space-between;
-  gap: 1.25rem;
+  gap: 1.5rem;
+  align-items: flex-end;
+}
+
+.graphs__intro {
+  max-width: min(36rem, 100%);
 }
 
 .graphs__header h2 {
   font-size: 1.5rem;
   font-weight: 600;
   color: #1f2933;
-  margin-bottom: 0.25rem;
+  margin-bottom: 0.35rem;
 }
 
 .graphs__header p {
   color: #52606d;
-  max-width: 32rem;
 }
 
 .graphs__controls {
   display: flex;
   flex-wrap: wrap;
   gap: 1rem;
-  align-items: flex-end;
+  align-items: center;
 }
 
 .control {
@@ -162,11 +252,50 @@ const grafanaKey = computed(() => `${fromTimestamp.value}-${toTimestamp.value}`)
   min-width: 16rem;
 }
 
-.graphs__body {
-  min-height: 20rem;
+.control--status {
+  font-size: 0.85rem;
+  color: #4b5563;
 }
 
-.graphs__grafana {
+.control--status strong {
+  font-size: 0.95rem;
+  color: #1f2933;
+  font-weight: 600;
+}
+
+.control--reset {
+  align-self: flex-start;
+  padding: 0.65rem 1.1rem;
+  border-radius: 0.65rem;
+  border: 1px solid rgba(37, 99, 235, 0.2);
+  background: #2563eb;
+  color: #ffffff;
+  font-weight: 600;
+  font-size: 0.9rem;
+  cursor: pointer;
+  transition: background 0.2s ease, transform 0.2s ease;
+}
+
+.control--reset:disabled {
+  background: rgba(148, 163, 184, 0.35);
+  border-color: transparent;
+  color: #e2e8f0;
+  cursor: not-allowed;
+}
+
+.control--reset:not(:disabled):hover,
+.control--reset:not(:disabled):focus-visible {
+  background: #1d4ed8;
+  transform: translateY(-1px);
+  outline: none;
+}
+
+.graphs__body {
+  min-height: 24rem;
+}
+
+.graphs__chart {
+  width: 100%;
   min-height: 24rem;
 }
 
@@ -181,16 +310,31 @@ const grafanaKey = computed(() => `${fromTimestamp.value}-${toTimestamp.value}`)
   border-radius: 0.75rem;
 }
 
-.state--warning {
-  border-color: rgba(245, 158, 11, 0.45);
-  background: rgba(245, 158, 11, 0.08);
-  color: #b45309;
+.state--error {
+  border-color: rgba(244, 63, 94, 0.35);
+  background: rgba(244, 63, 94, 0.08);
+  color: #b91c1c;
 }
 
-.state code {
-  background: rgba(15, 23, 42, 0.06);
-  padding: 0.1rem 0.3rem;
-  border-radius: 0.35rem;
-  font-size: 0.85rem;
+.state--loading {
+  color: #1f2933;
+}
+
+.loader {
+  width: 1.75rem;
+  height: 1.75rem;
+  border-radius: 50%;
+  border: 3px solid rgba(37, 99, 235, 0.25);
+  border-top-color: #2563eb;
+  animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(360deg);
+  }
 }
 </style>
