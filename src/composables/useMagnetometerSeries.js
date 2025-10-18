@@ -4,12 +4,16 @@ export function useMagnetometerSeries({
   range,
   every,
   unit,
-  station
+  station,
+  from,
+  to
 } = {}) {
   const rangeRef = isRef(range) ? range : ref(range ?? '24h');
   const everyRef = isRef(every) ? every : ref(every ?? '1m');
   const unitRef = isRef(unit) ? unit : ref(unit ?? 'nT');
   const stationRef = isRef(station) ? station : ref(station ?? 'CHI');
+  const fromRef = isRef(from) ? from : ref(from ?? '');
+  const toRef = isRef(to) ? to : ref(to ?? '');
 
   const labels = ref([]);
   const series = ref([]);
@@ -27,12 +31,32 @@ export function useMagnetometerSeries({
     isLoading.value = true;
     errorMessage.value = '';
 
+    const fromValue = fromRef.value;
+    const toValue = toRef.value;
+
+    if ((fromValue && !toValue) || (!fromValue && toValue)) {
+      errorMessage.value = 'Debes indicar una fecha inicial y final.';
+      labels.value = [];
+      series.value = [];
+      if (abortController.value === controller) {
+        abortController.value = undefined;
+      }
+      isLoading.value = false;
+      return;
+    }
+
     const searchParams = new URLSearchParams({
       station: stationRef.value,
-      range: rangeRef.value,
       every: everyRef.value,
       unit: unitRef.value
     });
+
+    if (fromValue && toValue) {
+      searchParams.set('from', fromValue);
+      searchParams.set('to', toValue);
+    } else {
+      searchParams.set('range', rangeRef.value);
+    }
 
     try {
       const response = await fetch(`/api/series?${searchParams.toString()}`, {
@@ -89,7 +113,7 @@ export function useMagnetometerSeries({
 
   onMounted(fetchData);
 
-  watch([rangeRef, everyRef, unitRef, stationRef], () => {
+  watch([rangeRef, everyRef, unitRef, stationRef, fromRef, toRef], () => {
     fetchData();
   });
 
@@ -104,6 +128,8 @@ export function useMagnetometerSeries({
     series,
     isLoading,
     errorMessage,
-    fetchData
+    fetchData,
+    from: fromRef,
+    to: toRef
   };
 }
