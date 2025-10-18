@@ -3,12 +3,19 @@
     <header class="graphs__header">
       <div class="graphs__intro">
         <h2>Evolución magnética</h2>
-        <p>Serie temporal de la componente H registrada por la estación CHI.</p>
+        <p>Serie temporal de la componente {{ componentLabel }} registrada por la estación CHI.</p>
       </div>
       <form class="graphs__controls" @submit.prevent>
         <label class="control control--range">
           <span>Rango de fechas</span>
           <DateRangePicker v-model="dateRange" :max="today" />
+        </label>
+        <label class="control control--component">
+          <span>Componente</span>
+          <select v-model="component">
+            <option value="H">H</option>
+            <option value="deltaH">ΔH</option>
+          </select>
         </label>
         <div class="control control--status" role="status">
           <span>Rango visible</span>
@@ -44,8 +51,11 @@
         v-else
         ref="chartRef"
         class="graphs__chart"
-        :points="points"
+        :points="chartPoints"
         unit="nT"
+        :y-label="chartYLabel"
+        x-label="Tiempo"
+        :tooltip-formatter="tooltipFormatter"
         @update:visible-domain="onVisibleDomainUpdate"
       />
     </section>
@@ -71,6 +81,7 @@ const today = toInputDate(todayDate);
 
 const chartRef = ref();
 const visibleDomain = ref({ start: null, end: null });
+const component = ref('H');
 
 const toStartOfDayISO = (value) => {
   if (!value) return '';
@@ -121,7 +132,7 @@ const { labels, series, isLoading, errorMessage } = useMagnetometerSeries({
   range: '24h'
 });
 
-const points = computed(() => {
+const rawPoints = computed(() => {
   const length = Math.min(labels.value.length, series.value.length);
   if (!length) return [];
 
@@ -133,11 +144,64 @@ const points = computed(() => {
       result.push({ date: time, value });
     }
   }
+});
 
   return result;
 });
 
-const hasData = computed(() => points.value.length > 0);
+const hasData = computed(() => rawPoints.value.length > 0);
+
+const componentLabel = computed(() => (component.value === 'deltaH' ? 'ΔH' : 'H'));
+
+const deltaBaseline = computed(() => {
+  if (component.value !== 'deltaH') return 0;
+  const data = rawPoints.value;
+  if (!data.length) return 0;
+  const total = data.reduce((acc, point) => acc + point.value, 0);
+  return total / data.length;
+});
+
+const chartPoints = computed(() => {
+  const data = rawPoints.value;
+  if (!data.length) return [];
+
+  if (component.value === 'deltaH') {
+    const baseline = deltaBaseline.value;
+    return data.map((point) => ({
+      date: point.date,
+      value: point.value - baseline,
+      rawValue: point.value,
+      baseline
+    }));
+  }
+
+  return data.map((point) => ({ ...point, rawValue: point.value }));
+});
+
+const chartYLabel = computed(() => `${componentLabel.value} (nT)`);
+
+const tooltipFormatter = (point, { formatValue }) => {
+  if (!point) return '';
+  const timeFormatter = new Intl.DateTimeFormat('es-CL', {
+    dateStyle: 'medium',
+    timeStyle: 'short'
+  });
+
+  const formattedDate = timeFormatter.format(point.date);
+
+  if (component.value === 'deltaH') {
+    return `
+      <strong>${formattedDate}</strong>
+      <div>ΔH: ${formatValue(point.value)}</div>
+      <div>H: ${formatValue(point.rawValue)}</div>
+    `.trim();
+  }
+
+  return `
+    <strong>${formattedDate}</strong>
+    <div>H: ${formatValue(point.value)}</div>
+  `.trim();
+};
 
 const rangeFormatter = new Intl.DateTimeFormat('es-CL', {
   dateStyle: 'medium',
@@ -158,12 +222,12 @@ const visibleRangeLabel = computed(() => {
 const fullDomain = computed(() => {
   if (!hasData.value) return null;
   return {
-    start: points.value[0].date,
-    end: points.value[points.value.length - 1].date
+    start: rawPoints.value[0].date,
+    end: rawPoints.value[rawPoints.value.length - 1].date
   };
 });
 
-watch(points, (newPoints) => {
+watch(rawPoints, (newPoints) => {
   if (!newPoints.length) {
     visibleDomain.value = { start: null, end: null };
     return;
@@ -255,6 +319,24 @@ const isResetDisabled = computed(() => {
 .control--status {
   font-size: 0.85rem;
   color: #4b5563;
+}
+
+.control--component select {
+  min-width: 8rem;
+  padding: 0.55rem 0.75rem;
+  border-radius: 0.65rem;
+  border: 1px solid rgba(148, 163, 184, 0.4);
+  background: #f8fafc;
+  color: #1f2933;
+  font-size: 0.9rem;
+  font-weight: 500;
+  transition: border-color 0.2s ease, box-shadow 0.2s ease;
+}
+
+.control--component select:focus-visible {
+  outline: none;
+  border-color: rgba(37, 99, 235, 0.8);
+  box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.15);
 }
 
 .control--status strong {
