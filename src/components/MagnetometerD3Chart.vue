@@ -49,15 +49,17 @@ let resizeObserver;
 let yLabelElement;
 let xLabelElement;
 let zeroLine;
+let gridGroup;
 
 const clipPathId = `clip-${Math.random().toString(36).slice(2, 10)}`;
+const gradientId = `gradient-${Math.random().toString(36).slice(2, 10)}`;
+
+const xScaleBase = d3.scaleTime();
+const yScale = d3.scaleLinear();
 
 let basePoints = [];
 let currentTransform = d3.zoomIdentity;
 let effectiveX = xScaleBase.copy();
-
-const xScaleBase = d3.scaleTime();
-const yScale = d3.scaleLinear();
 
 const sanitizePoints = (points) => {
   if (!Array.isArray(points)) return [];
@@ -150,6 +152,7 @@ const renderChart = (transform = currentTransform) => {
     focusCircle?.attr('display', 'none');
     tooltip?.style('opacity', 0);
     zeroLine?.attr('display', 'none');
+    gridGroup?.selectAll('line').remove();
     xAxisGroup.call(d3.axisBottom(xScaleBase).ticks(0));
     yAxisGroup.call(d3.axisLeft(yScale).ticks(0));
     emit('update:visible-domain', [null, null]);
@@ -182,6 +185,33 @@ const renderChart = (transform = currentTransform) => {
   const yTicks = Math.min(8, Math.max(3, Math.floor(dimensions.height / 70)));
   const yAxis = d3.axisLeft(yScale).ticks(yTicks).tickFormat((value) => d3.format('.2f')(value));
   yAxisGroup.call(yAxis);
+
+  if (gridGroup) {
+    const innerWidth = Math.max(0, width - margin.left - margin.right);
+    const innerHeight = Math.max(0, dimensions.height - margin.top - margin.bottom);
+    const xTickValues = effectiveX.ticks(xTicks);
+    const yTickValues = yScale.ticks(yTicks);
+
+    gridGroup
+      .selectAll('.grid-line--y')
+      .data(yTickValues)
+      .join('line')
+      .attr('class', 'grid-line grid-line--y')
+      .attr('x1', margin.left)
+      .attr('x2', margin.left + innerWidth)
+      .attr('y1', (value) => yScale(value))
+      .attr('y2', (value) => yScale(value));
+
+    gridGroup
+      .selectAll('.grid-line--x')
+      .data(xTickValues)
+      .join('line')
+      .attr('class', 'grid-line grid-line--x')
+      .attr('y1', margin.top)
+      .attr('y2', margin.top + innerHeight)
+      .attr('x1', (value) => effectiveX(value))
+      .attr('x2', (value) => effectiveX(value));
+  }
 
   if (zeroLine) {
     const zeroY = yScale(0);
@@ -305,6 +335,19 @@ onMounted(() => {
   svg.attr('height', height).attr('width', '100%').style('touch-action', 'none');
 
   const defs = svg.append('defs');
+  const gradient = defs.append('linearGradient').attr('id', gradientId);
+  gradient
+    .append('stop')
+    .attr('offset', '0%')
+    .attr('stop-color', '#38bdf8');
+  gradient
+    .append('stop')
+    .attr('offset', '50%')
+    .attr('stop-color', '#3b82f6');
+  gradient
+    .append('stop')
+    .attr('offset', '100%')
+    .attr('stop-color', '#6366f1');
   defs
     .append('clipPath')
     .attr('id', clipPathId)
@@ -324,8 +367,9 @@ onMounted(() => {
     .attr('transform', `translate(0, ${height - margin.bottom})`);
 
   const content = root.append('g').attr('clip-path', `url(#${clipPathId})`);
+  gridGroup = content.append('g').attr('class', 'chart-grid');
   zeroLine = content.append('line').attr('class', 'chart-zero-line').attr('display', 'none');
-  linePath = content.append('path').attr('class', 'chart-line');
+  linePath = content.append('path').attr('class', 'chart-line').attr('stroke', `url(#${gradientId})`);
   pointsGroup = content.append('g').attr('class', 'chart-points');
   focusCircle = content.append('circle').attr('class', 'chart-focus').attr('r', 5).attr('display', 'none');
 
@@ -451,24 +495,28 @@ defineExpose({
   width: 100%;
   height: 100%;
   font-family: 'Inter', system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
-  background: linear-gradient(180deg, rgba(248, 250, 252, 0.8) 0%, rgba(248, 250, 252, 0.2) 100%);
+  background: linear-gradient(180deg, rgba(255, 255, 255, 1) 0%, rgba(241, 245, 249, 0.9) 65%, rgba(226, 232, 240, 0.8) 100%);
   border-radius: 0.75rem;
   border: 1px solid rgba(148, 163, 184, 0.35);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.6);
   overflow: visible;
 }
 
+.chart-grid line {
+  stroke: rgba(148, 163, 184, 0.25);
+  stroke-width: 1;
+}
 
 .chart-line {
   fill: none;
-  stroke: #1d4ed8;
-  stroke-width: 2.5;
+  stroke-width: 3;
   stroke-linejoin: round;
   stroke-linecap: round;
 }
 
 .chart-point {
   fill: #1d4ed8;
-  stroke: #f8fafc;
+  stroke: #e0f2fe;
   stroke-width: 1.5;
   pointer-events: none;
 }
@@ -476,7 +524,7 @@ defineExpose({
 .chart-focus {
   fill: #f97316;
   stroke: #fff;
-  stroke-width: 2;
+  stroke-width: 2.5;
   pointer-events: none;
 }
 

@@ -144,7 +144,6 @@ const rawPoints = computed(() => {
       result.push({ date: time, value });
     }
   }
-});
 
   return result;
 });
