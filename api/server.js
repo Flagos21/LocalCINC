@@ -38,15 +38,38 @@ app.get('/api/series', async (req, res) => {
       range = '24h',
       station = 'CHI',
       unit = 'nT',
-      every = '1m'
+      every = '1m',
+      from,
+      to
     } = req.query;
 
+    const normalizeDate = (value) => {
+      if (!value) return null;
+      const date = new Date(value);
+      return Number.isNaN(date.getTime()) ? null : date;
+    };
+
+    const fromDate = normalizeDate(from);
+    const toDate = normalizeDate(to);
+
+    if ((from && !fromDate) || (to && !toDate)) {
+      return res.status(400).json({ error: 'Las fechas proporcionadas no son válidas.' });
+    }
+
+    if (fromDate && toDate && fromDate >= toDate) {
+      return res.status(400).json({ error: 'La fecha inicial debe ser menor que la final.' });
+    }
+
     const fluxRange = resolveRange(range);
+
+    const rangeClause = fromDate && toDate
+      ? `|> range(start: time(v: "${fromDate.toISOString()}"), stop: time(v: "${toDate.toISOString()}"))`
+      : `|> range(start: ${fluxRange})`;
 
     // Consulta principal
     let flux = `
       from(bucket: "${process.env.INFLUX_BUCKET}")
-        |> range(start: ${fluxRange})
+        ${rangeClause}
         |> filter(fn: (r) => r._measurement == "magnetometer")
         |> filter(fn: (r) => r.station == "${station}")
         |> filter(fn: (r) => r._field == "H")
@@ -75,7 +98,7 @@ app.get('/api/series', async (req, res) => {
     await executeQuery(flux);
 
     // Si no hay datos, busca el último punto y arma un rango centrado en él
-    if (!data.length) {
+    if (!data.length && !(fromDate && toDate)) {
       console.warn(`[INFO] No se encontraron datos en el rango ${range}. Buscando el último punto...`);
 
       const lastFlux = `
