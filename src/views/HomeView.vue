@@ -78,6 +78,10 @@ const placeholders = [
   flex: 1 1 auto;
 }
 
+.home__magneto {
+  grid-column: 1 / -1;
+}
+
 .panel {
   background: #ffffff;
   border-radius: 0.75rem;
