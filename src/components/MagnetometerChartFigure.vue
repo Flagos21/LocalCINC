@@ -68,7 +68,7 @@ function setDefaultTwoYears() {
   const normalized = normalizeRange(start, end)
   from.value = normalized.start
   to.value = normalized.end
-  pendingRange.value = { ...normalized }
+  pendingRange.value = null
 }
 
 function applyPendingRange() {
@@ -90,6 +90,7 @@ function applyPendingRange() {
 
   from.value = start
   to.value = end
+  pendingRange.value = null
 }
 
 const hasPendingChange = computed(() => {
@@ -282,7 +283,8 @@ onMounted(() => {
     }
 
     const normalized = normalizeRange(start, end)
-    pendingRange.value = { ...normalized }
+    const matchesCurrent = normalized.start === from.value && normalized.end === to.value
+    pendingRange.value = matchesCurrent ? null : { ...normalized }
   })
 
   if (dayjs(from.value).isValid() && dayjs(to.value).isValid()) {
@@ -297,9 +299,6 @@ onMounted(() => {
 watch([labels, series], draw)
 
 watch([from, to], () => {
-  pendingRange.value = dayjs(from.value).isValid() && dayjs(to.value).isValid()
-    ? { start: from.value, end: to.value }
-    : null
   draw()
 })
 

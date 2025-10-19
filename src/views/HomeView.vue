@@ -81,12 +81,12 @@ const placeholders = [
 .panel {
   background: #ffffff;
   border-radius: 0.75rem;
-  padding: 0.85rem 1.1rem;
-  box-shadow: 0 8px 18px rgba(15, 23, 42, 0.08);
+  padding: 0.75rem 1rem;
+  box-shadow: 0 6px 14px rgba(15, 23, 42, 0.08);
   display: flex;
   flex-direction: column;
-  gap: 0.65rem;
-  min-height: 200px;
+  gap: 0.6rem;
+  min-height: 180px;
 }
 
 .panel__head h3 {
@@ -101,7 +101,7 @@ const placeholders = [
 }
 
 .panel--tall {
-  min-height: 360px;
+  min-height: 320px;
 }
 
 .home__magneto-card :deep(.magneto__card) {
@@ -118,6 +118,6 @@ const placeholders = [
 }
 
 .home__magneto-card :deep(.magneto__chart) {
-  min-height: 220px;
+  min-height: 200px;
 }
 </style>
