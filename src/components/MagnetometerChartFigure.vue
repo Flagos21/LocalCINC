@@ -16,6 +16,7 @@ const { labels, series, fetchData, isLoading, errorMessage } = useMagnetometerSe
 })
 
 const hasData = computed(() => labels.value.length > 0 && series.value.length > 0)
+const dataExtent = ref(null)
 
 function setDefaultTwoYears() {
   const end = dayjs()
@@ -35,9 +36,24 @@ function draw() {
   const ys = pts.map(p => p.v)
 
   if (!xs.length) {
+    dataExtent.value = null
     Plotly.purge('plot-magneto')
     return
   }
+
+  const start = dayjs(xs[0])
+  const end = dayjs(xs[xs.length - 1])
+
+  dataExtent.value = {
+    start: start.toISOString(),
+    end: end.toISOString()
+  }
+
+  // Si solo llega un dato extendemos un poco la ventana para que sea visible
+  const hasSpan = end.diff(start) > 0
+  const paddedStart = hasSpan ? start : start.subtract(6, 'hour')
+  const paddedEnd = hasSpan ? end : end.add(6, 'hour')
+  const xRange = [paddedStart.toISOString(), paddedEnd.toISOString()]
 
   const trace = {
     x: xs,
@@ -58,7 +74,7 @@ function draw() {
 
   const layout = {
     title: {
-      text: `H – ${dayjs(from.value).format('YYYY-MM-DD')} a ${dayjs(to.value).format('YYYY-MM-DD')}`,
+      text: `H – ${dayjs(dataExtent.value?.start || from.value).format('YYYY-MM-DD')} a ${dayjs(dataExtent.value?.end || to.value).format('YYYY-MM-DD')}`,
       x: 0.02,
       xanchor: 'left',
       font: {
@@ -70,12 +86,17 @@ function draw() {
     xaxis: {
       title: 'Fecha',
       type: 'date',
+      autorange: false,
+      range: xRange,
       tickformatstops: [
         { dtickrange: [null, 1000*60*60*24*2], value: '%H:%M\n%d %b' },
         { dtickrange: [1000*60*60*24*2, 1000*60*60*24*62], value: '%d %b %Y' },
         { dtickrange: [1000*60*60*24*62, null], value: '%b %Y' }
       ],
-      rangeslider: { visible: true },
+      rangeslider: {
+        visible: true,
+        range: xRange
+      },
       rangeselector: {
         buttons: [
           { step: 'month', stepmode: 'backward', count: 1, label: '1m' },
@@ -110,7 +131,13 @@ function draw() {
   Plotly.react('plot-magneto', [trace], layout, {
     responsive: true,
     displaylogo: false,
-    modeBarButtonsToRemove: ['select2d', 'lasso2d']
+    scrollZoom: true,
+    modeBarButtonsToRemove: ['lasso2d'],
+    toImageButtonOptions: {
+      format: 'png',
+      filename: `magnetometro-${dayjs().format('YYYYMMDD-HHmmss')}`,
+      scale: 2
+    }
   })
 }
 
@@ -179,6 +206,9 @@ watch([labels, series], draw)
             />
             <small class="magneto__hint">
               Desde {{ dayjs(from).format('YYYY-MM-DD HH:mm') }} hasta {{ dayjs(to).format('YYYY-MM-DD HH:mm') }}
+            </small>
+            <small v-if="dataExtent" class="magneto__hint magneto__hint--data">
+              Datos disponibles: {{ dayjs(dataExtent.start).format('YYYY-MM-DD HH:mm') }} → {{ dayjs(dataExtent.end).format('YYYY-MM-DD HH:mm') }}
             </small>
           </label>
 
@@ -295,6 +325,11 @@ watch([labels, series], draw)
 .magneto__hint {
   font-size: 0.75rem;
   color: #64748b;
+}
+
+.magneto__hint--data {
+  color: #1e293b;
+  font-weight: 500;
 }
 
 .magneto__button {
