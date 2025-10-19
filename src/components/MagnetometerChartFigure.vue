@@ -13,6 +13,45 @@ const pickerRef = ref(null)
 const rangeInputRef = ref(null)
 const pendingRange = ref(null)
 
+function toDayjsInstance(value) {
+  if (!value) {
+    return dayjs.invalid()
+  }
+
+  if (dayjs.isDayjs(value)) {
+    return value
+  }
+
+  if (value instanceof Date) {
+    return dayjs(value)
+  }
+
+  if (typeof value === 'number' || typeof value === 'string') {
+    return dayjs(value)
+  }
+
+  if (typeof value?.toDate === 'function') {
+    return dayjs(value.toDate())
+  }
+
+  if (typeof value?.toJSDate === 'function') {
+    return dayjs(value.toJSDate())
+  }
+
+  if (value?.dateInstance instanceof Date) {
+    return dayjs(value.dateInstance)
+  }
+
+  if (typeof value?.valueOf === 'function') {
+    const primitive = value.valueOf()
+    if (primitive !== value) {
+      return toDayjsInstance(primitive)
+    }
+  }
+
+  return dayjs(value)
+}
+
 // Nuestro composable (usa from/to)
 const { labels, series, isLoading, errorMessage } = useMagnetometerSeries({
   from, to, every: ref(''), range: ref(''), unit: ref('nT'), station: ref('CHI')
@@ -53,9 +92,23 @@ const dataWindowHint = computed(() => {
   return `${dayjs(dataExtent.value.start).format('YYYY-MM-DD HH:mm')} → ${dayjs(dataExtent.value.end).format('YYYY-MM-DD HH:mm')}`
 })
 
-function normalizeRange(start, end) {
-  const normalizedStart = dayjs(start).startOf('day')
-  const normalizedEnd = dayjs(end).endOf('day')
+function normalizeRange(start, end, { clampToFullDays = false } = {}) {
+  let normalizedStart = toDayjsInstance(start)
+  let normalizedEnd = toDayjsInstance(end)
+
+  if (!normalizedStart.isValid() || !normalizedEnd.isValid()) {
+    return { start: '', end: '' }
+  }
+
+  if (normalizedEnd.isBefore(normalizedStart)) {
+    ;[normalizedStart, normalizedEnd] = [normalizedEnd, normalizedStart]
+  }
+
+  if (clampToFullDays) {
+    normalizedStart = normalizedStart.startOf('day')
+    normalizedEnd = normalizedEnd.endOf('day')
+  }
+
   return {
     start: normalizedStart.format('YYYY-MM-DDTHH:mm'),
     end: normalizedEnd.format('YYYY-MM-DDTHH:mm')
@@ -65,14 +118,14 @@ function normalizeRange(start, end) {
 function setDefaultTwoYears() {
   const end = dayjs()
   const start = end.subtract(2, 'year')
-  const normalized = normalizeRange(start, end)
+  const normalized = normalizeRange(start, end, { clampToFullDays: true })
   from.value = normalized.start
   to.value = normalized.end
   pendingRange.value = null
 }
 
 function applyPendingRange() {
-  if (!pendingRange.value) {
+  if (!hasPendingRange.value) {
     return
   }
 
@@ -85,6 +138,7 @@ function applyPendingRange() {
   const sameEnd = to.value === end
 
   if (sameStart && sameEnd) {
+    pendingRange.value = null
     return
   }
 
@@ -106,7 +160,16 @@ const hasPendingChange = computed(() => {
   return from.value !== start || to.value !== end
 })
 
-const isApplyDisabled = computed(() => !hasPendingChange.value)
+const hasPendingRange = computed(() => {
+  if (!pendingRange.value) {
+    return false
+  }
+
+  const { start, end } = pendingRange.value
+  return dayjs(start).isValid() && dayjs(end).isValid()
+})
+
+const isApplyDisabled = computed(() => !hasPendingRange.value || !hasPendingChange.value)
 
 // Dibuja (ordenando por tiempo y limitando al rango elegido)
 function draw() {
@@ -274,8 +337,8 @@ onMounted(() => {
   })
 
   picker.on('selected', (d1, d2) => {
-    const start = dayjs(d1)
-    const end = dayjs(d2)
+    const start = toDayjsInstance(d1)
+    const end = toDayjsInstance(d2)
 
     if (!start.isValid() || !end.isValid()) {
       pendingRange.value = null
