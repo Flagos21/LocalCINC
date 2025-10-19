@@ -1,5 +1,5 @@
 <script setup>
-import { ref, onMounted, watch, computed } from 'vue'
+import { ref, onMounted, watch, computed, onBeforeUnmount } from 'vue'
 import Plotly from 'plotly.js-dist-min'
 import dayjs from 'dayjs'
 import Litepicker from 'litepicker'
@@ -9,6 +9,7 @@ import { useMagnetometerSeries } from '@/composables/useMagnetometerSeries'
 // Fechas (un solo input range)
 const from = ref('')
 const to = ref('')
+const pickerRef = ref(null)
 
 // Nuestro composable (usa from/to)
 const { labels, series, fetchData, isLoading, errorMessage } = useMagnetometerSeries({
@@ -17,6 +18,23 @@ const { labels, series, fetchData, isLoading, errorMessage } = useMagnetometerSe
 
 const hasData = computed(() => labels.value.length > 0 && series.value.length > 0)
 const dataExtent = ref(null)
+const hasValidSelection = computed(() => dayjs(from.value).isValid() && dayjs(to.value).isValid())
+
+const rangeHint = computed(() => {
+  if (!hasValidSelection.value) {
+    return 'Sin selección de fechas'
+  }
+
+  return `${dayjs(from.value).format('YYYY-MM-DD HH:mm')} → ${dayjs(to.value).format('YYYY-MM-DD HH:mm')}`
+})
+
+const dataWindowHint = computed(() => {
+  if (!dataExtent.value) {
+    return ''
+  }
+
+  return `${dayjs(dataExtent.value.start).format('YYYY-MM-DD HH:mm')} → ${dayjs(dataExtent.value.end).format('YYYY-MM-DD HH:mm')}`
+})
 
 function setDefaultTwoYears() {
   const end = dayjs()
@@ -74,7 +92,7 @@ function draw() {
 
   const layout = {
     title: {
-      text: `H – ${dayjs(dataExtent.value?.start || from.value).format('YYYY-MM-DD')} a ${dayjs(dataExtent.value?.end || to.value).format('YYYY-MM-DD')}`,
+      text: `H – ${start.format('YYYY-MM-DD')} a ${end.format('YYYY-MM-DD')}`,
       x: 0.02,
       xanchor: 'left',
       font: {
@@ -149,7 +167,6 @@ async function apply() {
   }
 }
 
-
 onMounted(() => {
   setDefaultTwoYears()
 
@@ -157,30 +174,74 @@ onMounted(() => {
   const picker = new Litepicker({
     element: document.getElementById('range-input'),
     singleMode: false,
-    numberOfMonths: 2,
-    numberOfColumns: 2,
+    splitView: false,
+    numberOfMonths: 1,
+    numberOfColumns: 1,
     format: 'YYYY-MM-DD HH:mm',
     allowRepick: true,
     autoApply: true,
     useLocaleSettings: true,
     lang: 'es-ES',
     dropdowns: { minYear: 2010, maxYear: dayjs().year(), months: true, years: true },
-    startDate: dayjs(from.value).toDate(),
-    endDate: dayjs(to.value).toDate(),
+    startDate: dayjs(from.value).isValid() ? dayjs(from.value).toDate() : null,
+    endDate: dayjs(to.value).isValid() ? dayjs(to.value).toDate() : null
   })
 
   picker.on('selected', (d1, d2) => {
-    if (d1 && d2) {
-      from.value = dayjs(d1).format('YYYY-MM-DDTHH:mm')
-      to.value   = dayjs(d2).format('YYYY-MM-DDTHH:mm')
-      apply()
+    const start = dayjs(d1)
+    const end = dayjs(d2)
+
+    if (!start.isValid() || !end.isValid()) {
+      return
     }
+
+    from.value = start.format('YYYY-MM-DDTHH:mm')
+    to.value = end.format('YYYY-MM-DDTHH:mm')
   })
+
+  picker.on('clear:selection', () => {
+    setDefaultTwoYears()
+  })
+
+  if (dayjs(from.value).isValid() && dayjs(to.value).isValid()) {
+    picker.setDateRange(dayjs(from.value).toDate(), dayjs(to.value).toDate(), true)
+  }
+
+  pickerRef.value = picker
 
   apply()
 })
 
 watch([labels, series], draw)
+
+watch([from, to], ([start, end]) => {
+  const picker = pickerRef.value
+  if (!picker) return
+
+  const startDate = dayjs(start)
+  const endDate = dayjs(end)
+
+  if (startDate.isValid() && endDate.isValid()) {
+    const currentStart = picker.getStartDate()
+    const currentEnd = picker.getEndDate()
+
+    const startTime = currentStart ? currentStart.getTime() : null
+    const endTime = currentEnd ? currentEnd.getTime() : null
+
+    if (startTime !== startDate.toDate().getTime() || endTime !== endDate.toDate().getTime()) {
+      picker.setDateRange(startDate.toDate(), endDate.toDate(), true)
+    }
+  } else {
+    picker.clearSelection()
+  }
+})
+
+onBeforeUnmount(() => {
+  if (pickerRef.value) {
+    pickerRef.value.destroy()
+    pickerRef.value = null
+  }
+})
 </script>
 
 <template>
@@ -205,10 +266,10 @@ watch([labels, series], draw)
               readonly
             />
             <small class="magneto__hint">
-              Desde {{ dayjs(from).format('YYYY-MM-DD HH:mm') }} hasta {{ dayjs(to).format('YYYY-MM-DD HH:mm') }}
+              {{ rangeHint }}
             </small>
             <small v-if="dataExtent" class="magneto__hint magneto__hint--data">
-              Datos disponibles: {{ dayjs(dataExtent.start).format('YYYY-MM-DD HH:mm') }} → {{ dayjs(dataExtent.end).format('YYYY-MM-DD HH:mm') }}
+              Datos disponibles: {{ dataWindowHint }}
             </small>
           </label>
 
