@@ -1,4 +1,5 @@
 import { isRef, onBeforeUnmount, onMounted, ref, watch } from 'vue';
+import dayjs from 'dayjs';
 
 export function useMagnetometerSeries({
   range,
@@ -19,6 +20,7 @@ export function useMagnetometerSeries({
   const series = ref([]);
   const isLoading = ref(false);
   const errorMessage = ref('');
+  const meta = ref(null);
   const abortController = ref();
 
   const fetchData = async () => {
@@ -34,8 +36,11 @@ export function useMagnetometerSeries({
     const fromValue = fromRef.value;
     const toValue = toRef.value;
 
-    if ((fromValue && !toValue) || (!fromValue && toValue)) {
-      errorMessage.value = 'Debes indicar una fecha inicial y final.';
+    const parsedFrom = fromValue ? dayjs(fromValue) : null;
+    const parsedTo = toValue ? dayjs(toValue) : null;
+
+    if ((parsedFrom && !parsedFrom.isValid()) || (parsedTo && !parsedTo.isValid())) {
+      errorMessage.value = 'Selecciona un rango de fechas válido.';
       labels.value = [];
       series.value = [];
       if (abortController.value === controller) {
@@ -45,15 +50,38 @@ export function useMagnetometerSeries({
       return;
     }
 
+    if (parsedFrom && parsedTo && parsedFrom.isAfter(parsedTo)) {
+      errorMessage.value = 'La fecha inicial no puede ser posterior a la final.';
+      labels.value = [];
+      series.value = [];
+      if (abortController.value === controller) {
+        abortController.value = undefined;
+      }
+      isLoading.value = false;
+      return;
+    }
+
+    if ((fromValue && !toValue) || (!fromValue && toValue)) {
+      if (abortController.value === controller) {
+        abortController.value = undefined;
+      }
+      isLoading.value = false;
+      return;
+    }
+
+    labels.value = [];
+    series.value = [];
+    meta.value = null;
+
     const searchParams = new URLSearchParams({
       station: stationRef.value,
       every: everyRef.value,
       unit: unitRef.value
     });
 
-    if (fromValue && toValue) {
-      searchParams.set('from', fromValue);
-      searchParams.set('to', toValue);
+    if (parsedFrom && parsedTo) {
+      searchParams.set('from', parsedFrom.format('YYYY-MM-DDTHH:mm'));
+      searchParams.set('to', parsedTo.format('YYYY-MM-DDTHH:mm'));
     } else {
       searchParams.set('range', rangeRef.value);
     }
@@ -77,7 +105,7 @@ export function useMagnetometerSeries({
         } else {
           throw new Error();
         }
-      } catch (error) {
+      } catch {
         const snippet = rawBody.slice(0, 140).replace(/\s+/g, ' ').trim();
         throw new Error(
           snippet
@@ -94,6 +122,7 @@ export function useMagnetometerSeries({
       const length = Math.min(incomingLabels.length, incomingSeries.length);
       labels.value = incomingLabels.slice(0, length);
       series.value = incomingSeries.slice(0, length);
+      meta.value = payload.meta ?? null;
     } catch (error) {
       if (error instanceof DOMException && error.name === 'AbortError') {
         return;
@@ -103,6 +132,7 @@ export function useMagnetometerSeries({
       errorMessage.value = message;
       labels.value = [];
       series.value = [];
+      meta.value = null;
     } finally {
       if (abortController.value === controller) {
         abortController.value = undefined;
@@ -130,6 +160,7 @@ export function useMagnetometerSeries({
     errorMessage,
     fetchData,
     from: fromRef,
-    to: toRef
+    to: toRef,
+    meta
   };
 }

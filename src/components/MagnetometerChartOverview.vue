@@ -1,0 +1,513 @@
+<script setup>
+import { ref, computed, watch, onMounted, onBeforeUnmount } from 'vue'
+import Plotly from 'plotly.js-dist-min'
+import dayjs from 'dayjs'
+import { useMagnetometerSeries } from '@/composables/useMagnetometerSeries'
+
+const plotRef = ref(null)
+const activePreset = ref('1m')
+const rangeRef = ref('')
+const from = ref('')
+const to = ref('')
+
+const { labels, series, isLoading, errorMessage } = useMagnetometerSeries({
+  range: rangeRef,
+  every: ref(''),
+  unit: ref('nT'),
+  station: ref('CHI'),
+  from,
+  to
+})
+
+const visiblePoints = ref(0)
+const dataExtent = ref(null)
+
+const presets = [
+  { id: '1m', label: '1 m', description: 'Último mes', duration: { amount: 1, unit: 'month' } },
+  { id: '6m', label: '6 m', description: 'Últimos 6 meses', duration: { amount: 6, unit: 'month' } },
+  { id: '1y', label: '1 y', description: 'Último año', duration: { amount: 1, unit: 'year' } },
+  { id: 'all', label: 'Todo', description: 'Últimos 5 años', duration: { amount: 5, unit: 'year' }, rangeToken: '5y' }
+]
+
+const selectedPreset = computed(() => presets.find((preset) => preset.id === activePreset.value) ?? presets[0])
+
+const requestedWindow = computed(() => {
+  const preset = selectedPreset.value
+  if (!preset) return null
+
+  if (preset.rangeToken) {
+    const end = dayjs()
+    const start = end.subtract(preset.duration.amount, preset.duration.unit)
+    return { start, end }
+  }
+
+  const start = dayjs(from.value)
+  const end = dayjs(to.value)
+
+  if (!start.isValid() || !end.isValid()) {
+    return null
+  }
+
+  return { start, end }
+})
+
+const rangeHint = computed(() => {
+  const preset = selectedPreset.value
+  const window = requestedWindow.value
+
+  if (!preset) {
+    return 'Sin selección'
+  }
+
+  if (!window) {
+    return preset.description
+  }
+
+  return `${window.start.format('YYYY-MM-DD HH:mm')} → ${window.end.format('YYYY-MM-DD HH:mm')}`
+})
+
+const dataWindowHint = computed(() => {
+  if (!dataExtent.value) {
+    return ''
+  }
+
+  return `${dayjs(dataExtent.value.start).format('YYYY-MM-DD HH:mm')} → ${dayjs(dataExtent.value.end).format('YYYY-MM-DD HH:mm')}`
+})
+
+const hasVisibleData = computed(() => visiblePoints.value > 0)
+
+function applyPreset(id) {
+  const preset = presets.find((item) => item.id === id)
+  if (!preset) return
+
+  activePreset.value = id
+
+  if (preset.rangeToken) {
+    rangeRef.value = preset.rangeToken
+    from.value = ''
+    to.value = ''
+    draw()
+    return
+  }
+
+  rangeRef.value = ''
+  const end = dayjs()
+  const start = end.subtract(preset.duration.amount, preset.duration.unit)
+  from.value = start.format('YYYY-MM-DDTHH:mm')
+  to.value = end.format('YYYY-MM-DDTHH:mm')
+  draw()
+}
+
+function draw() {
+  const rawPoints = (labels.value || []).map((t, i) => ({ t, v: (series.value || [])[i] }))
+    .filter((point) => point.t && Number.isFinite(point.v))
+    .sort((a, b) => new Date(a.t) - new Date(b.t))
+
+  if (rawPoints.length) {
+    const rawStart = dayjs(rawPoints[0].t)
+    const rawEnd = dayjs(rawPoints[rawPoints.length - 1].t)
+    dataExtent.value = {
+      start: rawStart.toISOString(),
+      end: rawEnd.toISOString()
+    }
+  } else {
+    dataExtent.value = null
+  }
+
+  visiblePoints.value = rawPoints.length
+
+  const xs = rawPoints.map((point) => point.t)
+  const ys = rawPoints.map((point) => point.v)
+
+  let xRange = null
+
+  if (rawPoints.length) {
+    const start = dayjs(rawPoints[0].t)
+    const end = dayjs(rawPoints[rawPoints.length - 1].t)
+    const hasSpan = end.diff(start) > 0
+    const paddedStart = hasSpan ? start : start.subtract(6, 'hour')
+    const paddedEnd = hasSpan ? end : end.add(6, 'hour')
+    xRange = [paddedStart.toISOString(), paddedEnd.toISOString()]
+  } else if (requestedWindow.value) {
+    const { start, end } = requestedWindow.value
+    xRange = [start.toISOString(), end.toISOString()]
+  }
+
+  if (!xRange) {
+    const now = dayjs()
+    xRange = [now.subtract(1, 'day').toISOString(), now.add(1, 'day').toISOString()]
+  }
+
+  const displayWindow = rawPoints.length
+    ? { start: dayjs(rawPoints[0].t), end: dayjs(rawPoints[rawPoints.length - 1].t) }
+    : requestedWindow.value
+
+  const trace = {
+    x: xs,
+    y: ys,
+    type: 'scatter',
+    mode: 'lines',
+    connectgaps: false,
+    name: 'H',
+    line: {
+      color: '#2563eb',
+      width: 2
+    },
+    hovertemplate:
+      '%{x|%Y-%m-%d %H:%M:%S}<br>' +
+      'H: %{y:.2f} nT' +
+      '<extra></extra>'
+  }
+
+  const layout = {
+    title: {
+      text: displayWindow
+        ? `H – ${displayWindow.start.format('YYYY-MM-DD')} a ${displayWindow.end.format('YYYY-MM-DD')}`
+        : 'H – sin datos',
+      x: 0.02,
+      xanchor: 'left',
+      font: {
+        family: 'Inter, sans-serif',
+        size: 18,
+        color: '#0f172a'
+      }
+    },
+    xaxis: {
+      type: 'date',
+      autorange: false,
+      range: xRange,
+      tickformatstops: [
+        { dtickrange: [null, 1000 * 60 * 60 * 24 * 2], value: '%H:%M\n%d %b' },
+        { dtickrange: [1000 * 60 * 60 * 24 * 2, 1000 * 60 * 60 * 24 * 62], value: '%d %b %Y' },
+        { dtickrange: [1000 * 60 * 60 * 24 * 62, null], value: '%b %Y' }
+      ],
+      showgrid: true,
+      gridcolor: 'rgba(148, 163, 184, 0.15)',
+      zeroline: false,
+      linecolor: 'rgba(100, 116, 139, 0.4)',
+      linewidth: 1.5,
+      mirror: true
+    },
+    yaxis: {
+      autorange: true,
+      title: 'nT',
+      zeroline: false,
+      gridcolor: '#e5e7eb',
+      linecolor: 'rgba(100, 116, 139, 0.4)',
+      linewidth: 1.5,
+      mirror: true,
+      tickformat: ',.2f'
+    },
+    margin: { t: 60, r: 24, b: 60, l: 70 },
+    paper_bgcolor: '#f8fafc',
+    plot_bgcolor: '#ffffff',
+    hovermode: 'x unified',
+    font: {
+      family: 'Inter, sans-serif',
+      color: '#0f172a'
+    }
+  }
+
+  if (!plotRef.value) {
+    return
+  }
+
+  Plotly.react(plotRef.value, rawPoints.length ? [trace] : [], layout, {
+    responsive: true,
+    displaylogo: false,
+    scrollZoom: true,
+    modeBarButtonsToRemove: ['lasso2d'],
+    toImageButtonOptions: {
+      format: 'png',
+      filename: `magnetometro-${dayjs().format('YYYYMMDD-HHmmss')}`,
+      scale: 2
+    }
+  })
+}
+
+applyPreset(activePreset.value)
+
+watch([labels, series], draw)
+
+onMounted(() => {
+  draw()
+})
+
+onBeforeUnmount(() => {
+  if (plotRef.value) {
+    Plotly.purge(plotRef.value)
+  }
+})
+</script>
+
+<template>
+  <section class="magneto magneto--compact">
+    <div class="magneto__card">
+      <header class="magneto__header">
+        <div>
+          <h1 class="magneto__title">Magnetómetro – Estación única</h1>
+          <p class="magneto__description">
+            Visualiza la componente H con atajos rápidos para cambiar el periodo observado.
+          </p>
+        </div>
+
+        <div class="magneto__filters magneto__filters--compact">
+          <div class="magneto__field">
+            <span class="magneto__label">Rangos rápidos</span>
+            <div class="magneto__quick">
+              <button
+                v-for="preset in presets"
+                :key="preset.id"
+                type="button"
+                class="magneto__quick-button"
+                :class="{ 'magneto__quick-button--active': preset.id === activePreset }"
+                @click="applyPreset(preset.id)"
+              >
+                {{ preset.label }}
+              </button>
+            </div>
+          </div>
+
+          <div class="magneto__summary" role="status" aria-live="polite">
+            <div class="magneto__summary-block">
+              <span class="magneto__summary-label">Seleccionado</span>
+              <span class="magneto__summary-value">{{ rangeHint }}</span>
+            </div>
+            <div class="magneto__summary-block">
+              <span class="magneto__summary-label">Datos disponibles</span>
+              <span class="magneto__summary-value">{{ dataWindowHint || 'Sin datos en el último refresco' }}</span>
+            </div>
+          </div>
+        </div>
+      </header>
+
+      <div class="magneto__body">
+        <div class="magneto__chart-wrapper">
+          <div ref="plotRef" class="magneto__chart"></div>
+
+          <div v-if="isLoading" class="magneto__loading" role="status" aria-live="polite">
+            <span class="magneto__spinner" aria-hidden="true"></span>
+            <p>Cargando serie de datos…</p>
+          </div>
+        </div>
+
+        <p v-if="!isLoading && !hasVisibleData && !errorMessage" class="magneto__empty">
+          No hay datos disponibles para el rango seleccionado.
+        </p>
+
+        <p v-if="errorMessage" class="magneto__error">⚠️ {{ errorMessage }}</p>
+      </div>
+    </div>
+  </section>
+</template>
+
+<style scoped>
+.magneto {
+  padding: 0;
+}
+
+.magneto__card {
+  width: 100%;
+  background: linear-gradient(135deg, #ffffff 0%, #eef2ff 45%, #e0e7ff 100%);
+  border-radius: 20px;
+  border: 1px solid rgba(15, 23, 42, 0.08);
+  box-shadow: 0 16px 32px rgba(15, 23, 42, 0.12);
+  display: flex;
+  flex-direction: column;
+  gap: 1.25rem;
+  overflow: hidden;
+}
+
+.magneto__header {
+  display: flex;
+  flex-direction: column;
+  gap: 1.25rem;
+  padding: 1.5rem 1.75rem 1.25rem;
+  background: rgba(255, 255, 255, 0.7);
+  backdrop-filter: blur(10px);
+}
+
+.magneto__title {
+  font-size: 1.5rem;
+  font-weight: 600;
+  color: #0f172a;
+}
+
+.magneto__description {
+  color: #475569;
+  font-size: 0.9rem;
+  line-height: 1.45;
+}
+
+.magneto__filters {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 1rem;
+  align-items: flex-start;
+}
+
+.magneto__filters--compact {
+  align-items: center;
+}
+
+.magneto__field {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+  min-width: 180px;
+}
+
+.magneto__label {
+  font-size: 0.7rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: #64748b;
+  font-weight: 600;
+}
+
+.magneto__quick {
+  display: flex;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+}
+
+.magneto__quick-button {
+  border: 1px solid rgba(37, 99, 235, 0.3);
+  background: rgba(37, 99, 235, 0.1);
+  color: #1d4ed8;
+  padding: 0.35rem 0.65rem;
+  border-radius: 999px;
+  font-size: 0.8rem;
+  font-weight: 600;
+  transition: background-color 0.2s ease, color 0.2s ease, border-color 0.2s ease;
+  cursor: pointer;
+}
+
+.magneto__quick-button:hover,
+.magneto__quick-button:focus-visible {
+  background: rgba(37, 99, 235, 0.18);
+  border-color: #2563eb;
+  color: #1e3a8a;
+  outline: none;
+}
+
+.magneto__quick-button--active {
+  background: #2563eb;
+  color: #ffffff;
+  border-color: #1d4ed8;
+}
+
+.magneto__summary {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+  gap: 0.65rem;
+  padding: 0.65rem 0.85rem;
+  background: rgba(37, 99, 235, 0.08);
+  border-radius: 14px;
+  border: 1px solid rgba(37, 99, 235, 0.12);
+  color: #1e3a8a;
+}
+
+.magneto__summary-block {
+  display: flex;
+  flex-direction: column;
+  gap: 0.2rem;
+}
+
+.magneto__summary-label {
+  font-size: 0.65rem;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  font-weight: 600;
+  color: #1d4ed8;
+}
+
+.magneto__summary-value {
+  font-size: 0.85rem;
+  color: #0f172a;
+  font-weight: 500;
+}
+
+.magneto__body {
+  padding: 0 1.75rem 1.75rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.85rem;
+}
+
+.magneto__chart-wrapper {
+  position: relative;
+  border-radius: 16px;
+  overflow: hidden;
+  border: 1px solid rgba(15, 23, 42, 0.08);
+  background: #ffffff;
+}
+
+.magneto__chart {
+  height: 320px;
+  width: 100%;
+}
+
+.magneto__loading {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  text-align: center;
+  gap: 0.75rem;
+  background: rgba(255, 255, 255, 0.85);
+  backdrop-filter: blur(6px);
+  color: #1e293b;
+  font-size: 0.95rem;
+}
+
+.magneto__spinner {
+  width: 1.5rem;
+  height: 1.5rem;
+  border-radius: 50%;
+  border: 3px solid rgba(37, 99, 235, 0.25);
+  border-top-color: #2563eb;
+  animation: magneto-spin 1s linear infinite;
+}
+
+.magneto__empty {
+  padding: 0.85rem 1.1rem;
+  background: rgba(59, 130, 246, 0.12);
+  border-radius: 12px;
+  color: #1d4ed8;
+  font-weight: 500;
+  text-align: center;
+}
+
+.magneto__error {
+  text-align: center;
+  color: #b91c1c;
+  font-size: 0.9rem;
+  font-weight: 500;
+}
+
+@keyframes magneto-spin {
+  0% {
+    transform: rotate(0deg);
+  }
+  100% {
+    transform: rotate(360deg);
+  }
+}
+
+@media (max-width: 768px) {
+  .magneto__card {
+    border-radius: 18px;
+  }
+
+  .magneto__chart {
+    height: 280px;
+  }
+}
+
+@media (max-width: 520px) {
+  .magneto__title {
+    font-size: 1.35rem;
+  }
+}
+</style>
