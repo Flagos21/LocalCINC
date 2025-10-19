@@ -10,6 +10,7 @@ import { useMagnetometerSeries } from '@/composables/useMagnetometerSeries'
 const from = ref('')
 const to = ref('')
 const pickerRef = ref(null)
+const rangeInputRef = ref(null)
 
 // Nuestro composable (usa from/to)
 const { labels, series, isLoading, errorMessage } = useMagnetometerSeries({
@@ -38,11 +39,21 @@ const dataWindowHint = computed(() => {
   return `${dayjs(dataExtent.value.start).format('YYYY-MM-DD HH:mm')} → ${dayjs(dataExtent.value.end).format('YYYY-MM-DD HH:mm')}`
 })
 
+function normalizeRange(start, end) {
+  const normalizedStart = dayjs(start).startOf('day')
+  const normalizedEnd = dayjs(end).endOf('day')
+  return {
+    start: normalizedStart.format('YYYY-MM-DDTHH:mm'),
+    end: normalizedEnd.format('YYYY-MM-DDTHH:mm')
+  }
+}
+
 function setDefaultTwoYears() {
   const end = dayjs()
   const start = end.subtract(2, 'year')
-  from.value = start.format('YYYY-MM-DDTHH:mm')
-  to.value   = end.format('YYYY-MM-DDTHH:mm')
+  const normalized = normalizeRange(start, end)
+  from.value = normalized.start
+  to.value = normalized.end
 }
 
 // Dibuja (ordenando por tiempo y limitando al rango elegido)
@@ -195,7 +206,7 @@ setDefaultTwoYears()
 onMounted(() => {
   // Calendario de rango (un solo input)
   const picker = new Litepicker({
-    element: document.getElementById('range-input'),
+    element: rangeInputRef.value,
     singleMode: false,
     splitView: false,
     numberOfMonths: 1,
@@ -218,12 +229,9 @@ onMounted(() => {
       return
     }
 
-    from.value = start.format('YYYY-MM-DDTHH:mm')
-    to.value = end.format('YYYY-MM-DDTHH:mm')
-  })
-
-  picker.on('clear:selection', () => {
-    setDefaultTwoYears()
+    const normalized = normalizeRange(start, end)
+    from.value = normalized.start
+    to.value = normalized.end
   })
 
   if (dayjs(from.value).isValid() && dayjs(to.value).isValid()) {
@@ -290,7 +298,7 @@ onBeforeUnmount(() => {
           <label class="magneto__field">
             <span class="magneto__label">Rango de fechas</span>
             <input
-              id="range-input"
+              ref="rangeInputRef"
               class="magneto__picker"
               placeholder="Selecciona inicio → fin"
               readonly

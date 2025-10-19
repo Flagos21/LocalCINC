@@ -16,22 +16,26 @@ const placeholders = [
     </header>
 
     <div class="home__grid">
-      <article class="panel panel--tall">
-        <div class="panel__head">
-          <h3>El Sol (SUVI)</h3>
-          <p>Vista en tiempo (casi) real del Sol por longitudes de onda EUV.</p>
-        </div>
-        <SunViewer />
-      </article>
-
-      <div class="home__magneto">
-        <MagnetometerChartOverview />
+      <div class="home__item">
+        <article class="panel panel--tall">
+          <div class="panel__head">
+            <h3>El Sol (SUVI)</h3>
+            <p>Vista en tiempo (casi) real del Sol por longitudes de onda EUV.</p>
+          </div>
+          <SunViewer />
+        </article>
       </div>
 
-      <article v-for="section in placeholders" :key="section.title" class="panel">
-        <h3>{{ section.title }}</h3>
-        <p>{{ section.description }}</p>
-      </article>
+      <div class="home__item">
+        <MagnetometerChartOverview class="home__magneto-card" />
+      </div>
+
+      <div v-for="section in placeholders" :key="section.title" class="home__item">
+        <article class="panel">
+          <h3>{{ section.title }}</h3>
+          <p>{{ section.description }}</p>
+        </article>
+      </div>
     </div>
   </section>
 </template>
@@ -56,7 +60,22 @@ const placeholders = [
 .home__grid {
   display: grid;
   gap: 1.5rem;
-  grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+}
+
+@media (min-width: 1024px) {
+  .home__grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    align-items: stretch;
+  }
+}
+
+.home__item {
+  display: flex;
+}
+
+.home__item > * {
+  flex: 1 1 auto;
 }
 
 .home__magneto {
@@ -87,5 +106,13 @@ const placeholders = [
 
 .panel--tall {
   min-height: 420px;
+}
+
+.home__magneto-card :deep(.magneto__card) {
+  height: 100%;
+}
+
+.home__magneto-card :deep(.magneto__chart) {
+  min-height: 280px;
 }
 </style>

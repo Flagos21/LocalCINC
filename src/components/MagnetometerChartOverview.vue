@@ -303,48 +303,46 @@ onBeforeUnmount(() => {
 
 <style scoped>
 .magneto {
-  padding: 1.5rem;
+  padding: 0;
 }
 
 .magneto__card {
-  margin: 0 auto;
-  max-width: 1120px;
-  background: linear-gradient(150deg, #ffffff 0%, #f6f8ff 50%, #edf2ff 100%);
-  border-radius: 24px;
+  width: 100%;
+  background: linear-gradient(135deg, #ffffff 0%, #eef2ff 45%, #e0e7ff 100%);
+  border-radius: 20px;
   border: 1px solid rgba(15, 23, 42, 0.08);
-  box-shadow: 0 24px 50px rgba(15, 23, 42, 0.12);
+  box-shadow: 0 16px 32px rgba(15, 23, 42, 0.12);
   display: flex;
   flex-direction: column;
-  gap: 1.5rem;
+  gap: 1.25rem;
   overflow: hidden;
 }
 
 .magneto__header {
   display: flex;
   flex-direction: column;
-  gap: 1.75rem;
-  padding: 2rem 2.5rem 1.5rem;
-  background: rgba(255, 255, 255, 0.65);
-  backdrop-filter: blur(12px);
+  gap: 1.25rem;
+  padding: 1.5rem 1.75rem 1.25rem;
+  background: rgba(255, 255, 255, 0.7);
+  backdrop-filter: blur(10px);
 }
 
 .magneto__title {
-  font-size: 2rem;
+  font-size: 1.5rem;
   font-weight: 600;
   color: #0f172a;
 }
 
 .magneto__description {
-  max-width: 46ch;
   color: #475569;
-  font-size: 0.95rem;
-  line-height: 1.5;
+  font-size: 0.9rem;
+  line-height: 1.45;
 }
 
 .magneto__filters {
   display: flex;
   flex-wrap: wrap;
-  gap: 1.25rem;
+  gap: 1rem;
   align-items: flex-start;
 }
 
@@ -356,11 +354,11 @@ onBeforeUnmount(() => {
   display: flex;
   flex-direction: column;
   gap: 0.35rem;
-  min-width: 220px;
+  min-width: 180px;
 }
 
 .magneto__label {
-  font-size: 0.75rem;
+  font-size: 0.7rem;
   letter-spacing: 0.08em;
   text-transform: uppercase;
   color: #64748b;
@@ -374,12 +372,12 @@ onBeforeUnmount(() => {
 }
 
 .magneto__quick-button {
-  border: 1px solid rgba(37, 99, 235, 0.35);
-  background: rgba(37, 99, 235, 0.08);
+  border: 1px solid rgba(37, 99, 235, 0.3);
+  background: rgba(37, 99, 235, 0.1);
   color: #1d4ed8;
-  padding: 0.4rem 0.75rem;
+  padding: 0.35rem 0.65rem;
   border-radius: 999px;
-  font-size: 0.85rem;
+  font-size: 0.8rem;
   font-weight: 600;
   transition: background-color 0.2s ease, color 0.2s ease, border-color 0.2s ease;
   cursor: pointer;
@@ -401,24 +399,23 @@ onBeforeUnmount(() => {
 
 .magneto__summary {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
-  gap: 0.75rem;
-  padding: 0.75rem 1rem;
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+  gap: 0.65rem;
+  padding: 0.65rem 0.85rem;
   background: rgba(37, 99, 235, 0.08);
-  border-radius: 16px;
+  border-radius: 14px;
   border: 1px solid rgba(37, 99, 235, 0.12);
   color: #1e3a8a;
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.4);
 }
 
 .magneto__summary-block {
   display: flex;
   flex-direction: column;
-  gap: 0.25rem;
+  gap: 0.2rem;
 }
 
 .magneto__summary-label {
-  font-size: 0.7rem;
+  font-size: 0.65rem;
   text-transform: uppercase;
   letter-spacing: 0.08em;
   font-weight: 600;
@@ -426,27 +423,28 @@ onBeforeUnmount(() => {
 }
 
 .magneto__summary-value {
-  font-size: 0.95rem;
+  font-size: 0.85rem;
   color: #0f172a;
+  font-weight: 500;
 }
 
 .magneto__body {
-  padding: 0 2.5rem 2.25rem;
+  padding: 0 1.75rem 1.75rem;
   display: flex;
   flex-direction: column;
-  gap: 1rem;
+  gap: 0.85rem;
 }
 
 .magneto__chart-wrapper {
   position: relative;
-  border-radius: 18px;
+  border-radius: 16px;
   overflow: hidden;
   border: 1px solid rgba(15, 23, 42, 0.08);
   background: #ffffff;
 }
 
 .magneto__chart {
-  height: 420px;
+  height: 320px;
   width: 100%;
 }
 
@@ -464,8 +462,8 @@ onBeforeUnmount(() => {
 }
 
 .magneto__spinner {
-  width: 1.75rem;
-  height: 1.75rem;
+  width: 1.5rem;
+  height: 1.5rem;
   border-radius: 50%;
   border: 3px solid rgba(37, 99, 235, 0.25);
   border-top-color: #2563eb;
@@ -473,10 +471,9 @@ onBeforeUnmount(() => {
 }
 
 .magneto__empty {
-  margin-top: 1rem;
-  padding: 1rem 1.25rem;
+  padding: 0.85rem 1.1rem;
   background: rgba(59, 130, 246, 0.12);
-  border-radius: 14px;
+  border-radius: 12px;
   color: #1d4ed8;
   font-weight: 500;
   text-align: center;
@@ -485,7 +482,7 @@ onBeforeUnmount(() => {
 .magneto__error {
   text-align: center;
   color: #b91c1c;
-  font-size: 0.95rem;
+  font-size: 0.9rem;
   font-weight: 500;
 }
 
@@ -499,47 +496,18 @@ onBeforeUnmount(() => {
 }
 
 @media (max-width: 768px) {
-  .magneto {
-    padding: 1rem;
-  }
-
   .magneto__card {
-    border-radius: 20px;
+    border-radius: 18px;
   }
 
-  .magneto__header {
-    padding: 1.5rem 1.75rem 1.25rem;
-  }
-
-  .magneto__body {
-    padding: 0 1.75rem 1.75rem;
-  }
-
-  .magneto__filters {
-    flex-direction: column;
-    align-items: stretch;
-  }
-
-  .magneto__field {
-    width: 100%;
-  }
-
-  .magneto__summary {
-    width: 100%;
+  .magneto__chart {
+    height: 280px;
   }
 }
 
 @media (max-width: 520px) {
-  .magneto__card {
-    gap: 1.25rem;
-  }
-
   .magneto__title {
-    font-size: 1.65rem;
-  }
-
-  .magneto__chart {
-    height: 360px;
+    font-size: 1.35rem;
   }
 }
 </style>
