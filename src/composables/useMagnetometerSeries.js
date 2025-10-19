@@ -1,4 +1,5 @@
 import { isRef, onBeforeUnmount, onMounted, ref, watch } from 'vue';
+import dayjs from 'dayjs';
 
 export function useMagnetometerSeries({
   range,
@@ -34,6 +35,31 @@ export function useMagnetometerSeries({
     const fromValue = fromRef.value;
     const toValue = toRef.value;
 
+    const parsedFrom = fromValue ? dayjs(fromValue) : null;
+    const parsedTo = toValue ? dayjs(toValue) : null;
+
+    if ((parsedFrom && !parsedFrom.isValid()) || (parsedTo && !parsedTo.isValid())) {
+      errorMessage.value = 'Selecciona un rango de fechas válido.';
+      labels.value = [];
+      series.value = [];
+      if (abortController.value === controller) {
+        abortController.value = undefined;
+      }
+      isLoading.value = false;
+      return;
+    }
+
+    if (parsedFrom && parsedTo && parsedFrom.isAfter(parsedTo)) {
+      errorMessage.value = 'La fecha inicial no puede ser posterior a la final.';
+      labels.value = [];
+      series.value = [];
+      if (abortController.value === controller) {
+        abortController.value = undefined;
+      }
+      isLoading.value = false;
+      return;
+    }
+
     if ((fromValue && !toValue) || (!fromValue && toValue)) {
       errorMessage.value = 'Debes indicar una fecha inicial y final.';
       labels.value = [];
@@ -51,9 +77,9 @@ export function useMagnetometerSeries({
       unit: unitRef.value
     });
 
-    if (fromValue && toValue) {
-      searchParams.set('from', fromValue);
-      searchParams.set('to', toValue);
+    if (parsedFrom && parsedTo) {
+      searchParams.set('from', parsedFrom.format('YYYY-MM-DDTHH:mm'));
+      searchParams.set('to', parsedTo.format('YYYY-MM-DDTHH:mm'));
     } else {
       searchParams.set('range', rangeRef.value);
     }
@@ -77,7 +103,7 @@ export function useMagnetometerSeries({
         } else {
           throw new Error();
         }
-      } catch (error) {
+      } catch {
         const snippet = rawBody.slice(0, 140).replace(/\s+/g, ' ').trim();
         throw new Error(
           snippet
