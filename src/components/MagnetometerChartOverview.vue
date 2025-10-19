@@ -1,33 +1,69 @@
 <script setup>
-import { ref, onMounted, watch, computed, onBeforeUnmount } from 'vue'
+import { ref, computed, watch, onMounted, onBeforeUnmount } from 'vue'
 import Plotly from 'plotly.js-dist-min'
 import dayjs from 'dayjs'
-import Litepicker from 'litepicker'
-import 'litepicker/dist/css/litepicker.css'
 import { useMagnetometerSeries } from '@/composables/useMagnetometerSeries'
 
-// Fechas (un solo input range)
+const plotRef = ref(null)
+const activePreset = ref('1m')
+const rangeRef = ref('')
 const from = ref('')
 const to = ref('')
-const pickerRef = ref(null)
 
-// Nuestro composable (usa from/to)
 const { labels, series, isLoading, errorMessage } = useMagnetometerSeries({
-  from, to, every: ref(''), range: ref(''), unit: ref('nT'), station: ref('CHI')
+  range: rangeRef,
+  every: ref(''),
+  unit: ref('nT'),
+  station: ref('CHI'),
+  from,
+  to
 })
 
-const plotRef = ref(null)
 const visiblePoints = ref(0)
 const dataExtent = ref(null)
-const hasValidSelection = computed(() => dayjs(from.value).isValid() && dayjs(to.value).isValid())
-const hasVisibleData = computed(() => visiblePoints.value > 0)
 
-const rangeHint = computed(() => {
-  if (!hasValidSelection.value) {
-    return 'Sin selección de fechas'
+const presets = [
+  { id: '1m', label: '1 m', description: 'Último mes', duration: { amount: 1, unit: 'month' } },
+  { id: '6m', label: '6 m', description: 'Últimos 6 meses', duration: { amount: 6, unit: 'month' } },
+  { id: '1y', label: '1 y', description: 'Último año', duration: { amount: 1, unit: 'year' } },
+  { id: 'all', label: 'Todo', description: 'Últimos 5 años', duration: { amount: 5, unit: 'year' }, rangeToken: '5y' }
+]
+
+const selectedPreset = computed(() => presets.find((preset) => preset.id === activePreset.value) ?? presets[0])
+
+const requestedWindow = computed(() => {
+  const preset = selectedPreset.value
+  if (!preset) return null
+
+  if (preset.rangeToken) {
+    const end = dayjs()
+    const start = end.subtract(preset.duration.amount, preset.duration.unit)
+    return { start, end }
   }
 
-  return `${dayjs(from.value).format('YYYY-MM-DD HH:mm')} → ${dayjs(to.value).format('YYYY-MM-DD HH:mm')}`
+  const start = dayjs(from.value)
+  const end = dayjs(to.value)
+
+  if (!start.isValid() || !end.isValid()) {
+    return null
+  }
+
+  return { start, end }
+})
+
+const rangeHint = computed(() => {
+  const preset = selectedPreset.value
+  const window = requestedWindow.value
+
+  if (!preset) {
+    return 'Sin selección'
+  }
+
+  if (!window) {
+    return preset.description
+  }
+
+  return `${window.start.format('YYYY-MM-DD HH:mm')} → ${window.end.format('YYYY-MM-DD HH:mm')}`
 })
 
 const dataWindowHint = computed(() => {
@@ -38,17 +74,33 @@ const dataWindowHint = computed(() => {
   return `${dayjs(dataExtent.value.start).format('YYYY-MM-DD HH:mm')} → ${dayjs(dataExtent.value.end).format('YYYY-MM-DD HH:mm')}`
 })
 
-function setDefaultTwoYears() {
+const hasVisibleData = computed(() => visiblePoints.value > 0)
+
+function applyPreset(id) {
+  const preset = presets.find((item) => item.id === id)
+  if (!preset) return
+
+  activePreset.value = id
+
+  if (preset.rangeToken) {
+    rangeRef.value = preset.rangeToken
+    from.value = ''
+    to.value = ''
+    draw()
+    return
+  }
+
+  rangeRef.value = ''
   const end = dayjs()
-  const start = end.subtract(2, 'year')
+  const start = end.subtract(preset.duration.amount, preset.duration.unit)
   from.value = start.format('YYYY-MM-DDTHH:mm')
-  to.value   = end.format('YYYY-MM-DDTHH:mm')
+  to.value = end.format('YYYY-MM-DDTHH:mm')
+  draw()
 }
 
-// Dibuja (ordenando por tiempo y limitando al rango elegido)
 function draw() {
   const rawPoints = (labels.value || []).map((t, i) => ({ t, v: (series.value || [])[i] }))
-    .filter(p => p.t && Number.isFinite(p.v))
+    .filter((point) => point.t && Number.isFinite(point.v))
     .sort((a, b) => new Date(a.t) - new Date(b.t))
 
   if (rawPoints.length) {
@@ -62,36 +114,23 @@ function draw() {
     dataExtent.value = null
   }
 
-  const selectionStart = hasValidSelection.value ? dayjs(from.value) : null
-  const selectionEnd = hasValidSelection.value ? dayjs(to.value) : null
+  visiblePoints.value = rawPoints.length
 
-  const filteredPoints = selectionStart && selectionEnd
-    ? rawPoints.filter((point) => {
-        const time = new Date(point.t).getTime()
-        return time >= selectionStart.valueOf() && time <= selectionEnd.valueOf()
-      })
-    : rawPoints
-
-  visiblePoints.value = filteredPoints.length
-
-  const xs = filteredPoints.map(p => p.t)
-  const ys = filteredPoints.map(p => p.v)
+  const xs = rawPoints.map((point) => point.t)
+  const ys = rawPoints.map((point) => point.v)
 
   let xRange = null
 
-  if (selectionStart && selectionEnd) {
-    if (selectionStart.isSame(selectionEnd)) {
-      xRange = [selectionStart.subtract(12, 'hour').toISOString(), selectionEnd.add(12, 'hour').toISOString()]
-    } else {
-      xRange = [selectionStart.toISOString(), selectionEnd.toISOString()]
-    }
-  } else if (filteredPoints.length) {
-    const start = dayjs(filteredPoints[0].t)
-    const end = dayjs(filteredPoints[filteredPoints.length - 1].t)
+  if (rawPoints.length) {
+    const start = dayjs(rawPoints[0].t)
+    const end = dayjs(rawPoints[rawPoints.length - 1].t)
     const hasSpan = end.diff(start) > 0
     const paddedStart = hasSpan ? start : start.subtract(6, 'hour')
     const paddedEnd = hasSpan ? end : end.add(6, 'hour')
     xRange = [paddedStart.toISOString(), paddedEnd.toISOString()]
+  } else if (requestedWindow.value) {
+    const { start, end } = requestedWindow.value
+    xRange = [start.toISOString(), end.toISOString()]
   }
 
   if (!xRange) {
@@ -99,8 +138,9 @@ function draw() {
     xRange = [now.subtract(1, 'day').toISOString(), now.add(1, 'day').toISOString()]
   }
 
-  const titleStart = filteredPoints.length ? dayjs(filteredPoints[0].t) : selectionStart || dayjs()
-  const titleEnd = filteredPoints.length ? dayjs(filteredPoints[filteredPoints.length - 1].t) : selectionEnd || titleStart
+  const displayWindow = rawPoints.length
+    ? { start: dayjs(rawPoints[0].t), end: dayjs(rawPoints[rawPoints.length - 1].t) }
+    : requestedWindow.value
 
   const trace = {
     x: xs,
@@ -121,7 +161,9 @@ function draw() {
 
   const layout = {
     title: {
-      text: `H – ${titleStart.format('YYYY-MM-DD')} a ${titleEnd.format('YYYY-MM-DD')}`,
+      text: displayWindow
+        ? `H – ${displayWindow.start.format('YYYY-MM-DD')} a ${displayWindow.end.format('YYYY-MM-DD')}`
+        : 'H – sin datos',
       x: 0.02,
       xanchor: 'left',
       font: {
@@ -131,34 +173,29 @@ function draw() {
       }
     },
     xaxis: {
-      title: 'Fecha',
       type: 'date',
       autorange: false,
       range: xRange,
       tickformatstops: [
-        { dtickrange: [null, 1000*60*60*24*2], value: '%H:%M\n%d %b' },
-        { dtickrange: [1000*60*60*24*2, 1000*60*60*24*62], value: '%d %b %Y' },
-        { dtickrange: [1000*60*60*24*62, null], value: '%b %Y' }
+        { dtickrange: [null, 1000 * 60 * 60 * 24 * 2], value: '%H:%M\n%d %b' },
+        { dtickrange: [1000 * 60 * 60 * 24 * 2, 1000 * 60 * 60 * 24 * 62], value: '%d %b %Y' },
+        { dtickrange: [1000 * 60 * 60 * 24 * 62, null], value: '%b %Y' }
       ],
-      rangeslider: {
-        visible: true,
-        range: xRange
-      },
-      rangeselector: {
-        buttons: [
-          { step: 'month', stepmode: 'backward', count: 1, label: '1m' },
-          { step: 'month', stepmode: 'backward', count: 6, label: '6m' },
-          { step: 'year',  stepmode: 'backward', count: 1, label: '1y' },
-          { step: 'all', label: 'Todo' }
-        ]
-      }
+      showgrid: true,
+      gridcolor: 'rgba(148, 163, 184, 0.15)',
+      zeroline: false,
+      linecolor: 'rgba(100, 116, 139, 0.4)',
+      linewidth: 1.5,
+      mirror: true
     },
     yaxis: {
-      title: 'H (nT)',
-      zeroline: true,
-      zerolinewidth: 1.5,
-      zerolinecolor: '#666',
+      autorange: true,
+      title: 'nT',
+      zeroline: false,
       gridcolor: '#e5e7eb',
+      linecolor: 'rgba(100, 116, 139, 0.4)',
+      linewidth: 1.5,
+      mirror: true,
       tickformat: ',.2f'
     },
     margin: { t: 60, r: 24, b: 60, l: 70 },
@@ -171,13 +208,11 @@ function draw() {
     }
   }
 
-  const data = filteredPoints.length ? [trace] : []
-
   if (!plotRef.value) {
     return
   }
 
-  Plotly.react(plotRef.value, data, layout, {
+  Plotly.react(plotRef.value, rawPoints.length ? [trace] : [], layout, {
     responsive: true,
     displaylogo: false,
     scrollZoom: true,
@@ -190,84 +225,15 @@ function draw() {
   })
 }
 
-setDefaultTwoYears()
-
-onMounted(() => {
-  // Calendario de rango (un solo input)
-  const picker = new Litepicker({
-    element: document.getElementById('range-input'),
-    singleMode: false,
-    splitView: false,
-    numberOfMonths: 1,
-    numberOfColumns: 1,
-    format: 'YYYY-MM-DD HH:mm',
-    allowRepick: true,
-    autoApply: true,
-    useLocaleSettings: true,
-    lang: 'es-ES',
-    dropdowns: { minYear: 2010, maxYear: dayjs().year(), months: true, years: true },
-    startDate: dayjs(from.value).isValid() ? dayjs(from.value).toDate() : null,
-    endDate: dayjs(to.value).isValid() ? dayjs(to.value).toDate() : null
-  })
-
-  picker.on('selected', (d1, d2) => {
-    const start = dayjs(d1)
-    const end = dayjs(d2)
-
-    if (!start.isValid() || !end.isValid()) {
-      return
-    }
-
-    from.value = start.format('YYYY-MM-DDTHH:mm')
-    to.value = end.format('YYYY-MM-DDTHH:mm')
-  })
-
-  picker.on('clear:selection', () => {
-    setDefaultTwoYears()
-  })
-
-  if (dayjs(from.value).isValid() && dayjs(to.value).isValid()) {
-    picker.setDateRange(dayjs(from.value).toDate(), dayjs(to.value).toDate(), true)
-  }
-
-  pickerRef.value = picker
-
-  draw()
-})
+applyPreset(activePreset.value)
 
 watch([labels, series], draw)
 
-watch([from, to], () => {
+onMounted(() => {
   draw()
 })
 
-watch([from, to], ([start, end]) => {
-  const picker = pickerRef.value
-  if (!picker) return
-
-  const startDate = dayjs(start)
-  const endDate = dayjs(end)
-
-  if (startDate.isValid() && endDate.isValid()) {
-    const currentStart = picker.getStartDate()
-    const currentEnd = picker.getEndDate()
-
-    const startTime = currentStart ? currentStart.getTime() : null
-    const endTime = currentEnd ? currentEnd.getTime() : null
-
-    if (startTime !== startDate.toDate().getTime() || endTime !== endDate.toDate().getTime()) {
-      picker.setDateRange(startDate.toDate(), endDate.toDate(), true)
-    }
-  } else {
-    picker.clearSelection()
-  }
-})
-
 onBeforeUnmount(() => {
-  if (pickerRef.value) {
-    pickerRef.value.destroy()
-    pickerRef.value = null
-  }
   if (plotRef.value) {
     Plotly.purge(plotRef.value)
   }
@@ -275,27 +241,32 @@ onBeforeUnmount(() => {
 </script>
 
 <template>
-  <section class="magneto">
+  <section class="magneto magneto--compact">
     <div class="magneto__card">
       <header class="magneto__header">
         <div>
           <h1 class="magneto__title">Magnetómetro – Estación única</h1>
           <p class="magneto__description">
-            Visualiza la componente H en nanoTeslas para la estación CHI. Usa el calendario para seleccionar un rango
-            específico o explora con el zoom interactivo del gráfico.
+            Visualiza la componente H con atajos rápidos para cambiar el periodo observado.
           </p>
         </div>
 
-        <div class="magneto__filters">
-          <label class="magneto__field">
-            <span class="magneto__label">Rango de fechas</span>
-            <input
-              id="range-input"
-              class="magneto__picker"
-              placeholder="Selecciona inicio → fin"
-              readonly
-            />
-          </label>
+        <div class="magneto__filters magneto__filters--compact">
+          <div class="magneto__field">
+            <span class="magneto__label">Rangos rápidos</span>
+            <div class="magneto__quick">
+              <button
+                v-for="preset in presets"
+                :key="preset.id"
+                type="button"
+                class="magneto__quick-button"
+                :class="{ 'magneto__quick-button--active': preset.id === activePreset }"
+                @click="applyPreset(preset.id)"
+              >
+                {{ preset.label }}
+              </button>
+            </div>
+          </div>
 
           <div class="magneto__summary" role="status" aria-live="polite">
             <div class="magneto__summary-block">
@@ -377,11 +348,15 @@ onBeforeUnmount(() => {
   align-items: flex-start;
 }
 
+.magneto__filters--compact {
+  align-items: center;
+}
+
 .magneto__field {
   display: flex;
   flex-direction: column;
   gap: 0.35rem;
-  min-width: 260px;
+  min-width: 220px;
 }
 
 .magneto__label {
@@ -392,23 +367,36 @@ onBeforeUnmount(() => {
   font-weight: 600;
 }
 
-.magneto__picker {
-  border: 1px solid #cbd5f5;
-  border-radius: 12px;
-  padding: 0.65rem 0.85rem;
-  font-size: 0.95rem;
-  color: #1e293b;
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.5);
-  background: rgba(255, 255, 255, 0.95);
-  transition: border-color 0.2s ease, box-shadow 0.2s ease;
+.magneto__quick {
+  display: flex;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+}
+
+.magneto__quick-button {
+  border: 1px solid rgba(37, 99, 235, 0.35);
+  background: rgba(37, 99, 235, 0.08);
+  color: #1d4ed8;
+  padding: 0.4rem 0.75rem;
+  border-radius: 999px;
+  font-size: 0.85rem;
+  font-weight: 600;
+  transition: background-color 0.2s ease, color 0.2s ease, border-color 0.2s ease;
   cursor: pointer;
 }
 
-.magneto__picker:focus-visible,
-.magneto__picker:hover {
+.magneto__quick-button:hover,
+.magneto__quick-button:focus-visible {
+  background: rgba(37, 99, 235, 0.18);
   border-color: #2563eb;
-  box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.15);
+  color: #1e3a8a;
   outline: none;
+}
+
+.magneto__quick-button--active {
+  background: #2563eb;
+  color: #ffffff;
+  border-color: #1d4ed8;
 }
 
 .magneto__summary {
@@ -419,7 +407,8 @@ onBeforeUnmount(() => {
   background: rgba(37, 99, 235, 0.08);
   border-radius: 16px;
   border: 1px solid rgba(37, 99, 235, 0.12);
-  min-width: 260px;
+  color: #1e3a8a;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.4);
 }
 
 .magneto__summary-block {
@@ -429,17 +418,16 @@ onBeforeUnmount(() => {
 }
 
 .magneto__summary-label {
-  font-size: 0.65rem;
-  letter-spacing: 0.08em;
+  font-size: 0.7rem;
   text-transform: uppercase;
-  color: #1e3a8a;
+  letter-spacing: 0.08em;
   font-weight: 600;
+  color: #1d4ed8;
 }
 
 .magneto__summary-value {
-  font-size: 0.85rem;
+  font-size: 0.95rem;
   color: #0f172a;
-  font-weight: 500;
 }
 
 .magneto__body {
@@ -458,7 +446,7 @@ onBeforeUnmount(() => {
 }
 
 .magneto__chart {
-  height: 520px;
+  height: 420px;
   width: 100%;
 }
 
@@ -551,7 +539,7 @@ onBeforeUnmount(() => {
   }
 
   .magneto__chart {
-    height: 460px;
+    height: 360px;
   }
 }
 </style>
