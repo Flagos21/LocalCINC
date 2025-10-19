@@ -11,6 +11,7 @@ const from = ref('')
 const to = ref('')
 const pickerRef = ref(null)
 const rangeInputRef = ref(null)
+const pendingRange = ref(null)
 
 // Nuestro composable (usa from/to)
 const { labels, series, isLoading, errorMessage } = useMagnetometerSeries({
@@ -29,6 +30,19 @@ const rangeHint = computed(() => {
   }
 
   return `${dayjs(from.value).format('YYYY-MM-DD HH:mm')} → ${dayjs(to.value).format('YYYY-MM-DD HH:mm')}`
+})
+
+const pendingHint = computed(() => {
+  if (!pendingRange.value) {
+    return ''
+  }
+
+  const { start, end } = pendingRange.value
+  if (!start || !end) {
+    return ''
+  }
+
+  return `${dayjs(start).format('YYYY-MM-DD HH:mm')} → ${dayjs(end).format('YYYY-MM-DD HH:mm')}`
 })
 
 const dataWindowHint = computed(() => {
@@ -54,7 +68,44 @@ function setDefaultTwoYears() {
   const normalized = normalizeRange(start, end)
   from.value = normalized.start
   to.value = normalized.end
+  pendingRange.value = { ...normalized }
 }
+
+function applyPendingRange() {
+  if (!pendingRange.value) {
+    return
+  }
+
+  const { start, end } = pendingRange.value
+  if (!dayjs(start).isValid() || !dayjs(end).isValid()) {
+    return
+  }
+
+  const sameStart = from.value === start
+  const sameEnd = to.value === end
+
+  if (sameStart && sameEnd) {
+    return
+  }
+
+  from.value = start
+  to.value = end
+}
+
+const hasPendingChange = computed(() => {
+  if (!pendingRange.value) {
+    return false
+  }
+
+  const { start, end } = pendingRange.value
+  if (!dayjs(start).isValid() || !dayjs(end).isValid()) {
+    return false
+  }
+
+  return from.value !== start || to.value !== end
+})
+
+const isApplyDisabled = computed(() => !hasPendingChange.value)
 
 // Dibuja (ordenando por tiempo y limitando al rango elegido)
 function draw() {
@@ -226,12 +277,12 @@ onMounted(() => {
     const end = dayjs(d2)
 
     if (!start.isValid() || !end.isValid()) {
+      pendingRange.value = null
       return
     }
 
     const normalized = normalizeRange(start, end)
-    from.value = normalized.start
-    to.value = normalized.end
+    pendingRange.value = { ...normalized }
   })
 
   if (dayjs(from.value).isValid() && dayjs(to.value).isValid()) {
@@ -246,6 +297,9 @@ onMounted(() => {
 watch([labels, series], draw)
 
 watch([from, to], () => {
+  pendingRange.value = dayjs(from.value).isValid() && dayjs(to.value).isValid()
+    ? { start: from.value, end: to.value }
+    : null
   draw()
 })
 
@@ -295,15 +349,26 @@ onBeforeUnmount(() => {
         </div>
 
         <div class="magneto__filters">
-          <label class="magneto__field">
+          <div class="magneto__field">
             <span class="magneto__label">Rango de fechas</span>
-            <input
-              ref="rangeInputRef"
-              class="magneto__picker"
-              placeholder="Selecciona inicio → fin"
-              readonly
-            />
-          </label>
+            <div class="magneto__controls">
+              <input
+                ref="rangeInputRef"
+                class="magneto__picker"
+                placeholder="Selecciona inicio → fin"
+                readonly
+              />
+              <button
+                type="button"
+                class="magneto__apply"
+                :disabled="isApplyDisabled"
+                @click="applyPendingRange"
+              >
+                Visualizar
+              </button>
+            </div>
+            <p v-if="hasPendingChange" class="magneto__pending">Pendiente: {{ pendingHint }}</p>
+          </div>
 
           <div class="magneto__summary" role="status" aria-live="polite">
             <div class="magneto__summary-block">
@@ -392,6 +457,12 @@ onBeforeUnmount(() => {
   min-width: 260px;
 }
 
+.magneto__controls {
+  display: flex;
+  gap: 0.5rem;
+  align-items: center;
+}
+
 .magneto__label {
   font-size: 0.75rem;
   letter-spacing: 0.08em;
@@ -417,6 +488,41 @@ onBeforeUnmount(() => {
   border-color: #2563eb;
   box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.15);
   outline: none;
+}
+
+.magneto__apply {
+  border: none;
+  border-radius: 0.75rem;
+  padding: 0.5rem 1rem;
+  background: #2563eb;
+  color: #fff;
+  font-weight: 600;
+  font-size: 0.875rem;
+  cursor: pointer;
+  transition: transform 0.15s ease, box-shadow 0.15s ease, background 0.15s ease;
+  box-shadow: 0 10px 20px rgba(37, 99, 235, 0.25);
+}
+
+.magneto__apply:hover:not(:disabled) {
+  transform: translateY(-1px);
+  box-shadow: 0 12px 24px rgba(37, 99, 235, 0.28);
+}
+
+.magneto__apply:disabled {
+  background: #cbd5f5;
+  color: #64748b;
+  cursor: not-allowed;
+  box-shadow: none;
+}
+
+.magneto__pending {
+  margin: 0;
+  font-size: 0.75rem;
+  color: #0f172a;
+  background: rgba(37, 99, 235, 0.12);
+  border-radius: 0.75rem;
+  padding: 0.35rem 0.6rem;
+  font-weight: 500;
 }
 
 .magneto__summary {

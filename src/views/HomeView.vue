@@ -59,14 +59,14 @@ const placeholders = [
 
 .home__grid {
   display: grid;
-  gap: 1.5rem;
-  grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+  gap: 1.25rem;
+  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+  align-items: stretch;
 }
 
 @media (min-width: 1024px) {
   .home__grid {
     grid-template-columns: repeat(2, minmax(0, 1fr));
-    align-items: stretch;
   }
 }
 
@@ -78,19 +78,15 @@ const placeholders = [
   flex: 1 1 auto;
 }
 
-.home__magneto {
-  grid-column: 1 / -1;
-}
-
 .panel {
   background: #ffffff;
   border-radius: 0.75rem;
-  padding: 1rem 1.25rem;
-  box-shadow: 0 10px 25px rgba(15, 23, 42, 0.08);
+  padding: 0.85rem 1.1rem;
+  box-shadow: 0 8px 18px rgba(15, 23, 42, 0.08);
   display: flex;
   flex-direction: column;
-  gap: 0.75rem;
-  min-height: 220px;
+  gap: 0.65rem;
+  min-height: 200px;
 }
 
 .panel__head h3 {
@@ -105,14 +101,23 @@ const placeholders = [
 }
 
 .panel--tall {
-  min-height: 420px;
+  min-height: 360px;
 }
 
 .home__magneto-card :deep(.magneto__card) {
   height: 100%;
+  box-shadow: 0 10px 22px rgba(15, 23, 42, 0.08);
+}
+
+.home__magneto-card :deep(.magneto__header) {
+  padding: 1.1rem 1.3rem 0.9rem;
+}
+
+.home__magneto-card :deep(.magneto__body) {
+  padding: 0 1.3rem 1.1rem;
 }
 
 .home__magneto-card :deep(.magneto__chart) {
-  min-height: 280px;
+  min-height: 220px;
 }
 </style>
