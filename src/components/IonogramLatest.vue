@@ -95,7 +95,7 @@ onBeforeUnmount(() => {
   padding: 0.75rem 1rem 1rem;
   box-shadow: 0 6px 14px rgba(15, 23, 42, 0.08);
   min-height: 0;
-  height: 100%;
+  height: auto;
 }
 
 .ionogram-card__header {
@@ -149,7 +149,8 @@ onBeforeUnmount(() => {
 
 .ionogram-card__image {
   width: 100%;
-  height: 100%;
+  height: auto;
+  max-height: 100%;
   object-fit: contain;
 }
 

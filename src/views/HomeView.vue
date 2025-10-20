@@ -183,18 +183,16 @@ function fmtUTC(value) {
   display: grid;
   gap: 1rem;
   grid-template-columns: repeat(auto-fit, minmax(min(20rem, 100%), 1fr));
-  grid-auto-rows: minmax(0, 1fr);
+  grid-auto-rows: auto;
+  align-items: start;
 }
 
 .home__cell {
-  display: flex;
-  min-height: 0;
   width: 100%;
 }
 
 .home__cell > * {
-  flex: 1;
-  min-height: 0;
+  width: 100%;
 }
 
 @media (min-width: 960px) {
@@ -217,8 +215,7 @@ function fmtUTC(value) {
   display: flex;
   flex-direction: column;
   gap: 0.6rem;
-  height: 100%;
-  min-height: 0;
+  height: auto;
 }
 
 .panel--chart {
@@ -244,7 +241,7 @@ function fmtUTC(value) {
 }
 
 .panel__body {
-  flex: 1;
+  flex: 0 1 auto;
   display: flex;
   flex-direction: column;
   min-height: 0;
