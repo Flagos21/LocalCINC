@@ -332,6 +332,10 @@ onBeforeUnmount(() => {
   color: #0f172a;
 }
 
+.magneto--compact .magneto__title {
+  font-size: 1.25rem;
+}
+
 .magneto__description {
   color: #475569;
   font-size: 0.9rem;
@@ -444,6 +448,10 @@ onBeforeUnmount(() => {
 .magneto__chart {
   height: min(240px, 100%);
   width: 100%;
+}
+
+.magneto--compact .magneto__chart {
+  height: 100%;
 }
 
 .magneto__loading {
