@@ -125,7 +125,13 @@ const options = computed(() => ({
   },
   legend: { show: true },
   stroke: { width: 2, curve: 'straight' },
-  markers: { size: 0 },
+  markers: {
+    size: 0,
+    strokeWidth: 2,
+    fillOpacity: 1,
+    strokeOpacity: 1,
+    hover: { sizeOffset: 3 }
+  },
   xaxis: {
     type: 'datetime',
     tooltip: { enabled: false }, // la tooltip la renderizamos nosotros
