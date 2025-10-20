@@ -45,19 +45,23 @@ import { RouterLink, RouterView } from 'vue-router'
   display: flex;
   min-height: 100vh;
   flex-direction: column;
+  width: 100%;
+  overflow-x: hidden;
 }
 
 .navbar {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 1rem 1.5rem;
+  padding: 1rem clamp(1rem, 2vw, 1.5rem);
   background-color: #1f2933;
   color: #ffffff;
   box-shadow: 0 2px 6px rgba(0, 0, 0, 0.1);
   position: sticky;
   top: 0;
   z-index: 1000;
+  width: 100%;
+  box-sizing: border-box;
 }
 
 .brand {
@@ -75,6 +79,7 @@ import { RouterLink, RouterView } from 'vue-router'
   display: flex;
   gap: 1.25rem;
   align-items: center;
+  flex-wrap: wrap;
 }
 
 .nav-link {

@@ -24,6 +24,8 @@ import SunViewer from '@/components/SunViewer.vue'
   gap: 1.5rem;
   flex: 1;
   min-height: 0;
+  width: min(100%, 68rem);
+  margin: 0 auto;
 }
 
 .sun__header h2 {
@@ -44,5 +46,7 @@ import SunViewer from '@/components/SunViewer.vue'
   background: #ffffff;
   border-radius: 0.75rem;
   box-shadow: 0 1px 2px rgba(15, 23, 42, 0.08), 0 4px 12px rgba(15, 23, 42, 0.06);
+  display: flex;
+  justify-content: center;
 }
 </style>
