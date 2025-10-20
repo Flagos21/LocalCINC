@@ -10,14 +10,37 @@ const router = createRouter({
       component: HomeView,
     },
     {
-      path: '/graphs',
-      name: 'graphs',
-      component: () => import('../views/GraphsView.vue'),
+      path: '/sol',
+      name: 'sun',
+      component: () => import('../views/SunView.vue'),
+    },
+    {
+      path: '/rayos-x',
+      name: 'xray',
+      component: () => import('../views/XRayView.vue'),
     },
     {
       path: '/ionograms',
       name: 'ionograms',
       component: () => import('../views/IonogramGalleryView.vue'),
+    },
+    {
+      path: '/magnetometros/influxdb',
+      name: 'magnetometers-influxdb',
+      component: () => import('../views/MagnetometerInfluxView.vue'),
+    },
+    {
+      path: '/magnetometros/local',
+      name: 'magnetometers-local',
+      component: () => import('../views/MagnetometerLocalView.vue'),
+    },
+    {
+      path: '/graphs',
+      redirect: { name: 'magnetometers-influxdb' },
+    },
+    {
+      path: '/magnetometros',
+      redirect: { name: 'magnetometers-influxdb' },
     },
   ],
 })
