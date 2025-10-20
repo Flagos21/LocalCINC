@@ -204,15 +204,9 @@ function fmtUTC(d) {
   gap: 1.5rem;
 }
 
-.home__header h2 {
-  font-size: 1.75rem;
-  font-weight: 600;
-  color: #1f2933;
-}
-
-.home__header p {
-  color: #52606d;
-}
+/* FORZAR NEGRO EN TITULARES Y PÁRRAFOS DEL HEADER */
+.home__header h2 { color: #0f0f10; }
+.home__header p  { color: #0f0f10; }
 
 .home__grid {
   display: grid;
@@ -231,9 +225,7 @@ function fmtUTC(d) {
 .home__item > * { flex: 1 1 auto; }
 
 /* permitir ítems de ancho completo */
-.home__item--wide {
-  grid-column: 1 / -1;
-}
+.home__item--wide { grid-column: 1 / -1; }
 
 .panel {
   background: #ffffff;
@@ -244,18 +236,17 @@ function fmtUTC(d) {
   flex-direction: column;
   gap: 0.6rem;
   min-height: 180px;
+
+  /* DEFAULT: todo texto dentro del panel en negro */
+  color: #0f0f10;
 }
 
-.panel__head h3 {
-  font-size: 1.1rem;
-  font-weight: 600;
-  color: #1f2933;
-}
+/* Titulares/descr. de panel en negro */
+.panel__head h3 { color: #0f0f10; }
+.panel__head p  { color: #0f0f10; }
 
-.panel__head p {
-  color: #69707d;
-  margin-bottom: 0.25rem;
-}
+/* Placeholders: el <p> directo del panel en negro explícito */
+.panel > p { color: #0f0f10; }
 
 .panel--tall { min-height: 320px; }
 
@@ -264,16 +255,28 @@ function fmtUTC(d) {
   height: 100%;
   box-shadow: 0 10px 22px rgba(15, 23, 42, 0.08);
 }
+/* Override suave: textos dentro del overview en negro */
+.home__magneto-card :deep(h1),
+.home__magneto-card :deep(h2),
+.home__magneto-card :deep(h3),
+.home__magneto-card :deep(p),
+.home__magneto-card :deep(small),
+.home__magneto-card :deep(span),
+.home__magneto-card :deep(label) {
+  color: #0f0f10;
+}
+
 .home__magneto-card :deep(.magneto__header) { padding: 1.1rem 1.3rem 0.9rem; }
 .home__magneto-card :deep(.magneto__body)   { padding: 0 1.3rem 1.1rem; }
 .home__magneto-card :deep(.magneto__chart)  { min-height: 200px; }
 
-/* ===== Extensiones nuestras (coexisten con lo anterior) ===== */
+/* ===== Extensiones nuestras ===== */
 .panel--chart { min-height: 420px; }
 .panel--wide  { grid-column: 1 / -1; }
 
 .panel__body { flex: 1; display: flex; flex-direction: column; }
 
+/* Estados dentro de panel (mantienen su propio color cuando aplica) */
 .panel__state {
   margin-top: auto;
   margin-bottom: auto;
@@ -308,11 +311,8 @@ function fmtUTC(d) {
 .xray__controls { display: flex; gap: .5rem; align-items: center; flex-wrap: wrap; }
 .xray__clock { display: flex; gap: .35rem; align-items: baseline; }
 
-.tag { color: #0f0f10; font-size: .85rem; }
-.mono {
-  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", monospace;
-  color: #0f0f10;
-}
+.tag  { color: #0f0f10; font-size: .85rem; }
+.mono { font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", monospace; color: #0f0f10; }
 
 /* Toggle */
 .toggle {
