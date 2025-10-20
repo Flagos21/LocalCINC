@@ -1,6 +1,6 @@
 <script setup>
 import { ref, onMounted, watch, computed, onBeforeUnmount } from 'vue'
-import Plotly from 'plotly.js-dist-min'
+import VueApexCharts from 'vue3-apexcharts'
 import dayjs from 'dayjs'
 import Litepicker from 'litepicker'
 import 'litepicker/dist/css/litepicker.css'
@@ -57,11 +57,74 @@ const { labels, series, isLoading, errorMessage } = useMagnetometerSeries({
   from, to, every: ref(''), range: ref(''), unit: ref('nT'), station: ref('CHI')
 })
 
-const plotRef = ref(null)
+const chartSeries = ref([])
+const xDomain = ref({ min: null, max: null })
 const visiblePoints = ref(0)
 const dataExtent = ref(null)
 const hasValidSelection = computed(() => dayjs(from.value).isValid() && dayjs(to.value).isValid())
 const hasVisibleData = computed(() => visiblePoints.value > 0)
+
+const chartOptions = computed(() => ({
+  chart: {
+    type: 'line',
+    height: 520,
+    toolbar: {
+      show: true,
+      tools: { download: true, selection: true, zoom: true, zoomin: true, zoomout: true, pan: true },
+    },
+    animations: { enabled: true, easing: 'easeinout', speed: 250 },
+    background: 'transparent',
+    foreColor: '#0f172a',
+    zoom: { enabled: true, type: 'x' }
+  },
+  dataLabels: { enabled: false },
+  stroke: { width: 2, curve: 'straight' },
+  markers: {
+    size: 0,
+    strokeWidth: 2,
+    fillOpacity: 1,
+    strokeOpacity: 1,
+    hover: { sizeOffset: 3 }
+  },
+  colors: ['#2563eb'],
+  xaxis: {
+    type: 'datetime',
+    min: Number.isFinite(xDomain.value.min) ? xDomain.value.min : undefined,
+    max: Number.isFinite(xDomain.value.max) ? xDomain.value.max : undefined,
+    labels: { datetimeUTC: true },
+    tooltip: { enabled: false },
+    axisBorder: { color: '#cbd5f5' },
+    axisTicks: { color: '#cbd5f5' }
+  },
+  yaxis: {
+    title: { text: 'H (nT)' },
+    labels: {
+      formatter: (val) => (Number.isFinite(val) ? Number(val).toFixed(2) : ''),
+    },
+    decimalsInFloat: 2,
+    axisBorder: { show: false },
+    tickAmount: 6
+  },
+  grid: {
+    borderColor: '#e2e8f0',
+    strokeDashArray: 4,
+    padding: { left: 16, right: 16 }
+  },
+  tooltip: {
+    theme: 'dark',
+    shared: true,
+    intersect: false,
+    x: { format: 'yyyy-MM-dd HH:mm:ss' },
+    y: {
+      formatter: (val) => (Number.isFinite(val) ? `${val.toFixed(2)} nT` : '—')
+    }
+  },
+  legend: { show: false },
+  noData: {
+    text: 'Sin datos para mostrar',
+    style: { color: '#64748b', fontSize: '14px' }
+  }
+}))
 
 const rangeHint = computed(() => {
   if (!hasValidSelection.value) {
@@ -171,6 +234,11 @@ const hasPendingRange = computed(() => {
 
 const isApplyDisabled = computed(() => !hasPendingRange.value || !hasPendingChange.value)
 
+function toTimestamp(value) {
+  const ts = new Date(value).getTime()
+  return Number.isFinite(ts) ? ts : null
+}
+
 // Dibuja (ordenando por tiempo y limitando al rango elegido)
 function draw() {
   const rawPoints = (labels.value || []).map((t, i) => ({ t, v: (series.value || [])[i] }))
@@ -200,16 +268,13 @@ function draw() {
 
   visiblePoints.value = filteredPoints.length
 
-  const xs = filteredPoints.map(p => p.t)
-  const ys = filteredPoints.map(p => p.v)
-
   let xRange = null
 
   if (selectionStart && selectionEnd) {
     if (selectionStart.isSame(selectionEnd)) {
-      xRange = [selectionStart.subtract(12, 'hour').toISOString(), selectionEnd.add(12, 'hour').toISOString()]
+      xRange = [selectionStart.subtract(12, 'hour'), selectionEnd.add(12, 'hour')]
     } else {
-      xRange = [selectionStart.toISOString(), selectionEnd.toISOString()]
+      xRange = [selectionStart, selectionEnd]
     }
   } else if (filteredPoints.length) {
     const start = dayjs(filteredPoints[0].t)
@@ -217,103 +282,33 @@ function draw() {
     const hasSpan = end.diff(start) > 0
     const paddedStart = hasSpan ? start : start.subtract(6, 'hour')
     const paddedEnd = hasSpan ? end : end.add(6, 'hour')
-    xRange = [paddedStart.toISOString(), paddedEnd.toISOString()]
+    xRange = [paddedStart, paddedEnd]
   }
 
   if (!xRange) {
     const now = dayjs()
-    xRange = [now.subtract(1, 'day').toISOString(), now.add(1, 'day').toISOString()]
+    xRange = [now.subtract(1, 'day'), now.add(1, 'day')]
   }
 
   const titleStart = filteredPoints.length ? dayjs(filteredPoints[0].t) : selectionStart || dayjs()
   const titleEnd = filteredPoints.length ? dayjs(filteredPoints[filteredPoints.length - 1].t) : selectionEnd || titleStart
 
-  const trace = {
-    x: xs,
-    y: ys,
-    type: 'scatter',
-    mode: 'lines',
-    connectgaps: false,
-    name: 'H',
-    line: {
-      color: '#2563eb',
-      width: 2
-    },
-    hovertemplate:
-      '%{x|%Y-%m-%d %H:%M:%S}<br>' +
-      'H: %{y:.2f} nT' +
-      '<extra></extra>'
+  const domain = {
+    min: Number.isFinite(xRange[0]?.valueOf?.()) ? xRange[0].valueOf() : null,
+    max: Number.isFinite(xRange[1]?.valueOf?.()) ? xRange[1].valueOf() : null
   }
 
-  const layout = {
-    title: {
-      text: `H – ${titleStart.format('YYYY-MM-DD')} a ${titleEnd.format('YYYY-MM-DD')}`,
-      x: 0.02,
-      xanchor: 'left',
-      font: {
-        family: 'Inter, sans-serif',
-        size: 18,
-        color: '#0f172a'
-      }
-    },
-    xaxis: {
-      title: 'Fecha',
-      type: 'date',
-      autorange: false,
-      range: xRange,
-      tickformatstops: [
-        { dtickrange: [null, 1000*60*60*24*2], value: '%H:%M\n%d %b' },
-        { dtickrange: [1000*60*60*24*2, 1000*60*60*24*62], value: '%d %b %Y' },
-        { dtickrange: [1000*60*60*24*62, null], value: '%b %Y' }
-      ],
-      rangeslider: {
-        visible: true,
-        range: xRange
-      },
-      rangeselector: {
-        buttons: [
-          { step: 'month', stepmode: 'backward', count: 1, label: '1m' },
-          { step: 'month', stepmode: 'backward', count: 6, label: '6m' },
-          { step: 'year',  stepmode: 'backward', count: 1, label: '1y' },
-          { step: 'all', label: 'Todo' }
-        ]
-      }
-    },
-    yaxis: {
-      title: 'H (nT)',
-      zeroline: true,
-      zerolinewidth: 1.5,
-      zerolinecolor: '#666',
-      gridcolor: '#e5e7eb',
-      tickformat: ',.2f'
-    },
-    margin: { t: 60, r: 24, b: 60, l: 70 },
-    paper_bgcolor: '#f8fafc',
-    plot_bgcolor: '#ffffff',
-    hovermode: 'x unified',
-    font: {
-      family: 'Inter, sans-serif',
-      color: '#0f172a'
-    }
-  }
+  xDomain.value = domain
 
-  const data = filteredPoints.length ? [trace] : []
-
-  if (!plotRef.value) {
-    return
-  }
-
-  Plotly.react(plotRef.value, data, layout, {
-    responsive: true,
-    displaylogo: false,
-    scrollZoom: true,
-    modeBarButtonsToRemove: ['lasso2d'],
-    toImageButtonOptions: {
-      format: 'png',
-      filename: `magnetometro-${dayjs().format('YYYYMMDD-HHmmss')}`,
-      scale: 2
-    }
-  })
+  chartSeries.value = filteredPoints.length
+    ? [{
+        name: `H – ${titleStart.format('YYYY-MM-DD')} a ${titleEnd.format('YYYY-MM-DD')}`,
+        data: filteredPoints.map(point => {
+          const ts = toTimestamp(point.t)
+          return [ts, point.v]
+        }).filter(([ts]) => ts !== null)
+      }]
+    : []
 }
 
 setDefaultTwoYears()
@@ -359,7 +354,7 @@ onMounted(() => {
   draw()
 })
 
-watch([labels, series], draw)
+watch([labels, series], draw, { immediate: true })
 
 watch([from, to], () => {
   draw()
@@ -391,9 +386,6 @@ onBeforeUnmount(() => {
   if (pickerRef.value) {
     pickerRef.value.destroy()
     pickerRef.value = null
-  }
-  if (plotRef.value) {
-    Plotly.purge(plotRef.value)
   }
 })
 </script>
@@ -447,7 +439,13 @@ onBeforeUnmount(() => {
 
       <div class="magneto__body">
         <div class="magneto__chart-wrapper">
-          <div ref="plotRef" class="magneto__chart"></div>
+          <VueApexCharts
+            type="line"
+            class="magneto__chart"
+            height="520"
+            :options="chartOptions"
+            :series="chartSeries"
+          />
 
           <div v-if="isLoading" class="magneto__loading" role="status" aria-live="polite">
             <span class="magneto__spinner" aria-hidden="true"></span>
@@ -509,7 +507,7 @@ onBeforeUnmount(() => {
   display: flex;
   flex-wrap: wrap;
   gap: 1.25rem;
-  align-items: flex-start;
+  align-items: center;
 }
 
 .magneto__field {

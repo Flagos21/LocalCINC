@@ -292,7 +292,7 @@ function fmtUTC(value) {
 .xray__head {
   display: flex;
   gap: 0.75rem;
-  align-items: flex-start;
+  align-items: center;
   justify-content: space-between;
   flex-wrap: wrap;
 }

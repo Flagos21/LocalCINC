@@ -1,6 +1,6 @@
 <script setup>
-import { ref, computed, watch, onMounted, onBeforeUnmount } from 'vue'
-import Plotly from 'plotly.js-dist-min'
+import { ref, computed, watch, onMounted } from 'vue'
+import VueApexCharts from 'vue3-apexcharts'
 import dayjs from 'dayjs'
 import { useMagnetometerSeries } from '@/composables/useMagnetometerSeries'
 
@@ -16,7 +16,8 @@ const unitRef = ref('nT')
 const from = ref('')
 const to = ref('')
 
-const plotRef = ref(null)
+const chartSeries = ref([])
+const xDomain = ref({ min: null, max: null })
 const latestSample = ref(null)
 const extent = ref(null)
 const pointCount = ref(0)
@@ -49,6 +50,60 @@ const formattedExtent = computed(() => {
   return `${dayjs(extent.value.start).format('YYYY-MM-DD')} → ${dayjs(extent.value.end).format('YYYY-MM-DD')}`
 })
 
+const chartOptions = computed(() => ({
+  chart: {
+    type: 'line',
+    height: 220,
+    animations: { enabled: true, easing: 'easeinout', speed: 250 },
+    toolbar: { show: true, tools: { download: true, selection: true, zoom: true, zoomin: true, zoomout: true, pan: true } },
+    background: 'transparent',
+    foreColor: '#0f172a',
+    zoom: { enabled: true, type: 'x' }
+  },
+  dataLabels: { enabled: false },
+  stroke: { width: 2, curve: 'straight' },
+  markers: {
+    size: 0,
+    strokeWidth: 2,
+    fillOpacity: 1,
+    strokeOpacity: 1,
+    hover: { sizeOffset: 3 }
+  },
+  colors: ['#2563eb'],
+  xaxis: {
+    type: 'datetime',
+    min: Number.isFinite(xDomain.value.min) ? xDomain.value.min : undefined,
+    max: Number.isFinite(xDomain.value.max) ? xDomain.value.max : undefined,
+    labels: { datetimeUTC: true },
+    tooltip: { enabled: false },
+    axisBorder: { color: '#cbd5f5' },
+    axisTicks: { color: '#cbd5f5' }
+  },
+  yaxis: {
+    title: { text: 'nT' },
+    decimalsInFloat: 1,
+    labels: { formatter: (val) => (Number.isFinite(val) ? Number(val).toFixed(1) : '') },
+    axisBorder: { show: false }
+  },
+  grid: {
+    borderColor: '#e2e8f0',
+    strokeDashArray: 4,
+    padding: { left: 12, right: 12 }
+  },
+  legend: { show: false },
+  tooltip: {
+    theme: 'dark',
+    shared: true,
+    intersect: false,
+    x: { format: 'yyyy-MM-dd HH:mm:ss' },
+    y: { formatter: (val) => (Number.isFinite(val) ? `${val.toFixed(1)} nT` : '—') }
+  },
+  noData: {
+    text: 'Sin datos para mostrar',
+    style: { color: '#64748b', fontSize: '13px' }
+  }
+}))
+
 function buildPoints() {
   return (labels.value || [])
     .map((t, idx) => ({ t, v: (series.value || [])[idx] }))
@@ -70,9 +125,6 @@ function draw() {
     latestSample.value = null
   }
 
-  const xs = points.map((p) => p.t)
-  const ys = points.map((p) => p.v)
-
   const now = dayjs()
   let xRange = null
   if (points.length) {
@@ -81,99 +133,37 @@ function draw() {
     const hasSpan = end.diff(start) > 0
     const paddedStart = hasSpan ? start : start.subtract(6, 'hour')
     const paddedEnd = hasSpan ? end : end.add(6, 'hour')
-    xRange = [paddedStart.toISOString(), paddedEnd.toISOString()]
+    xRange = [paddedStart, paddedEnd]
   }
 
   if (!xRange) {
-    xRange = [now.subtract(3, 'day').toISOString(), now.add(3, 'day').toISOString()]
+    xRange = [now.subtract(3, 'day'), now.add(3, 'day')]
   }
 
-  const trace = {
-    x: xs,
-    y: ys,
-    type: 'scatter',
-    mode: 'lines',
-    connectgaps: false,
-    name: 'H',
-    line: {
-      color: '#2563eb',
-      width: 2,
-    },
-    hovertemplate:
-      '%{x|%Y-%m-%d %H:%M:%S}<br>' +
-      'H: %{y:.1f} nT' +
-      '<extra></extra>',
+  const domain = {
+    min: Number.isFinite(xRange[0]?.valueOf?.()) ? xRange[0].valueOf() : null,
+    max: Number.isFinite(xRange[1]?.valueOf?.()) ? xRange[1].valueOf() : null
   }
 
-  const layout = {
-    height: 220,
-    margin: { t: 32, r: 16, b: 40, l: 56 },
-    paper_bgcolor: '#ffffff',
-    plot_bgcolor: '#ffffff',
-    hovermode: 'x unified',
-    showlegend: false,
-    title: {
-      text: hasData.value
-        ? `Serie ${props.station} · últimos ${props.range}`
-        : `Serie ${props.station}`,
-      x: 0,
-      xanchor: 'left',
-      font: {
-        family: 'Inter, sans-serif',
-        size: 16,
-        color: '#0f172a',
-      },
-    },
-    xaxis: {
-      type: 'date',
-      autorange: false,
-      range: xRange,
-      showgrid: true,
-      gridcolor: 'rgba(148, 163, 184, 0.2)',
-      zeroline: false,
-      linecolor: 'rgba(100, 116, 139, 0.35)',
-      linewidth: 1,
-      tickformatstops: [
-        { dtickrange: [null, 1000 * 60 * 60 * 24 * 2], value: '%d %b\n%H:%M' },
-        { dtickrange: [1000 * 60 * 60 * 24 * 2, 1000 * 60 * 60 * 24 * 62], value: '%d %b' },
-        { dtickrange: [1000 * 60 * 60 * 24 * 62, null], value: '%b %Y' },
-      ],
-    },
-    yaxis: {
-      autorange: true,
-      title: 'nT',
-      zeroline: false,
-      gridcolor: 'rgba(148, 163, 184, 0.2)',
-      linecolor: 'rgba(100, 116, 139, 0.35)',
-      linewidth: 1,
-      tickformat: ',.0f',
-    },
-  }
+  xDomain.value = domain
 
-  if (!plotRef.value) return
-
-  Plotly.react(plotRef.value, points.length ? [trace] : [], layout, {
-    responsive: true,
-    displaylogo: false,
-    modeBarButtonsToRemove: ['lasso2d'],
-    toImageButtonOptions: {
-      format: 'png',
-      filename: `magnetometro-${props.station}-${dayjs().format('YYYYMMDD-HHmmss')}`,
-      scale: 2,
-    },
-  })
+  chartSeries.value = points.length
+    ? [{
+        name: `Serie ${props.station}`,
+        data: points
+          .map((point) => {
+            const ts = new Date(point.t).getTime()
+            return Number.isFinite(ts) ? [ts, point.v] : null
+          })
+          .filter(Boolean)
+      }]
+    : []
 }
 
-watch([labels, series], draw)
+watch([labels, series], draw, { immediate: true })
 
 onMounted(() => {
   draw()
-})
-
-onBeforeUnmount(() => {
-  if (plotRef.value) {
-    Plotly.purge(plotRef.value)
-  }
 })
 </script>
 
@@ -209,7 +199,13 @@ onBeforeUnmount(() => {
         <p>Sin datos para el rango solicitado.</p>
       </div>
       <div v-else class="magneto-card__plot">
-        <div ref="plotRef" class="magneto-card__chart" />
+        <VueApexCharts
+          type="line"
+          class="magneto-card__chart"
+          height="220"
+          :options="chartOptions"
+          :series="chartSeries"
+        />
       </div>
     </div>
 
@@ -238,7 +234,7 @@ onBeforeUnmount(() => {
   display: flex;
   justify-content: space-between;
   gap: 0.75rem;
-  align-items: flex-start;
+  align-items: center;
   flex-wrap: wrap;
 }
 

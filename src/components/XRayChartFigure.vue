@@ -125,7 +125,13 @@ const options = computed(() => ({
   },
   legend: { show: true },
   stroke: { width: 2, curve: 'straight' },
-  markers: { size: 0 },
+  markers: {
+    size: 0,
+    strokeWidth: 2,
+    fillOpacity: 1,
+    strokeOpacity: 1,
+    hover: { sizeOffset: 3 }
+  },
   xaxis: {
     type: 'datetime',
     tooltip: { enabled: false }, // la tooltip la renderizamos nosotros
@@ -182,12 +188,12 @@ const options = computed(() => ({
       if (!rows.length) return '';
 
       return `
-        <div class="apex-custom-tip" style="padding:.5rem .6rem;">
-          <div style="font-weight:600;margin-bottom:.25rem;">${dtStr}</div>
+        <div class="apex-custom-tip" style="padding:.55rem .75rem;background:rgba(15,23,42,0.97);color:#f8fafc;border-radius:0.75rem;border:1px solid rgba(148,163,184,0.55);box-shadow:0 18px 38px rgba(15,23,42,0.35);backdrop-filter:none;">
+          <div style="font-weight:600;margin-bottom:.35rem;letter-spacing:0.01em;">${dtStr}</div>
           ${rows.map(r => `
             <div style="display:flex;align-items:center;justify-content:space-between;gap:.75rem;">
-              <div style="display:flex;align-items:center;gap:.4rem;min-width:11.5rem;">
-                <span style="width:.6rem;height:.6rem;border-radius:9999px;background:${r.color};display:inline-block;"></span>
+              <div style="display:flex;align-items:center;gap:.45rem;min-width:11.5rem;">
+                <span style="width:.55rem;height:.55rem;border-radius:9999px;background:${r.color};display:inline-block;box-shadow:0 0 0 1px rgba(255,255,255,0.55);"></span>
                 <span>${r.name}</span>
               </div>
               <span style="font-family:ui-monospace,Menlo,Consolas,monospace;">${r.valStr}</span>
