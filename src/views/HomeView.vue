@@ -1,16 +1,13 @@
 <script setup>
 import { ref, onMounted, onBeforeUnmount } from 'vue';
 
-/* === Componentes que ya están en el repo === */
 import SunViewer from '@/components/SunViewer.vue';
 import IonogramLatest from '@/components/IonogramLatest.vue';
-import MagnetometerChartOverview from '@/components/MagnetometerChartOverview.vue';
+import MagnetometerHomeCard from '@/components/MagnetometerHomeCard.vue';
 
-/* === Componentes/logic que agregamos nosotros === */
 import XRayChartFigure from '@/components/XRayChartFigure.vue';
 import { useGoesXrays } from '@/composables/useGoesXrays';
 
-/* -------- GOES X-rays (por satélite) -------- */
 const {
   isLoading: xrLoading,
   errorMessage: xrError,
@@ -21,23 +18,37 @@ const {
   lastPointTime,
   autoRefresh,
   toggleAuto,
-  range: xrRange,        // <- v-model del <select>
-  refresh
+  range: xrRange,
+  refresh,
 } = useGoesXrays({ range: '6h', pollMs: 60000, auto: true });
 
-/* -------- Reloj UTC (visual) -------- */
 const utcNow = ref(new Date());
 let clockTimer = null;
-onMounted(() => { clockTimer = window.setInterval(() => { utcNow.value = new Date(); }, 1000); });
-onBeforeUnmount(() => { if (clockTimer) clearInterval(clockTimer); });
 
-function fmtUTC(d) {
-  if (!d) return '—';
+onMounted(() => {
+  clockTimer = window.setInterval(() => {
+    utcNow.value = new Date();
+  }, 1000);
+});
+
+onBeforeUnmount(() => {
+  if (clockTimer) {
+    clearInterval(clockTimer);
+  }
+});
+
+function fmtUTC(value) {
+  if (!value) return '—';
   return new Intl.DateTimeFormat('en-GB', {
-    timeZone: 'UTC', hour12: false,
-    year: 'numeric', month: '2-digit', day: '2-digit',
-    hour: '2-digit', minute: '2-digit', second: '2-digit'
-  }).format(d) + ' UTC';
+    timeZone: 'UTC',
+    hour12: false,
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit',
+    second: '2-digit',
+  }).format(value) + ' UTC';
 }
 </script>
 
@@ -49,8 +60,7 @@ function fmtUTC(d) {
     </header>
 
     <div class="home__grid">
-      <!-- === SUVI === -->
-      <div class="home__cell">
+      <div class="home__cell home__cell--sun">
         <article class="panel panel--media">
           <div class="panel__head">
             <h3>El Sol (SUVI)</h3>
@@ -60,18 +70,7 @@ function fmtUTC(d) {
         </article>
       </div>
 
-      <!-- === Magnetómetro === -->
-      <div class="home__cell">
-        <MagnetometerChartOverview />
-      </div>
-
-      <!-- === Último Ionograma === -->
-      <div class="home__cell">
-        <IonogramLatest />
-      </div>
-
-      <!-- === GOES X-ray Flux === -->
-      <div class="home__cell">
+      <div class="home__cell home__cell--xray">
         <article class="panel panel--chart">
           <div class="panel__head xray__head">
             <div class="xray__title">
@@ -126,58 +125,46 @@ function fmtUTC(d) {
             <p>No hay datos disponibles para este rango.</p>
           </div>
 
-          <template v-else>
-            <XRayChartFigure :long-by-sat="longBySat" :short-by-sat="shortBySat" :sats="sats" />
-            <small class="xray__foot">
-              Sats: {{ sats.join(', ') }}
-              · Pts totales Long: {{
-                sats.reduce((acc, s) => acc + (longBySat[s]?.length || 0), 0)
-              }}
-              · Pts totales Short: {{
-                sats.reduce((acc, s) => acc + (shortBySat[s]?.length || 0), 0)
-              }}
-              <template v-if="lastPointTime">
-                · Último ts: {{ new Date(lastPointTime).toISOString() }}
-              </template>
-            </small>
-          </template>
-        </div>
-      </article>
+            <template v-else>
+              <XRayChartFigure
+                :long-by-sat="longBySat"
+                :short-by-sat="shortBySat"
+                :sats="sats"
+                :height="280"
+              />
+              <small class="xray__foot">
+                Sats: {{ sats.join(', ') }}
+                · Pts totales Long: {{
+                  sats.reduce((acc, s) => acc + (longBySat[s]?.length || 0), 0)
+                }}
+                · Pts totales Short: {{
+                  sats.reduce((acc, s) => acc + (shortBySat[s]?.length || 0), 0)
+                }}
+                <template v-if="lastPointTime">
+                  · Último ts: {{ new Date(lastPointTime).toISOString() }}
+                </template>
+              </small>
+            </template>
+          </div>
+        </article>
+      </div>
 
-      <!-- === Último Ionograma === -->
-      <IonogramLatest class="panel panel--media" />
+      <div class="home__cell home__cell--magneto">
+        <MagnetometerHomeCard range="7d" every="1h" station="CHI" />
+      </div>
 
-      <!-- === Detalle Magnetómetro === -->
-      <article class="panel panel--chart">
-        <div class="panel__head">
-          <h3>Componente H (últimos 7 días)</h3>
-          <p>Promedio horario de la estación CHI.</p>
-        </div>
-        <div class="panel__body" aria-live="polite">
-          <div v-if="errorMessage" class="panel__state panel__state--error">
-            <strong>Hubo un problema al cargar los datos.</strong>
-            <p>{{ errorMessage }}</p>
-          </div>
-          <div v-else-if="isLoading" class="panel__state panel__state--loading">
-            <span class="loader" aria-hidden="true" />
-            <p>Cargando datos…</p>
-          </div>
-          <div v-else-if="!hasData" class="panel__state">
-            <p>No hay datos disponibles para este periodo.</p>
-          </div>
-          <MagnetometerChartFigure v-else :labels="labels" :series="series" :unit="unit" />
-        </div>
-      </article>
+      <div class="home__cell home__cell--ionogram">
+        <IonogramLatest />
+      </div>
     </div>
   </section>
 </template>
 
 <style scoped>
-/* ===== Base del repo ===== */
 .home {
   display: flex;
   flex-direction: column;
-  gap: 1.5rem;
+  gap: 1.25rem;
   flex: 1;
   min-height: 0;
 }
@@ -204,17 +191,18 @@ function fmtUTC(d) {
 .home__grid {
   flex: 1;
   min-height: 0;
+  height: 100%;
   display: grid;
   gap: 1rem;
-  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+  grid-template-columns: 1fr;
   grid-auto-rows: minmax(0, 1fr);
-  align-content: stretch;
 }
 
 .home__cell {
   display: flex;
   min-height: 0;
   width: 100%;
+  overflow: hidden;
 }
 
 .home__cell > * {
@@ -222,9 +210,10 @@ function fmtUTC(d) {
   display: flex;
   flex-direction: column;
   min-height: 0;
+  overflow: hidden;
 }
 
-@media (min-width: 1200px) {
+@media (min-width: 900px) {
   .home__grid {
     grid-template-columns: repeat(2, minmax(0, 1fr));
     grid-template-rows: repeat(2, minmax(0, 1fr));
@@ -243,25 +232,32 @@ function fmtUTC(d) {
   min-height: 0;
 }
 
-  /* DEFAULT: todo texto dentro del panel en negro */
-  color: #0f0f10;
+.panel__head h3 {
+  font-size: 1.05rem;
+  font-weight: 600;
+  color: #1f2933;
 }
 
-/* Titulares/descr. de panel en negro */
-.panel__head h3 { color: #0f0f10; }
-.panel__head p  { color: #0f0f10; }
-
+.panel__head p {
+  color: #69707d;
+  margin-bottom: 0.25rem;
+  font-size: 0.85rem;
+}
 
 .panel--media {
   min-height: 0;
 }
 
-/* ===== Extensiones nuestras (coexisten con lo anterior) ===== */
 .panel--chart {
   min-height: 0;
 }
 
-.panel__body { flex: 1; display: flex; flex-direction: column; min-height: 0; }
+.panel__body {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+}
 
 /* Estados dentro de panel (mantienen su propio color cuando aplica) */
 .panel__state {
@@ -272,63 +268,131 @@ function fmtUTC(d) {
   text-align: center;
   gap: 0.5rem;
   color: #0f0f10;
-  padding: 2rem 1rem;
+  padding: 1.5rem 1rem;
   border: 1px dashed #d3dae6;
   border-radius: 0.75rem;
 }
+
 .panel__state--error {
   color: #b42318;
   border-color: rgba(180, 35, 24, 0.35);
   background: rgba(180, 35, 24, 0.06);
 }
-.panel__state--loading { color: #0f0f10; }
+
+.panel__state--loading {
+  color: #0f0f10;
+}
 
 .loader {
-  width: 1.75rem; height: 1.75rem; border-radius: 50%;
+  width: 1.75rem;
+  height: 1.75rem;
+  border-radius: 50%;
   border: 3px solid rgba(37, 99, 235, 0.2);
   border-top-color: #2563eb;
   animation: spin 1s linear infinite;
 }
-@keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
 
-/* ===== X-Rays (estilos UI) ===== */
-.xray__head { display: flex; gap: 0.75rem; align-items: flex-start; justify-content: space-between; flex-wrap: wrap; }
-.xray__title h3 { margin-bottom: .25rem; }
+@keyframes spin {
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(360deg);
+  }
+}
 
-.xray__controls { display: flex; gap: .5rem; align-items: center; flex-wrap: wrap; }
-.xray__clock { display: flex; gap: .35rem; align-items: baseline; }
+.xray__head {
+  display: flex;
+  gap: 0.75rem;
+  align-items: flex-start;
+  justify-content: space-between;
+  flex-wrap: wrap;
+}
 
-.tag  { color: #0f0f10; font-size: .85rem; }
-.mono { font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", monospace; color: #0f0f10; }
+.xray__title h3 {
+  margin-bottom: 0.25rem;
+}
 
-/* Toggle */
+.xray__controls {
+  display: flex;
+  gap: 0.5rem;
+  align-items: center;
+  flex-wrap: wrap;
+}
+
+.xray__clock {
+  display: flex;
+  gap: 0.35rem;
+  align-items: baseline;
+}
+
+.tag {
+  color: #0f0f10;
+  font-size: 0.85rem;
+}
+
+.mono {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, 'Liberation Mono', monospace;
+  color: #0f0f10;
+}
+
 .toggle {
   position: relative;
   display: inline-flex;
   align-items: center;
-  gap: .5rem;
+  gap: 0.5rem;
   border: 1px solid #cbd5e1;
   background: #f8fafc;
   border-radius: 9999px;
-  padding: .25rem .6rem .25rem .25rem;
+  padding: 0.25rem 0.6rem 0.25rem 0.25rem;
   cursor: pointer;
   color: #0f0f10;
 }
-.toggle .knob { width: 1.25rem; height: 1.25rem; border-radius: 9999px; background: #94a3b8; transition: all .2s ease; }
-.toggle.is-on { border-color: #2563eb; background: #eff6ff; }
-.toggle.is-on .knob { background: #2563eb; transform: translateX(1.1rem); }
-.toggle .label { font-size: .85rem; color: #0f0f10; }
+
+.toggle .knob {
+  width: 1.25rem;
+  height: 1.25rem;
+  border-radius: 9999px;
+  background: #94a3b8;
+  transition: all 0.2s ease;
+}
+
+.toggle.is-on {
+  border-color: #2563eb;
+  background: #eff6ff;
+}
+
+.toggle.is-on .knob {
+  background: #2563eb;
+  transform: translateX(1.1rem);
+}
+
+.toggle .label {
+  font-size: 0.85rem;
+  color: #0f0f10;
+}
 
 .ghost {
   background: transparent;
   border: 1px solid #cbd5e1;
   color: #0f0f10;
-  padding: .35rem .6rem;
-  border-radius: .5rem;
+  padding: 0.35rem 0.6rem;
+  border-radius: 0.5rem;
   cursor: pointer;
 }
-.ghost:hover { background: #f1f5f9; }
 
-.xray__foot { margin-top: .5rem; color: #0f0f10; }
+.ghost:hover {
+  background: #f1f5f9;
+}
 
+.xray__foot {
+  margin-top: 0.5rem;
+  color: #0f0f10;
+}
+
+@media (max-width: 600px) {
+  .panel {
+    padding: 0.75rem;
+  }
+}
 </style>

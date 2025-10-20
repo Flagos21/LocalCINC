@@ -320,20 +320,10 @@ onBeforeUnmount(() => {
   height: 100%;
 }
 
-.magneto--compact .magneto__card {
-  flex: 1;
-  gap: 1rem;
-  border-radius: 16px;
-}
-
 .magneto__header {
   display: flex;
   flex-direction: column;
   gap: 0.75rem;
-}
-
-.magneto--compact .magneto__header {
-  padding: 1.1rem 1.2rem 0.9rem;
 }
 
 .magneto__title {
