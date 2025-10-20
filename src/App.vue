@@ -34,6 +34,9 @@ import { RouterLink, RouterView } from 'vue-router'
   background-color: #1f2933;
   color: #ffffff;
   box-shadow: 0 2px 6px rgba(0, 0, 0, 0.1);
+  position: sticky;
+  top: 0;
+  z-index: 1000;
 }
 
 .brand {
