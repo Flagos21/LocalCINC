@@ -145,6 +145,7 @@ onBeforeUnmount(() => {
   place-items: center;
   overflow: hidden;
   min-height: 0;
+  max-height: 240px;
 }
 
 .ionogram-card__image {

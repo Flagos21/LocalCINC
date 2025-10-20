@@ -201,6 +201,22 @@ function fmtUTC(d) {
   width: 100%;
 }
 
+.home__grid {
+  flex: 1;
+  min-height: 0;
+  display: grid;
+  gap: 1rem;
+  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+  grid-auto-rows: minmax(0, 1fr);
+  align-content: stretch;
+}
+
+.home__cell {
+  display: flex;
+  min-height: 0;
+  width: 100%;
+}
+
 .home__cell > * {
   flex: 1;
   display: flex;
@@ -211,7 +227,7 @@ function fmtUTC(d) {
 @media (min-width: 1200px) {
   .home__grid {
     grid-template-columns: repeat(2, minmax(0, 1fr));
-    grid-auto-rows: minmax(0, 1fr);
+    grid-template-rows: repeat(2, minmax(0, 1fr));
   }
 }
 
