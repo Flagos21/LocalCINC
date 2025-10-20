@@ -111,6 +111,7 @@ const chartOptions = computed(() => ({
     padding: { left: 16, right: 16 }
   },
   tooltip: {
+    theme: 'dark',
     shared: true,
     intersect: false,
     x: { format: 'yyyy-MM-dd HH:mm:ss' },

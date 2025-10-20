@@ -92,6 +92,7 @@ const chartOptions = computed(() => ({
   },
   legend: { show: false },
   tooltip: {
+    theme: 'dark',
     shared: true,
     intersect: false,
     x: { format: 'yyyy-MM-dd HH:mm:ss' },

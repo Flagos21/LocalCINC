@@ -16,3 +16,33 @@ a {
 * {
   transition: color 0.2s ease, background-color 0.2s ease;
 }
+
+/* ApexCharts tooltip overrides */
+.apexcharts-tooltip,
+.apexcharts-tooltip.apexcharts-theme-light,
+.apexcharts-tooltip.apexcharts-theme-dark {
+  background: rgba(15, 23, 42, 0.96) !important;
+  color: #f8fafc !important;
+  border: 1px solid rgba(148, 163, 184, 0.55) !important;
+  box-shadow: 0 18px 40px rgba(15, 23, 42, 0.32) !important;
+  backdrop-filter: none !important;
+  border-radius: 0.75rem !important;
+  overflow: hidden;
+}
+
+.apexcharts-tooltip-title {
+  background: rgba(30, 41, 59, 0.92) !important;
+  color: #e2e8f0 !important;
+  border-bottom: 1px solid rgba(148, 163, 184, 0.35) !important;
+  font-weight: 600 !important;
+  letter-spacing: 0.01em;
+}
+
+.apexcharts-tooltip-series-group {
+  padding: 0.45rem 0.75rem !important;
+}
+
+.apexcharts-tooltip-marker {
+  opacity: 1 !important;
+  border: 1px solid rgba(255, 255, 255, 0.65);
+}
