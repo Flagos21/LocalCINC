@@ -20,6 +20,7 @@ export function useMagnetometerSeries({
   const series = ref([]);
   const isLoading = ref(false);
   const errorMessage = ref('');
+  const meta = ref(null);
   const abortController = ref();
 
   const fetchData = async () => {
@@ -61,15 +62,16 @@ export function useMagnetometerSeries({
     }
 
     if ((fromValue && !toValue) || (!fromValue && toValue)) {
-      errorMessage.value = 'Debes indicar una fecha inicial y final.';
-      labels.value = [];
-      series.value = [];
       if (abortController.value === controller) {
         abortController.value = undefined;
       }
       isLoading.value = false;
       return;
     }
+
+    labels.value = [];
+    series.value = [];
+    meta.value = null;
 
     const searchParams = new URLSearchParams({
       station: stationRef.value,
@@ -120,6 +122,7 @@ export function useMagnetometerSeries({
       const length = Math.min(incomingLabels.length, incomingSeries.length);
       labels.value = incomingLabels.slice(0, length);
       series.value = incomingSeries.slice(0, length);
+      meta.value = payload.meta ?? null;
     } catch (error) {
       if (error instanceof DOMException && error.name === 'AbortError') {
         return;
@@ -129,6 +132,7 @@ export function useMagnetometerSeries({
       errorMessage.value = message;
       labels.value = [];
       series.value = [];
+      meta.value = null;
     } finally {
       if (abortController.value === controller) {
         abortController.value = undefined;
@@ -156,6 +160,7 @@ export function useMagnetometerSeries({
     errorMessage,
     fetchData,
     from: fromRef,
-    to: toRef
+    to: toRef,
+    meta
   };
 }

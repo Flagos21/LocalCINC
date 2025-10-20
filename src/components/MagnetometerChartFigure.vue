@@ -10,15 +10,58 @@ import { useMagnetometerSeries } from '@/composables/useMagnetometerSeries'
 const from = ref('')
 const to = ref('')
 const pickerRef = ref(null)
+const rangeInputRef = ref(null)
+const pendingRange = ref(null)
+
+function toDayjsInstance(value) {
+  if (!value) {
+    return dayjs.invalid()
+  }
+
+  if (dayjs.isDayjs(value)) {
+    return value
+  }
+
+  if (value instanceof Date) {
+    return dayjs(value)
+  }
+
+  if (typeof value === 'number' || typeof value === 'string') {
+    return dayjs(value)
+  }
+
+  if (typeof value?.toDate === 'function') {
+    return dayjs(value.toDate())
+  }
+
+  if (typeof value?.toJSDate === 'function') {
+    return dayjs(value.toJSDate())
+  }
+
+  if (value?.dateInstance instanceof Date) {
+    return dayjs(value.dateInstance)
+  }
+
+  if (typeof value?.valueOf === 'function') {
+    const primitive = value.valueOf()
+    if (primitive !== value) {
+      return toDayjsInstance(primitive)
+    }
+  }
+
+  return dayjs(value)
+}
 
 // Nuestro composable (usa from/to)
-const { labels, series, fetchData, isLoading, errorMessage } = useMagnetometerSeries({
+const { labels, series, isLoading, errorMessage } = useMagnetometerSeries({
   from, to, every: ref(''), range: ref(''), unit: ref('nT'), station: ref('CHI')
 })
 
-const hasData = computed(() => labels.value.length > 0 && series.value.length > 0)
+const plotRef = ref(null)
+const visiblePoints = ref(0)
 const dataExtent = ref(null)
 const hasValidSelection = computed(() => dayjs(from.value).isValid() && dayjs(to.value).isValid())
+const hasVisibleData = computed(() => visiblePoints.value > 0)
 
 const rangeHint = computed(() => {
   if (!hasValidSelection.value) {
@@ -26,6 +69,19 @@ const rangeHint = computed(() => {
   }
 
   return `${dayjs(from.value).format('YYYY-MM-DD HH:mm')} → ${dayjs(to.value).format('YYYY-MM-DD HH:mm')}`
+})
+
+const pendingHint = computed(() => {
+  if (!pendingRange.value) {
+    return ''
+  }
+
+  const { start, end } = pendingRange.value
+  if (!start || !end) {
+    return ''
+  }
+
+  return `${dayjs(start).format('YYYY-MM-DD HH:mm')} → ${dayjs(end).format('YYYY-MM-DD HH:mm')}`
 })
 
 const dataWindowHint = computed(() => {
@@ -36,49 +92,148 @@ const dataWindowHint = computed(() => {
   return `${dayjs(dataExtent.value.start).format('YYYY-MM-DD HH:mm')} → ${dayjs(dataExtent.value.end).format('YYYY-MM-DD HH:mm')}`
 })
 
+function normalizeRange(start, end, { clampToFullDays = false } = {}) {
+  let normalizedStart = toDayjsInstance(start)
+  let normalizedEnd = toDayjsInstance(end)
+
+  if (!normalizedStart.isValid() || !normalizedEnd.isValid()) {
+    return { start: '', end: '' }
+  }
+
+  if (normalizedEnd.isBefore(normalizedStart)) {
+    ;[normalizedStart, normalizedEnd] = [normalizedEnd, normalizedStart]
+  }
+
+  if (clampToFullDays) {
+    normalizedStart = normalizedStart.startOf('day')
+    normalizedEnd = normalizedEnd.endOf('day')
+  }
+
+  return {
+    start: normalizedStart.format('YYYY-MM-DDTHH:mm'),
+    end: normalizedEnd.format('YYYY-MM-DDTHH:mm')
+  }
+}
+
 function setDefaultTwoYears() {
   const end = dayjs()
   const start = end.subtract(2, 'year')
-  from.value = start.format('YYYY-MM-DDTHH:mm')
-  to.value   = end.format('YYYY-MM-DDTHH:mm')
+  const normalized = normalizeRange(start, end, { clampToFullDays: true })
+  from.value = normalized.start
+  to.value = normalized.end
+  pendingRange.value = null
 }
 
-// Dibuja (ordenando por tiempo y sin conectar huecos)
-function draw() {
-  // Zipea, filtra NaN, ordena
-  const pts = (labels.value || []).map((t, i) => ({ t, v: (series.value || [])[i] }))
-    .filter(p => p.t && Number.isFinite(p.v))
-    .sort((a,b) => new Date(a.t) - new Date(b.t))
-
-  const xs = pts.map(p => p.t)
-  const ys = pts.map(p => p.v)
-
-  if (!xs.length) {
-    dataExtent.value = null
-    Plotly.purge('plot-magneto')
+function applyPendingRange() {
+  if (!hasPendingRange.value) {
     return
   }
 
-  const start = dayjs(xs[0])
-  const end = dayjs(xs[xs.length - 1])
-
-  dataExtent.value = {
-    start: start.toISOString(),
-    end: end.toISOString()
+  const { start, end } = pendingRange.value
+  if (!dayjs(start).isValid() || !dayjs(end).isValid()) {
+    return
   }
 
-  // Si solo llega un dato extendemos un poco la ventana para que sea visible
-  const hasSpan = end.diff(start) > 0
-  const paddedStart = hasSpan ? start : start.subtract(6, 'hour')
-  const paddedEnd = hasSpan ? end : end.add(6, 'hour')
-  const xRange = [paddedStart.toISOString(), paddedEnd.toISOString()]
+  const sameStart = from.value === start
+  const sameEnd = to.value === end
+
+  if (sameStart && sameEnd) {
+    pendingRange.value = null
+    return
+  }
+
+  from.value = start
+  to.value = end
+  pendingRange.value = null
+}
+
+const hasPendingChange = computed(() => {
+  if (!pendingRange.value) {
+    return false
+  }
+
+  const { start, end } = pendingRange.value
+  if (!dayjs(start).isValid() || !dayjs(end).isValid()) {
+    return false
+  }
+
+  return from.value !== start || to.value !== end
+})
+
+const hasPendingRange = computed(() => {
+  if (!pendingRange.value) {
+    return false
+  }
+
+  const { start, end } = pendingRange.value
+  return dayjs(start).isValid() && dayjs(end).isValid()
+})
+
+const isApplyDisabled = computed(() => !hasPendingRange.value || !hasPendingChange.value)
+
+// Dibuja (ordenando por tiempo y limitando al rango elegido)
+function draw() {
+  const rawPoints = (labels.value || []).map((t, i) => ({ t, v: (series.value || [])[i] }))
+    .filter(p => p.t && Number.isFinite(p.v))
+    .sort((a, b) => new Date(a.t) - new Date(b.t))
+
+  if (rawPoints.length) {
+    const rawStart = dayjs(rawPoints[0].t)
+    const rawEnd = dayjs(rawPoints[rawPoints.length - 1].t)
+    dataExtent.value = {
+      start: rawStart.toISOString(),
+      end: rawEnd.toISOString()
+    }
+  } else {
+    dataExtent.value = null
+  }
+
+  const selectionStart = hasValidSelection.value ? dayjs(from.value) : null
+  const selectionEnd = hasValidSelection.value ? dayjs(to.value) : null
+
+  const filteredPoints = selectionStart && selectionEnd
+    ? rawPoints.filter((point) => {
+        const time = new Date(point.t).getTime()
+        return time >= selectionStart.valueOf() && time <= selectionEnd.valueOf()
+      })
+    : rawPoints
+
+  visiblePoints.value = filteredPoints.length
+
+  const xs = filteredPoints.map(p => p.t)
+  const ys = filteredPoints.map(p => p.v)
+
+  let xRange = null
+
+  if (selectionStart && selectionEnd) {
+    if (selectionStart.isSame(selectionEnd)) {
+      xRange = [selectionStart.subtract(12, 'hour').toISOString(), selectionEnd.add(12, 'hour').toISOString()]
+    } else {
+      xRange = [selectionStart.toISOString(), selectionEnd.toISOString()]
+    }
+  } else if (filteredPoints.length) {
+    const start = dayjs(filteredPoints[0].t)
+    const end = dayjs(filteredPoints[filteredPoints.length - 1].t)
+    const hasSpan = end.diff(start) > 0
+    const paddedStart = hasSpan ? start : start.subtract(6, 'hour')
+    const paddedEnd = hasSpan ? end : end.add(6, 'hour')
+    xRange = [paddedStart.toISOString(), paddedEnd.toISOString()]
+  }
+
+  if (!xRange) {
+    const now = dayjs()
+    xRange = [now.subtract(1, 'day').toISOString(), now.add(1, 'day').toISOString()]
+  }
+
+  const titleStart = filteredPoints.length ? dayjs(filteredPoints[0].t) : selectionStart || dayjs()
+  const titleEnd = filteredPoints.length ? dayjs(filteredPoints[filteredPoints.length - 1].t) : selectionEnd || titleStart
 
   const trace = {
     x: xs,
     y: ys,
     type: 'scatter',
     mode: 'lines',
-    connectgaps: false,         // ⬅️ no conectar huecos
+    connectgaps: false,
     name: 'H',
     line: {
       color: '#2563eb',
@@ -92,7 +247,7 @@ function draw() {
 
   const layout = {
     title: {
-      text: `H – ${start.format('YYYY-MM-DD')} a ${end.format('YYYY-MM-DD')}`,
+      text: `H – ${titleStart.format('YYYY-MM-DD')} a ${titleEnd.format('YYYY-MM-DD')}`,
       x: 0.02,
       xanchor: 'left',
       font: {
@@ -135,10 +290,6 @@ function draw() {
     margin: { t: 60, r: 24, b: 60, l: 70 },
     paper_bgcolor: '#f8fafc',
     plot_bgcolor: '#ffffff',
-    shapes: [
-      { type: 'line', x0: 0, x1: 1, xref: 'paper', y0: 0, y1: 0, yref: 'y',
-        line: { dash: 'dash', width: 1, color: '#6b7280' } }
-    ],
     hovermode: 'x unified',
     font: {
       family: 'Inter, sans-serif',
@@ -146,7 +297,13 @@ function draw() {
     }
   }
 
-  Plotly.react('plot-magneto', [trace], layout, {
+  const data = filteredPoints.length ? [trace] : []
+
+  if (!plotRef.value) {
+    return
+  }
+
+  Plotly.react(plotRef.value, data, layout, {
     responsive: true,
     displaylogo: false,
     scrollZoom: true,
@@ -159,20 +316,12 @@ function draw() {
   })
 }
 
-async function apply() {
-  try {
-    await fetchData()
-  } catch (e) {
-    console.error(e)
-  }
-}
+setDefaultTwoYears()
 
 onMounted(() => {
-  setDefaultTwoYears()
-
   // Calendario de rango (un solo input)
   const picker = new Litepicker({
-    element: document.getElementById('range-input'),
+    element: rangeInputRef.value,
     singleMode: false,
     splitView: false,
     numberOfMonths: 1,
@@ -188,19 +337,17 @@ onMounted(() => {
   })
 
   picker.on('selected', (d1, d2) => {
-    const start = dayjs(d1)
-    const end = dayjs(d2)
+    const start = toDayjsInstance(d1)
+    const end = toDayjsInstance(d2)
 
     if (!start.isValid() || !end.isValid()) {
+      pendingRange.value = null
       return
     }
 
-    from.value = start.format('YYYY-MM-DDTHH:mm')
-    to.value = end.format('YYYY-MM-DDTHH:mm')
-  })
-
-  picker.on('clear:selection', () => {
-    setDefaultTwoYears()
+    const normalized = normalizeRange(start, end)
+    const matchesCurrent = normalized.start === from.value && normalized.end === to.value
+    pendingRange.value = matchesCurrent ? null : { ...normalized }
   })
 
   if (dayjs(from.value).isValid() && dayjs(to.value).isValid()) {
@@ -209,10 +356,14 @@ onMounted(() => {
 
   pickerRef.value = picker
 
-  apply()
+  draw()
 })
 
 watch([labels, series], draw)
+
+watch([from, to], () => {
+  draw()
+})
 
 watch([from, to], ([start, end]) => {
   const picker = pickerRef.value
@@ -241,6 +392,9 @@ onBeforeUnmount(() => {
     pickerRef.value.destroy()
     pickerRef.value = null
   }
+  if (plotRef.value) {
+    Plotly.purge(plotRef.value)
+  }
 })
 </script>
 
@@ -257,34 +411,43 @@ onBeforeUnmount(() => {
         </div>
 
         <div class="magneto__filters">
-          <label class="magneto__field">
+          <div class="magneto__field">
             <span class="magneto__label">Rango de fechas</span>
-            <input
-              id="range-input"
-              class="magneto__picker"
-              placeholder="Selecciona inicio → fin"
-              readonly
-            />
-            <small class="magneto__hint">
-              {{ rangeHint }}
-            </small>
-            <small v-if="dataExtent" class="magneto__hint magneto__hint--data">
-              Datos disponibles: {{ dataWindowHint }}
-            </small>
-          </label>
+            <div class="magneto__controls">
+              <input
+                ref="rangeInputRef"
+                class="magneto__picker"
+                placeholder="Selecciona inicio → fin"
+                readonly
+              />
+              <button
+                type="button"
+                class="magneto__apply"
+                :disabled="isApplyDisabled"
+                @click="applyPendingRange"
+              >
+                Visualizar
+              </button>
+            </div>
+            <p v-if="hasPendingChange" class="magneto__pending">Pendiente: {{ pendingHint }}</p>
+          </div>
 
-          <button class="magneto__button" type="button" @click="apply" :disabled="isLoading">
-            <svg class="magneto__button-icon" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24" aria-hidden="true">
-              <path stroke-linecap="round" stroke-linejoin="round" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9H9m0-5h.01M5 20h14a1 1 0 001-1v-9a1 1 0 00-1-1h-4l-2-3H9l-2 3H5a1 1 0 00-1 1v9a1 1 0 001 1z" />
-            </svg>
-            {{ isLoading ? 'Actualizando…' : 'Actualizar' }}
-          </button>
+          <div class="magneto__summary" role="status" aria-live="polite">
+            <div class="magneto__summary-block">
+              <span class="magneto__summary-label">Seleccionado</span>
+              <span class="magneto__summary-value">{{ rangeHint }}</span>
+            </div>
+            <div class="magneto__summary-block">
+              <span class="magneto__summary-label">Datos disponibles</span>
+              <span class="magneto__summary-value">{{ dataWindowHint || 'Sin datos en el último refresco' }}</span>
+            </div>
+          </div>
         </div>
       </header>
 
       <div class="magneto__body">
         <div class="magneto__chart-wrapper">
-          <div id="plot-magneto" class="magneto__chart"></div>
+          <div ref="plotRef" class="magneto__chart"></div>
 
           <div v-if="isLoading" class="magneto__loading" role="status" aria-live="polite">
             <span class="magneto__spinner" aria-hidden="true"></span>
@@ -292,7 +455,7 @@ onBeforeUnmount(() => {
           </div>
         </div>
 
-        <p v-if="!isLoading && !hasData && !errorMessage" class="magneto__empty">
+        <p v-if="!isLoading && !hasVisibleData && !errorMessage" class="magneto__empty">
           No hay datos disponibles para el rango seleccionado.
         </p>
 
@@ -345,8 +508,8 @@ onBeforeUnmount(() => {
 .magneto__filters {
   display: flex;
   flex-wrap: wrap;
-  gap: 1rem;
-  align-items: flex-end;
+  gap: 1.25rem;
+  align-items: flex-start;
 }
 
 .magneto__field {
@@ -354,6 +517,12 @@ onBeforeUnmount(() => {
   flex-direction: column;
   gap: 0.35rem;
   min-width: 260px;
+}
+
+.magneto__controls {
+  display: flex;
+  gap: 0.5rem;
+  align-items: center;
 }
 
 .magneto__label {
@@ -383,51 +552,70 @@ onBeforeUnmount(() => {
   outline: none;
 }
 
-.magneto__hint {
-  font-size: 0.75rem;
-  color: #64748b;
-}
-
-.magneto__hint--data {
-  color: #1e293b;
-  font-weight: 500;
-}
-
-.magneto__button {
-  display: inline-flex;
-  align-items: center;
-  gap: 0.55rem;
-  padding: 0.65rem 1.4rem;
-  border-radius: 12px;
+.magneto__apply {
   border: none;
-  background: linear-gradient(135deg, #2563eb 0%, #1d4ed8 100%);
-  color: #ffffff;
-  font-size: 0.95rem;
+  border-radius: 0.75rem;
+  padding: 0.5rem 1rem;
+  background: #2563eb;
+  color: #fff;
   font-weight: 600;
-  box-shadow: 0 14px 28px rgba(37, 99, 235, 0.25);
+  font-size: 0.875rem;
   cursor: pointer;
-  transition: transform 0.2s ease, box-shadow 0.2s ease;
+  transition: transform 0.15s ease, box-shadow 0.15s ease, background 0.15s ease;
+  box-shadow: 0 10px 20px rgba(37, 99, 235, 0.25);
 }
 
-.magneto__button:hover:not(:disabled) {
+.magneto__apply:hover:not(:disabled) {
   transform: translateY(-1px);
-  box-shadow: 0 18px 32px rgba(37, 99, 235, 0.3);
+  box-shadow: 0 12px 24px rgba(37, 99, 235, 0.28);
 }
 
-.magneto__button:active:not(:disabled) {
-  transform: translateY(0);
-  box-shadow: 0 12px 24px rgba(37, 99, 235, 0.22);
-}
-
-.magneto__button:disabled {
-  opacity: 0.6;
+.magneto__apply:disabled {
+  background: #cbd5f5;
+  color: #64748b;
   cursor: not-allowed;
   box-shadow: none;
 }
 
-.magneto__button-icon {
-  width: 1.05rem;
-  height: 1.05rem;
+.magneto__pending {
+  margin: 0;
+  font-size: 0.75rem;
+  color: #0f172a;
+  background: rgba(37, 99, 235, 0.12);
+  border-radius: 0.75rem;
+  padding: 0.35rem 0.6rem;
+  font-weight: 500;
+}
+
+.magneto__summary {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+  gap: 0.75rem;
+  padding: 0.75rem 1rem;
+  background: rgba(37, 99, 235, 0.08);
+  border-radius: 16px;
+  border: 1px solid rgba(37, 99, 235, 0.12);
+  min-width: 260px;
+}
+
+.magneto__summary-block {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+}
+
+.magneto__summary-label {
+  font-size: 0.65rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: #1e3a8a;
+  font-weight: 600;
+}
+
+.magneto__summary-value {
+  font-size: 0.85rem;
+  color: #0f172a;
+  font-weight: 500;
 }
 
 .magneto__body {
@@ -473,10 +661,13 @@ onBeforeUnmount(() => {
 }
 
 .magneto__empty {
+  margin-top: 1rem;
+  padding: 1rem 1.25rem;
+  background: rgba(59, 130, 246, 0.12);
+  border-radius: 14px;
+  color: #1d4ed8;
+  font-weight: 500;
   text-align: center;
-  color: #64748b;
-  font-size: 0.95rem;
-  padding: 0.75rem;
 }
 
 .magneto__error {
@@ -521,9 +712,8 @@ onBeforeUnmount(() => {
     width: 100%;
   }
 
-  .magneto__button {
+  .magneto__summary {
     width: 100%;
-    justify-content: center;
   }
 }
 
