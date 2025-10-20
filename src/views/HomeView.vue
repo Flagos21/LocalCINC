@@ -1,32 +1,13 @@
 <script setup>
-import { computed, ref, onMounted, onBeforeUnmount } from 'vue';
+import { ref, onMounted, onBeforeUnmount } from 'vue';
 
-/* === Componentes que ya están en el repo === */
 import SunViewer from '@/components/SunViewer.vue';
-import MagnetometerChartOverview from '@/components/MagnetometerChartOverview.vue';
 import IonogramLatest from '@/components/IonogramLatest.vue';
+import MagnetometerChartOverview from '@/components/MagnetometerChartOverview.vue';
 
-/* === Componentes/logic que agregamos nosotros === */
-import MagnetometerChartFigure from '@/components/MagnetometerChartFigure.vue';
 import XRayChartFigure from '@/components/XRayChartFigure.vue';
-import { useMagnetometerSeries } from '@/composables/useMagnetometerSeries';
 import { useGoesXrays } from '@/composables/useGoesXrays';
 
-const placeholders = [
-  { title: 'Sección 3', description: 'Espacio reservado para un gráfico o imagen.' },
-  { title: 'Sección 4', description: 'Espacio reservado para un gráfico o imagen.' }
-];
-
-/* -------- Magnetómetro (detalle CHI) -------- */
-const range = ref('7d');
-const every = ref('1h');
-const unit = ref('nT');
-const { labels, series, isLoading, errorMessage } = useMagnetometerSeries({
-  range, every, unit, station: 'CHI'
-});
-const hasData = computed(() => labels.value.length > 0 && series.value.length > 0);
-
-/* -------- GOES X-rays (por satélite) -------- */
 const {
   isLoading: xrLoading,
   errorMessage: xrError,
@@ -37,23 +18,37 @@ const {
   lastPointTime,
   autoRefresh,
   toggleAuto,
-  range: xrRange,        // <- v-model del <select>
-  refresh
+  range: xrRange,
+  refresh,
 } = useGoesXrays({ range: '6h', pollMs: 60000, auto: true });
 
-/* -------- Reloj UTC (visual) -------- */
 const utcNow = ref(new Date());
 let clockTimer = null;
-onMounted(() => { clockTimer = window.setInterval(() => { utcNow.value = new Date(); }, 1000); });
-onBeforeUnmount(() => { if (clockTimer) clearInterval(clockTimer); });
 
-function fmtUTC(d) {
-  if (!d) return '—';
+onMounted(() => {
+  clockTimer = window.setInterval(() => {
+    utcNow.value = new Date();
+  }, 1000);
+});
+
+onBeforeUnmount(() => {
+  if (clockTimer) {
+    clearInterval(clockTimer);
+  }
+});
+
+function fmtUTC(value) {
+  if (!value) return '—';
   return new Intl.DateTimeFormat('en-GB', {
-    timeZone: 'UTC', hour12: false,
-    year: 'numeric', month: '2-digit', day: '2-digit',
-    hour: '2-digit', minute: '2-digit', second: '2-digit'
-  }).format(d) + ' UTC';
+    timeZone: 'UTC',
+    hour12: false,
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit',
+    second: '2-digit',
+  }).format(value) + ' UTC';
 }
 </script>
 
@@ -65,9 +60,8 @@ function fmtUTC(d) {
     </header>
 
     <div class="home__grid">
-      <!-- === SUVI === -->
-      <div class="home__item">
-        <article class="panel panel--tall">
+      <div class="home__cell home__cell--sun">
+        <article class="panel">
           <div class="panel__head">
             <h3>El Sol (SUVI)</h3>
             <p>Vista en tiempo (casi) real del Sol por longitudes de onda EUV.</p>
@@ -76,51 +70,8 @@ function fmtUTC(d) {
         </article>
       </div>
 
-      <!-- === Overview Magnetómetro (del repo) === -->
-      <div class="home__item">
-        <MagnetometerChartOverview class="home__magneto-card" />
-      </div>
-
-      <!-- === Último Ionograma (del repo) === -->
-      <div class="home__item">
-        <IonogramLatest />
-      </div>
-
-      <!-- === Detalle Magnetómetro (nuestro) === -->
-      <div class="home__item">
+      <div class="home__cell home__cell--xray">
         <article class="panel panel--chart">
-          <div class="panel__head">
-            <h3>Componente H (últimos 7 días)</h3>
-            <p>Promedio horario de la estación CHI.</p>
-          </div>
-          <div class="panel__body" aria-live="polite">
-            <div v-if="errorMessage" class="panel__state panel__state--error">
-              <strong>Hubo un problema al cargar los datos.</strong>
-              <p>{{ errorMessage }}</p>
-            </div>
-            <div v-else-if="isLoading" class="panel__state panel__state--loading">
-              <span class="loader" aria-hidden="true" />
-              <p>Cargando datos…</p>
-            </div>
-            <div v-else-if="!hasData" class="panel__state">
-              <p>No hay datos disponibles para este periodo.</p>
-            </div>
-            <MagnetometerChartFigure v-else :labels="labels" :series="series" :unit="unit" />
-          </div>
-        </article>
-      </div>
-
-      <!-- === Placeholders que ya estaban === -->
-      <div v-for="section in placeholders" :key="section.title" class="home__item">
-        <article class="panel">
-          <h3>{{ section.title }}</h3>
-          <p>{{ section.description }}</p>
-        </article>
-      </div>
-
-      <!-- === GOES X-ray Flux (nuestro, ancho completo) === -->
-      <div class="home__item home__item--wide">
-        <article class="panel panel--chart panel--wide">
           <div class="panel__head xray__head">
             <div class="xray__title">
               <h3>GOES X-ray Flux (0.05–0.4 nm y 0.1–0.8 nm)</h3>
@@ -175,7 +126,12 @@ function fmtUTC(d) {
             </div>
 
             <template v-else>
-              <XRayChartFigure :long-by-sat="longBySat" :short-by-sat="shortBySat" :sats="sats" />
+              <XRayChartFigure
+                :long-by-sat="longBySat"
+                :short-by-sat="shortBySat"
+                :sats="sats"
+                :height="260"
+              />
               <small class="xray__foot">
                 Sats: {{ sats.join(', ') }}
                 · Pts totales Long: {{
@@ -192,16 +148,28 @@ function fmtUTC(d) {
           </div>
         </article>
       </div>
+
+      <div class="home__cell home__cell--magneto">
+        <div class="panel panel--flush home__magneto-card">
+          <MagnetometerChartOverview />
+        </div>
+      </div>
+
+      <div class="home__cell home__cell--ionogram">
+        <IonogramLatest />
+      </div>
     </div>
   </section>
 </template>
 
 <style scoped>
-/* ===== Base del repo ===== */
 .home {
   display: flex;
   flex-direction: column;
-  gap: 1.5rem;
+  gap: 1.25rem;
+  flex: 1;
+  min-height: 0;
+  height: 100%;
 }
 
 .home__header h2 {
@@ -215,24 +183,30 @@ function fmtUTC(d) {
 }
 
 .home__grid {
+  flex: 1;
+  min-height: 0;
+  height: 100%;
   display: grid;
-  gap: 1.25rem;
-  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
-  align-items: stretch;
+  gap: 1rem;
+  grid-template-columns: 1fr;
+  grid-auto-rows: minmax(0, 1fr);
 }
 
-@media (min-width: 1024px) {
+.home__cell {
+  display: flex;
+  min-height: 0;
+  width: 100%;
+}
+
+.home__cell > * {
+  flex: 1;
+  min-height: 0;
+}
+
+@media (min-width: 900px) {
   .home__grid {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
-}
-
-.home__item { display: flex; }
-.home__item > * { flex: 1 1 auto; }
-
-/* permitir ítems de ancho completo */
-.home__item--wide {
-  grid-column: 1 / -1;
 }
 
 .panel {
@@ -243,11 +217,22 @@ function fmtUTC(d) {
   display: flex;
   flex-direction: column;
   gap: 0.6rem;
-  min-height: 180px;
+  height: 100%;
+  min-height: 0;
+}
+
+.panel--chart {
+  padding-bottom: 0.75rem;
+}
+
+.panel--flush {
+  padding: 0;
+  background: transparent;
+  box-shadow: none;
 }
 
 .panel__head h3 {
-  font-size: 1.1rem;
+  font-size: 1.05rem;
   font-weight: 600;
   color: #1f2933;
 }
@@ -255,24 +240,15 @@ function fmtUTC(d) {
 .panel__head p {
   color: #69707d;
   margin-bottom: 0.25rem;
+  font-size: 0.85rem;
 }
 
-.panel--tall { min-height: 320px; }
-
-/* estilos del overview ya existentes */
-.home__magneto-card :deep(.magneto__card) {
-  height: 100%;
-  box-shadow: 0 10px 22px rgba(15, 23, 42, 0.08);
+.panel__body {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
 }
-.home__magneto-card :deep(.magneto__header) { padding: 1.1rem 1.3rem 0.9rem; }
-.home__magneto-card :deep(.magneto__body)   { padding: 0 1.3rem 1.1rem; }
-.home__magneto-card :deep(.magneto__chart)  { min-height: 200px; }
-
-/* ===== Extensiones nuestras (coexisten con lo anterior) ===== */
-.panel--chart { min-height: 420px; }
-.panel--wide  { grid-column: 1 / -1; }
-
-.panel__body { flex: 1; display: flex; flex-direction: column; }
 
 .panel__state {
   margin-top: auto;
@@ -282,65 +258,165 @@ function fmtUTC(d) {
   text-align: center;
   gap: 0.5rem;
   color: #0f0f10;
-  padding: 2rem 1rem;
+  padding: 1.5rem 1rem;
   border: 1px dashed #d3dae6;
   border-radius: 0.75rem;
 }
+
 .panel__state--error {
   color: #b42318;
   border-color: rgba(180, 35, 24, 0.35);
   background: rgba(180, 35, 24, 0.06);
 }
-.panel__state--loading { color: #0f0f10; }
+
+.panel__state--loading {
+  color: #0f0f10;
+}
 
 .loader {
-  width: 1.75rem; height: 1.75rem; border-radius: 50%;
+  width: 1.75rem;
+  height: 1.75rem;
+  border-radius: 50%;
   border: 3px solid rgba(37, 99, 235, 0.2);
   border-top-color: #2563eb;
   animation: spin 1s linear infinite;
 }
-@keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
 
-/* ===== X-Rays (estilos UI) ===== */
-.xray__head { display: flex; gap: 0.75rem; align-items: flex-start; justify-content: space-between; flex-wrap: wrap; }
-.xray__title h3 { margin-bottom: .25rem; }
+@keyframes spin {
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(360deg);
+  }
+}
 
-.xray__controls { display: flex; gap: .5rem; align-items: center; flex-wrap: wrap; }
-.xray__clock { display: flex; gap: .35rem; align-items: baseline; }
+.xray__head {
+  display: flex;
+  gap: 0.75rem;
+  align-items: flex-start;
+  justify-content: space-between;
+  flex-wrap: wrap;
+}
 
-.tag { color: #0f0f10; font-size: .85rem; }
+.xray__title h3 {
+  margin-bottom: 0.25rem;
+}
+
+.xray__controls {
+  display: flex;
+  gap: 0.5rem;
+  align-items: center;
+  flex-wrap: wrap;
+}
+
+.xray__clock {
+  display: flex;
+  gap: 0.35rem;
+  align-items: baseline;
+}
+
+.tag {
+  color: #0f0f10;
+  font-size: 0.85rem;
+}
+
 .mono {
-  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", monospace;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, 'Liberation Mono', monospace;
   color: #0f0f10;
 }
 
-/* Toggle */
 .toggle {
   position: relative;
   display: inline-flex;
   align-items: center;
-  gap: .5rem;
+  gap: 0.5rem;
   border: 1px solid #cbd5e1;
   background: #f8fafc;
   border-radius: 9999px;
-  padding: .25rem .6rem .25rem .25rem;
+  padding: 0.25rem 0.6rem 0.25rem 0.25rem;
   cursor: pointer;
   color: #0f0f10;
 }
-.toggle .knob { width: 1.25rem; height: 1.25rem; border-radius: 9999px; background: #94a3b8; transition: all .2s ease; }
-.toggle.is-on { border-color: #2563eb; background: #eff6ff; }
-.toggle.is-on .knob { background: #2563eb; transform: translateX(1.1rem); }
-.toggle .label { font-size: .85rem; color: #0f0f10; }
+
+.toggle .knob {
+  width: 1.25rem;
+  height: 1.25rem;
+  border-radius: 9999px;
+  background: #94a3b8;
+  transition: all 0.2s ease;
+}
+
+.toggle.is-on {
+  border-color: #2563eb;
+  background: #eff6ff;
+}
+
+.toggle.is-on .knob {
+  background: #2563eb;
+  transform: translateX(1.1rem);
+}
+
+.toggle .label {
+  font-size: 0.85rem;
+  color: #0f0f10;
+}
 
 .ghost {
   background: transparent;
   border: 1px solid #cbd5e1;
   color: #0f0f10;
-  padding: .35rem .6rem;
-  border-radius: .5rem;
+  padding: 0.35rem 0.6rem;
+  border-radius: 0.5rem;
   cursor: pointer;
 }
-.ghost:hover { background: #f1f5f9; }
 
-.xray__foot { margin-top: .5rem; color: #0f0f10; }
+.ghost:hover {
+  background: #f1f5f9;
+}
+
+.xray__foot {
+  margin-top: 0.5rem;
+  color: #0f0f10;
+}
+
+.home__magneto-card {
+  height: 100%;
+  min-height: 0;
+}
+
+.home__magneto-card :deep(.magneto) {
+  height: 100%;
+  min-height: 0;
+}
+
+.home__magneto-card :deep(.magneto__card) {
+  height: 100%;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.home__magneto-card :deep(.magneto__body) {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.home__magneto-card :deep(.magneto__chart-wrapper) {
+  flex: 1;
+  min-height: 0;
+}
+
+.home__magneto-card :deep(.magneto__chart) {
+  height: 100%;
+  min-height: 0;
+}
+
+@media (max-width: 600px) {
+  .panel {
+    padding: 0.75rem;
+  }
+}
 </style>

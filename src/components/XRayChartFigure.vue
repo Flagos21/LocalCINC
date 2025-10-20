@@ -11,6 +11,7 @@ const props = defineProps({
   longBySat:  { type: Object, required: true },
   shortBySat: { type: Object, required: true },
   sats:       { type: Array,  required: true },
+  height:     { type: [Number, String], default: 400 },
 });
 
 /* ---------- Utilidades ---------- */
@@ -202,7 +203,7 @@ const options = computed(() => ({
 <template>
   <VueApexCharts
     type="line"
-    :height="400"
+    :height="props.height"
     :options="options"
     :series="chartSeries"
   />
