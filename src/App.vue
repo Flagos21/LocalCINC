@@ -201,7 +201,7 @@ import { RouterLink, RouterView } from 'vue-router'
   min-height: 0;
   padding: 1.5rem;
   background-color: #f3f4f6;
-  overflow: hidden;
+  overflow-x: hidden;
 }
 
 @media (max-width: 720px) {

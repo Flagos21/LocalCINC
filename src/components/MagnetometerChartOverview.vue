@@ -1,10 +1,11 @@
 <script setup>
-import { ref, computed, watch, onMounted, onBeforeUnmount } from 'vue'
-import Plotly from 'plotly.js-dist-min'
+import { ref, computed, watch, onMounted } from 'vue'
+import VueApexCharts from 'vue3-apexcharts'
 import dayjs from 'dayjs'
 import { useMagnetometerSeries } from '@/composables/useMagnetometerSeries'
 
-const plotRef = ref(null)
+const chartSeries = ref([])
+const xDomain = ref({ min: null, max: null })
 const activePreset = ref('1m')
 const rangeRef = ref('')
 const from = ref('')
@@ -21,6 +22,59 @@ const { labels, series, isLoading, errorMessage } = useMagnetometerSeries({
 
 const visiblePoints = ref(0)
 const dataExtent = ref(null)
+
+const chartOptions = computed(() => ({
+  chart: {
+    type: 'line',
+    height: 420,
+    toolbar: { show: true, tools: { download: true, selection: true, zoom: true, zoomin: true, zoomout: true, pan: true } },
+    background: 'transparent',
+    foreColor: '#0f172a',
+    animations: { enabled: true, easing: 'easeinout', speed: 250 },
+    zoom: { enabled: true, type: 'x' }
+  },
+  stroke: { width: 2, curve: 'straight' },
+  dataLabels: { enabled: false },
+  markers: {
+    size: 0,
+    strokeWidth: 2,
+    fillOpacity: 1,
+    strokeOpacity: 1,
+    hover: { sizeOffset: 3 }
+  },
+  colors: ['#2563eb'],
+  xaxis: {
+    type: 'datetime',
+    min: Number.isFinite(xDomain.value.min) ? xDomain.value.min : undefined,
+    max: Number.isFinite(xDomain.value.max) ? xDomain.value.max : undefined,
+    labels: { datetimeUTC: true },
+    tooltip: { enabled: false },
+    axisBorder: { color: '#cbd5f5' },
+    axisTicks: { color: '#cbd5f5' }
+  },
+  yaxis: {
+    title: { text: 'nT' },
+    labels: { formatter: (val) => (Number.isFinite(val) ? Number(val).toFixed(1) : '') },
+    decimalsInFloat: 1,
+    axisBorder: { show: false }
+  },
+  grid: {
+    borderColor: '#e2e8f0',
+    strokeDashArray: 4,
+    padding: { left: 16, right: 16 }
+  },
+  legend: { show: false },
+  tooltip: {
+    shared: true,
+    intersect: false,
+    x: { format: 'yyyy-MM-dd HH:mm:ss' },
+    y: { formatter: (val) => (Number.isFinite(val) ? `${val.toFixed(2)} nT` : '—') }
+  },
+  noData: {
+    text: 'Sin datos para mostrar',
+    style: { color: '#64748b', fontSize: '14px' }
+  }
+}))
 
 const presets = [
   { id: '1m', label: '1 m', description: 'Último mes', duration: { amount: 1, unit: 'month' } },
@@ -98,6 +152,11 @@ function applyPreset(id) {
   draw()
 }
 
+function toTimestamp(value) {
+  const ts = new Date(value).getTime()
+  return Number.isFinite(ts) ? ts : null
+}
+
 function draw() {
   const rawPoints = (labels.value || []).map((t, i) => ({ t, v: (series.value || [])[i] }))
     .filter((point) => point.t && Number.isFinite(point.v))
@@ -116,9 +175,6 @@ function draw() {
 
   visiblePoints.value = rawPoints.length
 
-  const xs = rawPoints.map((point) => point.t)
-  const ys = rawPoints.map((point) => point.v)
-
   let xRange = null
 
   if (rawPoints.length) {
@@ -127,116 +183,49 @@ function draw() {
     const hasSpan = end.diff(start) > 0
     const paddedStart = hasSpan ? start : start.subtract(6, 'hour')
     const paddedEnd = hasSpan ? end : end.add(6, 'hour')
-    xRange = [paddedStart.toISOString(), paddedEnd.toISOString()]
+    xRange = [paddedStart, paddedEnd]
   } else if (requestedWindow.value) {
     const { start, end } = requestedWindow.value
-    xRange = [start.toISOString(), end.toISOString()]
+    xRange = [start, end]
   }
 
   if (!xRange) {
     const now = dayjs()
-    xRange = [now.subtract(1, 'day').toISOString(), now.add(1, 'day').toISOString()]
+    xRange = [now.subtract(1, 'day'), now.add(1, 'day')]
   }
 
   const displayWindow = rawPoints.length
     ? { start: dayjs(rawPoints[0].t), end: dayjs(rawPoints[rawPoints.length - 1].t) }
     : requestedWindow.value
 
-  const trace = {
-    x: xs,
-    y: ys,
-    type: 'scatter',
-    mode: 'lines',
-    connectgaps: false,
-    name: 'H',
-    line: {
-      color: '#2563eb',
-      width: 2
-    },
-    hovertemplate:
-      '%{x|%Y-%m-%d %H:%M:%S}<br>' +
-      'H: %{y:.2f} nT' +
-      '<extra></extra>'
+  const domain = {
+    min: Number.isFinite(xRange[0]?.valueOf?.()) ? xRange[0].valueOf() : null,
+    max: Number.isFinite(xRange[1]?.valueOf?.()) ? xRange[1].valueOf() : null
   }
 
-  const layout = {
-    title: {
-      text: displayWindow
-        ? `H – ${displayWindow.start.format('YYYY-MM-DD')} a ${displayWindow.end.format('YYYY-MM-DD')}`
-        : 'H – sin datos',
-      x: 0.02,
-      xanchor: 'left',
-      font: {
-        family: 'Inter, sans-serif',
-        size: 18,
-        color: '#0f172a'
-      }
-    },
-    xaxis: {
-      type: 'date',
-      autorange: false,
-      range: xRange,
-      tickformatstops: [
-        { dtickrange: [null, 1000 * 60 * 60 * 24 * 2], value: '%H:%M\n%d %b' },
-        { dtickrange: [1000 * 60 * 60 * 24 * 2, 1000 * 60 * 60 * 24 * 62], value: '%d %b %Y' },
-        { dtickrange: [1000 * 60 * 60 * 24 * 62, null], value: '%b %Y' }
-      ],
-      showgrid: true,
-      gridcolor: 'rgba(148, 163, 184, 0.15)',
-      zeroline: false,
-      linecolor: 'rgba(100, 116, 139, 0.4)',
-      linewidth: 1.5,
-      mirror: true
-    },
-    yaxis: {
-      autorange: true,
-      title: 'nT',
-      zeroline: false,
-      gridcolor: '#e5e7eb',
-      linecolor: 'rgba(100, 116, 139, 0.4)',
-      linewidth: 1.5,
-      mirror: true,
-      tickformat: ',.2f'
-    },
-    margin: { t: 60, r: 24, b: 60, l: 70 },
-    paper_bgcolor: '#f8fafc',
-    plot_bgcolor: '#ffffff',
-    hovermode: 'x unified',
-    font: {
-      family: 'Inter, sans-serif',
-      color: '#0f172a'
-    }
-  }
+  xDomain.value = domain
 
-  if (!plotRef.value) {
-    return
-  }
-
-  Plotly.react(plotRef.value, rawPoints.length ? [trace] : [], layout, {
-    responsive: true,
-    displaylogo: false,
-    scrollZoom: true,
-    modeBarButtonsToRemove: ['lasso2d'],
-    toImageButtonOptions: {
-      format: 'png',
-      filename: `magnetometro-${dayjs().format('YYYYMMDD-HHmmss')}`,
-      scale: 2
-    }
-  })
+  chartSeries.value = rawPoints.length
+    ? [{
+        name: displayWindow
+          ? `H – ${displayWindow.start.format('YYYY-MM-DD')} a ${displayWindow.end.format('YYYY-MM-DD')}`
+          : 'H',
+        data: rawPoints
+          .map((point) => {
+            const ts = toTimestamp(point.t)
+            return [ts, point.v]
+          })
+          .filter(([ts]) => ts !== null)
+      }]
+    : []
 }
 
 applyPreset(activePreset.value)
 
-watch([labels, series], draw)
+watch([labels, series], draw, { immediate: true })
 
 onMounted(() => {
   draw()
-})
-
-onBeforeUnmount(() => {
-  if (plotRef.value) {
-    Plotly.purge(plotRef.value)
-  }
 })
 </script>
 
@@ -283,7 +272,13 @@ onBeforeUnmount(() => {
 
       <div class="magneto__body">
         <div class="magneto__chart-wrapper">
-          <div ref="plotRef" class="magneto__chart"></div>
+          <VueApexCharts
+            type="line"
+            class="magneto__chart"
+            height="420"
+            :options="chartOptions"
+            :series="chartSeries"
+          />
 
           <div v-if="isLoading" class="magneto__loading" role="status" aria-live="polite">
             <span class="magneto__spinner" aria-hidden="true"></span>
