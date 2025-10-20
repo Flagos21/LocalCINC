@@ -1,6 +1,6 @@
 <script setup>
 import { ref, computed, onMounted, onBeforeUnmount } from 'vue'
-import dayjs from 'dayjs'
+import dayjs from '@/utils/dayjs'
 
 const latestImage = ref(null)
 const isLoading = ref(false)
@@ -9,7 +9,7 @@ let intervalId = null
 
 const formattedTimestamp = computed(() => {
   if (!latestImage.value?.timestamp) return ''
-  return dayjs(latestImage.value.timestamp).format('DD MMM YYYY HH:mm:ss [UTC]')
+  return dayjs.utc(latestImage.value.timestamp).format('DD MMM YYYY HH:mm:ss [UTC]')
 })
 
 async function loadLatest() {
