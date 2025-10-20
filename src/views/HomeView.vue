@@ -3,7 +3,7 @@ import { ref, onMounted, onBeforeUnmount } from 'vue';
 
 import SunViewer from '@/components/SunViewer.vue';
 import IonogramLatest from '@/components/IonogramLatest.vue';
-import MagnetometerHomeCard from '@/components/MagnetometerHomeCard.vue';
+import MagnetometerChartOverview from '@/components/MagnetometerChartOverview.vue';
 
 import XRayChartFigure from '@/components/XRayChartFigure.vue';
 import { useGoesXrays } from '@/composables/useGoesXrays';
@@ -61,7 +61,7 @@ function fmtUTC(value) {
 
     <div class="home__grid">
       <div class="home__cell home__cell--sun">
-        <article class="panel panel--media">
+        <article class="panel">
           <div class="panel__head">
             <h3>El Sol (SUVI)</h3>
             <p>Vista en tiempo (casi) real del Sol por longitudes de onda EUV.</p>
@@ -130,7 +130,7 @@ function fmtUTC(value) {
                 :long-by-sat="longBySat"
                 :short-by-sat="shortBySat"
                 :sats="sats"
-                :height="280"
+                :height="260"
               />
               <small class="xray__foot">
                 Sats: {{ sats.join(', ') }}
@@ -150,7 +150,9 @@ function fmtUTC(value) {
       </div>
 
       <div class="home__cell home__cell--magneto">
-        <MagnetometerHomeCard range="7d" every="1h" station="CHI" />
+        <div class="panel panel--flush home__magneto-card">
+          <MagnetometerChartOverview />
+        </div>
       </div>
 
       <div class="home__cell home__cell--ionogram">
@@ -167,6 +169,7 @@ function fmtUTC(value) {
   gap: 1.25rem;
   flex: 1;
   min-height: 0;
+  height: 100%;
 }
 
 /* FORZAR NEGRO EN TITULARES Y PÁRRAFOS DEL HEADER */
@@ -202,21 +205,16 @@ function fmtUTC(value) {
   display: flex;
   min-height: 0;
   width: 100%;
-  overflow: hidden;
 }
 
 .home__cell > * {
   flex: 1;
-  display: flex;
-  flex-direction: column;
   min-height: 0;
-  overflow: hidden;
 }
 
 @media (min-width: 900px) {
   .home__grid {
     grid-template-columns: repeat(2, minmax(0, 1fr));
-    grid-template-rows: repeat(2, minmax(0, 1fr));
   }
 }
 
@@ -232,6 +230,16 @@ function fmtUTC(value) {
   min-height: 0;
 }
 
+.panel--chart {
+  padding-bottom: 0.75rem;
+}
+
+.panel--flush {
+  padding: 0;
+  background: transparent;
+  box-shadow: none;
+}
+
 .panel__head h3 {
   font-size: 1.05rem;
   font-weight: 600;
@@ -242,14 +250,6 @@ function fmtUTC(value) {
   color: #69707d;
   margin-bottom: 0.25rem;
   font-size: 0.85rem;
-}
-
-.panel--media {
-  min-height: 0;
-}
-
-.panel--chart {
-  min-height: 0;
 }
 
 .panel__body {
@@ -388,6 +388,40 @@ function fmtUTC(value) {
 .xray__foot {
   margin-top: 0.5rem;
   color: #0f0f10;
+}
+
+.home__magneto-card {
+  height: 100%;
+  min-height: 0;
+}
+
+.home__magneto-card :deep(.magneto) {
+  height: 100%;
+  min-height: 0;
+}
+
+.home__magneto-card :deep(.magneto__card) {
+  height: 100%;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.home__magneto-card :deep(.magneto__body) {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.home__magneto-card :deep(.magneto__chart-wrapper) {
+  flex: 1;
+  min-height: 0;
+}
+
+.home__magneto-card :deep(.magneto__chart) {
+  height: 100%;
+  min-height: 0;
 }
 
 @media (max-width: 600px) {

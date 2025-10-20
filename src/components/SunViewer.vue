@@ -236,7 +236,7 @@ function onSeek(evt) {
 </template>
 
 <style scoped>
-.sunviewer { display:flex; flex-direction:column; gap:0.75rem; }
+.sunviewer { display:flex; flex-direction:column; gap:0.75rem; height:100%; min-height:0; }
 
 /* Top bar */
 .sunviewer__toolbar {
@@ -258,7 +258,7 @@ function onSeek(evt) {
 .sunviewer__frame {
   position:relative; width:100%; aspect-ratio:1; border-radius:0.75rem;
   background:#0b1020; overflow:hidden; display:grid; place-items:center;
-  flex:1; max-height:240px;
+  flex:1; min-height:0;
 }
 .sunviewer__img { width:100%; height:100%; object-fit:contain; display:block; }
 .sunviewer__status {
