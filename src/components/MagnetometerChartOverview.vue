@@ -304,6 +304,11 @@ onBeforeUnmount(() => {
 <style scoped>
 .magneto {
   padding: 0;
+  height: 100%;
+}
+
+.magneto--compact {
+  display: flex;
 }
 
 .magneto__card {
@@ -318,6 +323,12 @@ onBeforeUnmount(() => {
   overflow: hidden;
 }
 
+.magneto--compact .magneto__card {
+  flex: 1;
+  gap: 1rem;
+  border-radius: 16px;
+}
+
 .magneto__header {
   display: flex;
   flex-direction: column;
@@ -327,10 +338,18 @@ onBeforeUnmount(() => {
   backdrop-filter: blur(10px);
 }
 
+.magneto--compact .magneto__header {
+  padding: 1.1rem 1.2rem 0.9rem;
+}
+
 .magneto__title {
   font-size: 1.5rem;
   font-weight: 600;
   color: #0f172a;
+}
+
+.magneto--compact .magneto__title {
+  font-size: 1.25rem;
 }
 
 .magneto__description {
@@ -433,6 +452,11 @@ onBeforeUnmount(() => {
   display: flex;
   flex-direction: column;
   gap: 0.85rem;
+  flex: 1;
+}
+
+.magneto--compact .magneto__body {
+  padding: 0 1.2rem 1.1rem;
 }
 
 .magneto__chart-wrapper {
@@ -441,11 +465,17 @@ onBeforeUnmount(() => {
   overflow: hidden;
   border: 1px solid rgba(15, 23, 42, 0.08);
   background: #ffffff;
+  flex: 1;
+  display: flex;
 }
 
 .magneto__chart {
   height: 320px;
   width: 100%;
+}
+
+.magneto--compact .magneto__chart {
+  height: 100%;
 }
 
 .magneto__loading {

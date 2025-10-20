@@ -256,8 +256,9 @@ function onSeek(evt) {
 
 /* Frame contenedor (evita desbordes) */
 .sunviewer__frame {
-  position:relative; width:100%; aspect-ratio:1/1; border-radius:0.75rem;
+  position:relative; width:100%; aspect-ratio:4/3; border-radius:0.75rem;
   background:#0b1020; overflow:hidden; display:grid; place-items:center;
+  flex:1; max-height:100%;
 }
 .sunviewer__img { max-width:100%; max-height:100%; object-fit:contain; display:block; }
 .sunviewer__status {

@@ -1,24 +1,14 @@
 <script setup>
-import { computed, ref, onMounted, onBeforeUnmount } from 'vue';
+import { ref, onMounted, onBeforeUnmount } from 'vue';
 
 /* === Componentes que ya están en el repo === */
 import SunViewer from '@/components/SunViewer.vue';
 import IonogramLatest from '@/components/IonogramLatest.vue';
+import MagnetometerChartOverview from '@/components/MagnetometerChartOverview.vue';
 
 /* === Componentes/logic que agregamos nosotros === */
-import MagnetometerChartFigure from '@/components/MagnetometerChartFigure.vue';
 import XRayChartFigure from '@/components/XRayChartFigure.vue';
-import { useMagnetometerSeries } from '@/composables/useMagnetometerSeries';
 import { useGoesXrays } from '@/composables/useGoesXrays';
-
-/* -------- Magnetómetro (detalle CHI) -------- */
-const range = ref('7d');
-const every = ref('1h');
-const unit = ref('nT');
-const { labels, series, isLoading, errorMessage } = useMagnetometerSeries({
-  range, every, unit, station: 'CHI'
-});
-const hasData = computed(() => labels.value.length > 0 && series.value.length > 0);
 
 /* -------- GOES X-rays (por satélite) -------- */
 const {
@@ -60,21 +50,34 @@ function fmtUTC(d) {
 
     <div class="home__grid">
       <!-- === SUVI === -->
-      <article class="panel panel--media">
-        <div class="panel__head">
-          <h3>El Sol (SUVI)</h3>
-          <p>Vista en tiempo (casi) real del Sol por longitudes de onda EUV.</p>
-        </div>
-        <SunViewer />
-      </article>
+      <div class="home__cell">
+        <article class="panel panel--media">
+          <div class="panel__head">
+            <h3>El Sol (SUVI)</h3>
+            <p>Vista en tiempo (casi) real del Sol por longitudes de onda EUV.</p>
+          </div>
+          <SunViewer />
+        </article>
+      </div>
+
+      <!-- === Magnetómetro === -->
+      <div class="home__cell">
+        <MagnetometerChartOverview />
+      </div>
+
+      <!-- === Último Ionograma === -->
+      <div class="home__cell">
+        <IonogramLatest />
+      </div>
 
       <!-- === GOES X-ray Flux === -->
-      <article class="panel panel--chart">
-        <div class="panel__head xray__head">
-          <div class="xray__title">
-            <h3>GOES X-ray Flux (0.05–0.4 nm y 0.1–0.8 nm)</h3>
-            <p>Escala logarítmica con umbrales A/B/C/M/X. Fuente: SWPC.</p>
-          </div>
+      <div class="home__cell">
+        <article class="panel panel--chart">
+          <div class="panel__head xray__head">
+            <div class="xray__title">
+              <h3>GOES X-ray Flux (0.05–0.4 nm y 0.1–0.8 nm)</h3>
+              <p>Escala logarítmica con umbrales A/B/C/M/X. Fuente: SWPC.</p>
+            </div>
             <div class="xray__controls">
               <div class="xray__clock">
                 <span class="tag">UTC ahora:</span>
@@ -175,6 +178,8 @@ function fmtUTC(d) {
   display: flex;
   flex-direction: column;
   gap: 1.5rem;
+  flex: 1;
+  min-height: 0;
 }
 
 /* FORZAR NEGRO EN TITULARES Y PÁRRAFOS DEL HEADER */
@@ -182,15 +187,31 @@ function fmtUTC(d) {
 .home__header p  { color: #0f0f10; }
 
 .home__grid {
+  flex: 1;
+  min-height: 0;
   display: grid;
   gap: 1rem;
-  grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
-  align-items: stretch;
+  grid-template-columns: minmax(0, 1fr);
+  grid-auto-rows: auto;
+}
+
+.home__cell {
+  display: flex;
+  min-height: 0;
+  width: 100%;
+}
+
+.home__cell > * {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
 }
 
 @media (min-width: 1200px) {
   .home__grid {
     grid-template-columns: repeat(2, minmax(0, 1fr));
+    grid-auto-rows: minmax(0, 1fr);
   }
 }
 
@@ -202,7 +223,9 @@ function fmtUTC(d) {
   display: flex;
   flex-direction: column;
   gap: 0.6rem;
-  min-height: 180px;
+  height: 100%;
+  min-height: 0;
+}
 
   /* DEFAULT: todo texto dentro del panel en negro */
   color: #0f0f10;
@@ -212,19 +235,17 @@ function fmtUTC(d) {
 .panel__head h3 { color: #0f0f10; }
 .panel__head p  { color: #0f0f10; }
 
-/* Placeholders: el <p> directo del panel en negro explícito */
-.panel > p { color: #0f0f10; }
 
 .panel--media {
-  min-height: 320px;
+  min-height: 0;
 }
 
 /* ===== Extensiones nuestras (coexisten con lo anterior) ===== */
 .panel--chart {
-  min-height: 360px;
+  min-height: 0;
 }
 
-.panel__body { flex: 1; display: flex; flex-direction: column; }
+.panel__body { flex: 1; display: flex; flex-direction: column; min-height: 0; }
 
 /* Estados dentro de panel (mantienen su propio color cuando aplica) */
 .panel__state {

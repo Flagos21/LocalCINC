@@ -68,7 +68,11 @@ import { RouterLink, RouterView } from 'vue-router'
 
 .content {
   flex: 1;
-  padding: 2rem 1.5rem 3rem;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  padding: 1.5rem;
   background-color: #f3f4f6;
+  overflow: hidden;
 }
 </style>
