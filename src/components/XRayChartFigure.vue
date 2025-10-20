@@ -1,45 +1,117 @@
+<!-- src/components/XRayChartFigure.vue -->
 <script setup>
 import { ref, watch, computed } from 'vue';
 import VueApexCharts from 'vue3-apexcharts';
 
 const props = defineProps({
-  // Arrays como [[tsMs, flux], ...]
-  longSeries: { type: Array, required: true },
-  shortSeries: { type: Array, required: true },
+  // Estructura:
+  // longBySat:  { '18': [[ts, flux], ...], '19': [...] }
+  // shortBySat: { '18': [[ts, flux], ...], '19': [...] }
+  // sats: ['18','19', ...]
+  longBySat:  { type: Object, required: true },
+  shortBySat: { type: Object, required: true },
+  sats:       { type: Array,  required: true },
 });
 
 /* ---------- Utilidades ---------- */
 function toLog10Pairs(pairs) {
-  // Transforma [ts, y] -> [ts, log10(y)] filtrando y<=0
   const out = [];
-  for (let i = 0; i < pairs.length; i++) {
+  for (let i = 0; i < (pairs?.length || 0); i++) {
     const ts = Number(pairs[i][0]);
-    const v = Number(pairs[i][1]);
+    const v  = Number(pairs[i][1]);
     if (!Number.isFinite(ts) || !Number.isFinite(v) || v <= 0) continue;
     out.push([ts, Math.log10(v)]);
   }
   return out;
 }
+
+function roundToMinute(ts) { return Math.floor(ts / 60000) * 60000; }
+
+/** Rejilla común (timestamps redondeados a minuto, ordenados) */
+function buildCommonGrid(allSeriesPairs) {
+  const set = new Set();
+  for (const arr of allSeriesPairs) for (const [ts] of arr) set.add(roundToMinute(ts));
+  const grid = Array.from(set);
+  grid.sort((a, b) => a - b);
+  return grid;
+}
+
+/** Remuestreo nearest-neighbor con tolerancia */
+function resampleNearest(pairsLog, grid, toleranceMs) {
+  if (!pairsLog?.length || !grid?.length) return grid.map(ts => [ts, null]);
+  let j = 0;
+  const out = new Array(grid.length);
+  for (let i = 0; i < grid.length; i++) {
+    const gts = grid[i];
+    while (j < pairsLog.length - 1 && pairsLog[j + 1][0] <= gts) j++;
+    let k = j;
+    if (j + 1 < pairsLog.length && Math.abs(pairsLog[j + 1][0] - gts) < Math.abs(pairsLog[j][0] - gts)) k = j + 1;
+    const best = pairsLog[k];
+    out[i] = (Math.abs(best[0] - gts) <= toleranceMs) ? [gts, best[1]] : [gts, null];
+  }
+  return out;
+}
+
+/** Forward-fill + backward-fill para evitar nulls en el hover */
+function fillGapsFFillBFill(pairs) {
+  const out = pairs.map(p => [p[0], p[1]]);
+  let last = null;
+  for (let i = 0; i < out.length; i++) {
+    if (Number.isFinite(out[i][1])) last = out[i][1];
+    else if (last !== null) out[i][1] = last;
+  }
+  let firstValid = null;
+  for (let i = 0; i < out.length; i++) {
+    if (Number.isFinite(out[i][1])) { firstValid = out[i][1]; break; }
+  }
+  if (firstValid !== null) {
+    for (let i = 0; i < out.length && !Number.isFinite(out[i][1]); i++) out[i][1] = firstValid;
+  }
+  return out;
+}
+
+/* ---------- Umbrales ---------- */
 const thresholds = [
   { y: 1e-7,  label: 'B (1e-7)' },
   { y: 1e-6,  label: 'C (1e-6)' },
   { y: 1e-5,  label: 'M (1e-5)' },
   { y: 1e-4,  label: 'X (1e-4)' },
 ];
-// umbrales convertidos a log10
 const thrLog = thresholds.map(t => ({ y: Math.log10(t.y), label: t.label }));
 
-/* ---------- Series (transformadas a log10) ---------- */
+/* ---------- Construcción de series alineadas ---------- */
 const chartSeries = ref([]);
-function rebuildSeries() {
-  chartSeries.value = [
-    { name: 'Long 0.1–0.8 nm (XRS-B)', data: toLog10Pairs(props.longSeries) },
-    { name: 'Short 0.05–0.4 nm (XRS-A)', data: toLog10Pairs(props.shortSeries) },
-  ];
-}
-watch(() => [props.longSeries, props.shortSeries], rebuildSeries, { deep: true, immediate: true });
+const gridX = ref([]); // guardamos la grilla para tooltip custom
+const TOLERANCE_MS = 120_000;
 
-/* ---------- Opciones ApexCharts (eje Y lineal en log10) ---------- */
+function rebuildSeries() {
+  // 1) log10 de todas las series
+  const allLog = [];
+  for (const sat of props.sats) {
+    allLog.push(toLog10Pairs(props.longBySat[sat]));
+    allLog.push(toLog10Pairs(props.shortBySat[sat]));
+  }
+  // 2) grilla común por minuto
+  gridX.value = buildCommonGrid(allLog);
+
+  // 3) remuestreo + fill
+  const out = [];
+  for (const sat of props.sats) {
+    const longLog  = toLog10Pairs(props.longBySat[sat]);
+    const shortLog = toLog10Pairs(props.shortBySat[sat]);
+
+    const longAligned  = fillGapsFFillBFill(resampleNearest(longLog,  gridX.value, TOLERANCE_MS));
+    const shortAligned = fillGapsFFillBFill(resampleNearest(shortLog, gridX.value, TOLERANCE_MS));
+
+    out.push({ name: `GOES-${sat} Long`,  data: longAligned  });
+    out.push({ name: `GOES-${sat} Short`, data: shortAligned });
+  }
+  chartSeries.value = out;
+}
+
+watch(() => [props.longBySat, props.shortBySat, props.sats], rebuildSeries, { deep: true, immediate: true });
+
+/* ---------- Opciones ApexCharts ---------- */
 const options = computed(() => ({
   chart: {
     type: 'line',
@@ -52,30 +124,16 @@ const options = computed(() => ({
   },
   legend: { show: true },
   stroke: { width: 2, curve: 'straight' },
+  markers: { size: 0 },
   xaxis: {
     type: 'datetime',
-    tooltip: { enabled: false },
+    tooltip: { enabled: false }, // la tooltip la renderizamos nosotros
     labels: { datetimeUTC: true },
   },
-  // NOTA: aquí el eje Y es LINEAL mostrando log10(flux)
   yaxis: {
-    min: -9,   // 1e-9
-    max: -2,   // 1e-2
-    tickAmount: 7,
-    labels: {
-      formatter: (p) => {
-        if (!Number.isFinite(p)) return '';
-        const k = Math.round(p);
-        return `1e${k}`;
-      },
-    },
+    min: -9, max: -2, tickAmount: 7,
+    labels: { formatter: (p) => Number.isFinite(p) ? `1e${Math.round(p)}` : '' },
     title: { text: 'Flujo X (W/m²)' },
-  },
-  tooltip: {
-    shared: true,
-    x: { format: "yyyy-MM-dd HH:mm 'UTC'" },
-    // Convertimos de vuelta: 10^(log10(v))
-    y: { formatter: (p) => (Number.isFinite(p) ? (10 ** p).toExponential(2) + ' W/m²' : '-') }
   },
   grid: { strokeDashArray: 4 },
   annotations: {
@@ -85,13 +143,67 @@ const options = computed(() => ({
       label: { text: t.label, style: { background: '#f8fafc', color: '#0f172a' } }
     })),
   },
+  colors: ['#ea580c', '#6b21a8', '#f59e0b', '#4c1d95'],
+
+  /* === Tooltip SIEMPRE con todas las series visibles (por índice común) === */
+  tooltip: {
+    shared: false,
+    intersect: false,
+    followCursor: true,
+    custom: ({ seriesIndex, dataPointIndex, w }) => {
+      // si por alguna razón Apex no entrega índice válido, no mostramos nada
+      const idx = Number.isInteger(dataPointIndex) && dataPointIndex >= 0 ? dataPointIndex : null;
+      if (idx === null) return '';
+
+      // series ocultas (apagadas en leyenda)
+      const hidden = new Set(w.globals.collapsedSeriesIndices || []);
+
+      const ts = gridX.value[idx];
+      if (!Number.isFinite(ts)) return '';
+
+      const dtStr = new Intl.DateTimeFormat('en-GB', {
+        timeZone: 'UTC', hour12: false,
+        year: 'numeric', month: '2-digit', day: '2-digit',
+        hour: '2-digit', minute: '2-digit', second: '2-digit'
+      }).format(new Date(ts)) + ' UTC';
+
+      const rows = [];
+      for (let i = 0; i < w.config.series.length; i++) {
+        if (hidden.has(i)) continue; // solo las visibles
+        const yLog = w.globals.series[i]?.[idx]; // mismo índice para TODAS
+        if (!Number.isFinite(yLog)) continue;
+        const name  = w.config.series[i].name;
+        const color = (w.config.colors && w.config.colors[i]) || '#999';
+        const valStr = (10 ** yLog).toExponential(2) + ' W/m²';
+        rows.push({ name, color, valStr });
+      }
+
+      if (!rows.length) return '';
+
+      return `
+        <div class="apex-custom-tip" style="padding:.5rem .6rem;">
+          <div style="font-weight:600;margin-bottom:.25rem;">${dtStr}</div>
+          ${rows.map(r => `
+            <div style="display:flex;align-items:center;justify-content:space-between;gap:.75rem;">
+              <div style="display:flex;align-items:center;gap:.4rem;min-width:11.5rem;">
+                <span style="width:.6rem;height:.6rem;border-radius:9999px;background:${r.color};display:inline-block;"></span>
+                <span>${r.name}</span>
+              </div>
+              <span style="font-family:ui-monospace,Menlo,Consolas,monospace;">${r.valStr}</span>
+            </div>
+          `).join('')}
+        </div>
+      `;
+    }
+  },
 }));
 </script>
 
 <template>
-  <VueApexCharts type="line" :height="400" :options="options" :series="chartSeries" />
+  <VueApexCharts
+    type="line"
+    :height="400"
+    :options="options"
+    :series="chartSeries"
+  />
 </template>
-
-<style scoped>
-/* opcional */
-</style>

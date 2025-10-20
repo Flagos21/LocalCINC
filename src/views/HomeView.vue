@@ -20,17 +20,18 @@ const { labels, series, isLoading, errorMessage } = useMagnetometerSeries({
 });
 const hasData = computed(() => labels.value.length > 0 && series.value.length > 0);
 
-/* -------- GOES X-rays -------- */
+/* -------- GOES X-rays (por satélite) -------- */
 const {
   isLoading: xrLoading,
   errorMessage: xrError,
   hasData: xrHasData,
-  longSeries: xrLong,
-  shortSeries: xrShort,
+  longBySat,
+  shortBySat,
+  sats,
   lastPointTime,
   autoRefresh,
   toggleAuto,
-  range: xrRange,        // <- usamos este ref DIRECTO en el <select>
+  range: xrRange,        // <- v-model del <select>
   refresh
 } = useGoesXrays({ range: '6h', pollMs: 60000, auto: true });
 
@@ -142,9 +143,16 @@ function fmtUTC(d) {
           </div>
 
           <template v-else>
-            <XRayChartFigure :long-series="xrLong" :short-series="xrShort" />
+            <!-- ahora pasamos las series por satélite -->
+            <XRayChartFigure :long-by-sat="longBySat" :short-by-sat="shortBySat" :sats="sats" />
             <small class="xray__foot">
-              Pts Long: {{ xrLong.length }} · Pts Short: {{ xrShort.length }}
+              Sats: {{ sats.join(', ') }}
+              · Pts totales Long: {{
+                sats.reduce((acc, s) => acc + (longBySat[s]?.length || 0), 0)
+              }}
+              · Pts totales Short: {{
+                sats.reduce((acc, s) => acc + (shortBySat[s]?.length || 0), 0)
+              }}
               <template v-if="lastPointTime">
                 · Último ts: {{ new Date(lastPointTime).toISOString() }}
               </template>
