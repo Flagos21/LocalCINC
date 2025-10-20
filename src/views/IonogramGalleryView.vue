@@ -1,6 +1,6 @@
 <script setup>
 import { ref, computed, watch, onMounted, onBeforeUnmount } from 'vue'
-import dayjs from 'dayjs'
+import dayjs from '@/utils/dayjs'
 
 const today = dayjs().format('YYYY-MM-DD')
 const selectedDate = ref(today)
@@ -17,7 +17,7 @@ const formattedSelectedDate = computed(() => dayjs(selectedDate.value).format('D
 const formattedTime = computed(() => {
   if (!currentImage.value) return ''
   if (currentImage.value.timestamp) {
-    return dayjs(currentImage.value.timestamp).format('HH:mm:ss [UTC]')
+    return dayjs.utc(currentImage.value.timestamp).format('HH:mm:ss [UTC]')
   }
   return currentImage.value.displayTime || ''
 })
@@ -39,7 +39,7 @@ async function fetchImages(dateStr) {
 
     const enhanced = list.map((image) => {
       const iso = image.timestamp
-      const fallbackTime = iso ? dayjs(iso).format('HH:mm:ss') : ''
+      const fallbackTime = iso ? dayjs.utc(iso).format('HH:mm:ss') : ''
       const displayTime = image.time || fallbackTime
       const sortKey = iso || `${dateStr}T${(displayTime || '').replace(/:/g, '')}_${image.filename || ''}`
 
@@ -149,7 +149,7 @@ onBeforeUnmount(() => {
           @click="goToIndex(index)"
         >
           <img :src="image.url" :alt="`Ionograma ${image.displayTime || image.timestamp || 'sin hora'}`" />
-          <span class="gallery__thumb-time">{{ image.displayTime || (image.timestamp ? dayjs(image.timestamp).format('HH:mm') : '—') }}</span>
+          <span class="gallery__thumb-time">{{ image.displayTime || (image.timestamp ? dayjs.utc(image.timestamp).format('HH:mm') : '—') }}</span>
         </button>
       </div>
     </footer>
