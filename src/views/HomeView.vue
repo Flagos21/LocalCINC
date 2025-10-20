@@ -113,37 +113,61 @@ function fmtUTC(d) {
             </div>
           </div>
 
-          <div class="panel__body" aria-live="polite">
-            <div v-if="xrError" class="panel__state panel__state--error">
-              <strong>Problema al cargar rayos X.</strong>
-              <p>{{ xrError }}</p>
-            </div>
-            <div v-else-if="xrLoading" class="panel__state panel__state--loading">
-              <span class="loader" aria-hidden="true"></span>
-              <p>Cargando rayos X…</p>
-            </div>
-            <div v-else-if="!xrHasData" class="panel__state">
-              <p>No hay datos disponibles para este rango.</p>
-            </div>
-
-            <template v-else>
-              <XRayChartFigure :long-by-sat="longBySat" :short-by-sat="shortBySat" :sats="sats" />
-              <small class="xray__foot">
-                Sats: {{ sats.join(', ') }}
-                · Pts totales Long: {{
-                  sats.reduce((acc, s) => acc + (longBySat[s]?.length || 0), 0)
-                }}
-                · Pts totales Short: {{
-                  sats.reduce((acc, s) => acc + (shortBySat[s]?.length || 0), 0)
-                }}
-                <template v-if="lastPointTime">
-                  · Último ts: {{ new Date(lastPointTime).toISOString() }}
-                </template>
-              </small>
-            </template>
+        <div class="panel__body" aria-live="polite">
+          <div v-if="xrError" class="panel__state panel__state--error">
+            <strong>Problema al cargar rayos X.</strong>
+            <p>{{ xrError }}</p>
           </div>
-        </article>
-      </div>
+          <div v-else-if="xrLoading" class="panel__state panel__state--loading">
+            <span class="loader" aria-hidden="true"></span>
+            <p>Cargando rayos X…</p>
+          </div>
+          <div v-else-if="!xrHasData" class="panel__state">
+            <p>No hay datos disponibles para este rango.</p>
+          </div>
+
+          <template v-else>
+            <XRayChartFigure :long-by-sat="longBySat" :short-by-sat="shortBySat" :sats="sats" />
+            <small class="xray__foot">
+              Sats: {{ sats.join(', ') }}
+              · Pts totales Long: {{
+                sats.reduce((acc, s) => acc + (longBySat[s]?.length || 0), 0)
+              }}
+              · Pts totales Short: {{
+                sats.reduce((acc, s) => acc + (shortBySat[s]?.length || 0), 0)
+              }}
+              <template v-if="lastPointTime">
+                · Último ts: {{ new Date(lastPointTime).toISOString() }}
+              </template>
+            </small>
+          </template>
+        </div>
+      </article>
+
+      <!-- === Último Ionograma === -->
+      <IonogramLatest class="panel panel--media" />
+
+      <!-- === Detalle Magnetómetro === -->
+      <article class="panel panel--chart">
+        <div class="panel__head">
+          <h3>Componente H (últimos 7 días)</h3>
+          <p>Promedio horario de la estación CHI.</p>
+        </div>
+        <div class="panel__body" aria-live="polite">
+          <div v-if="errorMessage" class="panel__state panel__state--error">
+            <strong>Hubo un problema al cargar los datos.</strong>
+            <p>{{ errorMessage }}</p>
+          </div>
+          <div v-else-if="isLoading" class="panel__state panel__state--loading">
+            <span class="loader" aria-hidden="true" />
+            <p>Cargando datos…</p>
+          </div>
+          <div v-else-if="!hasData" class="panel__state">
+            <p>No hay datos disponibles para este periodo.</p>
+          </div>
+          <MagnetometerChartFigure v-else :labels="labels" :series="series" :unit="unit" />
+        </div>
+      </article>
     </div>
   </section>
 </template>
@@ -158,14 +182,23 @@ function fmtUTC(d) {
   min-height: 0;
 }
 
-.home__header h2 {
-  font-size: 1.75rem;
-  font-weight: 600;
-  color: #1f2933;
+/* FORZAR NEGRO EN TITULARES Y PÁRRAFOS DEL HEADER */
+.home__header h2 { color: #0f0f10; }
+.home__header p  { color: #0f0f10; }
+
+.home__grid {
+  flex: 1;
+  min-height: 0;
+  display: grid;
+  gap: 1rem;
+  grid-template-columns: minmax(0, 1fr);
+  grid-auto-rows: auto;
 }
 
-.home__header p {
-  color: #52606d;
+.home__cell {
+  display: flex;
+  min-height: 0;
+  width: 100%;
 }
 
 .home__grid {
@@ -191,7 +224,7 @@ function fmtUTC(d) {
   min-height: 0;
 }
 
-@media (min-width: 1024px) {
+@media (min-width: 1200px) {
   .home__grid {
     grid-template-columns: repeat(2, minmax(0, 1fr));
     grid-template-rows: repeat(2, minmax(0, 1fr));
@@ -210,16 +243,13 @@ function fmtUTC(d) {
   min-height: 0;
 }
 
-.panel__head h3 {
-  font-size: 1.1rem;
-  font-weight: 600;
-  color: #1f2933;
+  /* DEFAULT: todo texto dentro del panel en negro */
+  color: #0f0f10;
 }
 
-.panel__head p {
-  color: #69707d;
-  margin-bottom: 0.25rem;
-}
+/* Titulares/descr. de panel en negro */
+.panel__head h3 { color: #0f0f10; }
+.panel__head p  { color: #0f0f10; }
 
 
 .panel--media {
@@ -233,6 +263,7 @@ function fmtUTC(d) {
 
 .panel__body { flex: 1; display: flex; flex-direction: column; min-height: 0; }
 
+/* Estados dentro de panel (mantienen su propio color cuando aplica) */
 .panel__state {
   margin-top: auto;
   margin-bottom: auto;
@@ -267,11 +298,8 @@ function fmtUTC(d) {
 .xray__controls { display: flex; gap: .5rem; align-items: center; flex-wrap: wrap; }
 .xray__clock { display: flex; gap: .35rem; align-items: baseline; }
 
-.tag { color: #0f0f10; font-size: .85rem; }
-.mono {
-  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", monospace;
-  color: #0f0f10;
-}
+.tag  { color: #0f0f10; font-size: .85rem; }
+.mono { font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", monospace; color: #0f0f10; }
 
 /* Toggle */
 .toggle {

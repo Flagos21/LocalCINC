@@ -320,16 +320,30 @@ onBeforeUnmount(() => {
   height: 100%;
 }
 
+.magneto--compact .magneto__card {
+  flex: 1;
+  gap: 1rem;
+  border-radius: 16px;
+}
+
 .magneto__header {
   display: flex;
   flex-direction: column;
   gap: 0.75rem;
 }
 
+.magneto--compact .magneto__header {
+  padding: 1.1rem 1.2rem 0.9rem;
+}
+
 .magneto__title {
   font-size: 1.1rem;
   font-weight: 600;
   color: #0f172a;
+}
+
+.magneto--compact .magneto__title {
+  font-size: 1.25rem;
 }
 
 .magneto__description {
@@ -444,6 +458,10 @@ onBeforeUnmount(() => {
 .magneto__chart {
   height: min(240px, 100%);
   width: 100%;
+}
+
+.magneto--compact .magneto__chart {
+  height: 100%;
 }
 
 .magneto__loading {
