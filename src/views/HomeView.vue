@@ -176,28 +176,13 @@ function fmtUTC(value) {
 .home__header h2 { color: #0f0f10; }
 .home__header p  { color: #0f0f10; }
 
+
 .home__grid {
   flex: 1;
   min-height: 0;
   display: grid;
   gap: 1rem;
-  grid-template-columns: minmax(0, 1fr);
-  grid-auto-rows: auto;
-}
-
-.home__cell {
-  display: flex;
-  min-height: 0;
-  width: 100%;
-}
-
-.home__grid {
-  flex: 1;
-  min-height: 0;
-  height: 100%;
-  display: grid;
-  gap: 1rem;
-  grid-template-columns: 1fr;
+  grid-template-columns: repeat(auto-fit, minmax(min(20rem, 100%), 1fr));
   grid-auto-rows: minmax(0, 1fr);
 }
 
@@ -212,9 +197,15 @@ function fmtUTC(value) {
   min-height: 0;
 }
 
-@media (min-width: 900px) {
+@media (min-width: 960px) {
   .home__grid {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
+    grid-template-columns: repeat(auto-fit, minmax(18rem, 1fr));
+  }
+}
+
+@media (min-width: 1280px) {
+  .home__grid {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
   }
 }
 
