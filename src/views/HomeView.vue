@@ -3,7 +3,6 @@ import { computed, ref, onMounted, onBeforeUnmount } from 'vue';
 
 /* === Componentes que ya están en el repo === */
 import SunViewer from '@/components/SunViewer.vue';
-import MagnetometerChartOverview from '@/components/MagnetometerChartOverview.vue';
 import IonogramLatest from '@/components/IonogramLatest.vue';
 
 /* === Componentes/logic que agregamos nosotros === */
@@ -11,11 +10,6 @@ import MagnetometerChartFigure from '@/components/MagnetometerChartFigure.vue';
 import XRayChartFigure from '@/components/XRayChartFigure.vue';
 import { useMagnetometerSeries } from '@/composables/useMagnetometerSeries';
 import { useGoesXrays } from '@/composables/useGoesXrays';
-
-const placeholders = [
-  { title: 'Sección 3', description: 'Espacio reservado para un gráfico o imagen.' },
-  { title: 'Sección 4', description: 'Espacio reservado para un gráfico o imagen.' }
-];
 
 /* -------- Magnetómetro (detalle CHI) -------- */
 const range = ref('7d');
@@ -66,66 +60,21 @@ function fmtUTC(d) {
 
     <div class="home__grid">
       <!-- === SUVI === -->
-      <div class="home__item">
-        <article class="panel panel--tall">
-          <div class="panel__head">
-            <h3>El Sol (SUVI)</h3>
-            <p>Vista en tiempo (casi) real del Sol por longitudes de onda EUV.</p>
+      <article class="panel panel--media">
+        <div class="panel__head">
+          <h3>El Sol (SUVI)</h3>
+          <p>Vista en tiempo (casi) real del Sol por longitudes de onda EUV.</p>
+        </div>
+        <SunViewer />
+      </article>
+
+      <!-- === GOES X-ray Flux === -->
+      <article class="panel panel--chart">
+        <div class="panel__head xray__head">
+          <div class="xray__title">
+            <h3>GOES X-ray Flux (0.05–0.4 nm y 0.1–0.8 nm)</h3>
+            <p>Escala logarítmica con umbrales A/B/C/M/X. Fuente: SWPC.</p>
           </div>
-          <SunViewer />
-        </article>
-      </div>
-
-      <!-- === Overview Magnetómetro (del repo) === -->
-      <div class="home__item">
-        <MagnetometerChartOverview class="home__magneto-card" />
-      </div>
-
-      <!-- === Último Ionograma (del repo) === -->
-      <div class="home__item">
-        <IonogramLatest />
-      </div>
-
-      <!-- === Detalle Magnetómetro (nuestro) === -->
-      <div class="home__item">
-        <article class="panel panel--chart">
-          <div class="panel__head">
-            <h3>Componente H (últimos 7 días)</h3>
-            <p>Promedio horario de la estación CHI.</p>
-          </div>
-          <div class="panel__body" aria-live="polite">
-            <div v-if="errorMessage" class="panel__state panel__state--error">
-              <strong>Hubo un problema al cargar los datos.</strong>
-              <p>{{ errorMessage }}</p>
-            </div>
-            <div v-else-if="isLoading" class="panel__state panel__state--loading">
-              <span class="loader" aria-hidden="true" />
-              <p>Cargando datos…</p>
-            </div>
-            <div v-else-if="!hasData" class="panel__state">
-              <p>No hay datos disponibles para este periodo.</p>
-            </div>
-            <MagnetometerChartFigure v-else :labels="labels" :series="series" :unit="unit" />
-          </div>
-        </article>
-      </div>
-
-      <!-- === Placeholders que ya estaban === -->
-      <div v-for="section in placeholders" :key="section.title" class="home__item">
-        <article class="panel">
-          <h3>{{ section.title }}</h3>
-          <p>{{ section.description }}</p>
-        </article>
-      </div>
-
-      <!-- === GOES X-ray Flux (nuestro, ancho completo) === -->
-      <div class="home__item home__item--wide">
-        <article class="panel panel--chart panel--wide">
-          <div class="panel__head xray__head">
-            <div class="xray__title">
-              <h3>GOES X-ray Flux (0.05–0.4 nm y 0.1–0.8 nm)</h3>
-              <p>Escala logarítmica con umbrales A/B/C/M/X. Fuente: SWPC.</p>
-            </div>
             <div class="xray__controls">
               <div class="xray__clock">
                 <span class="tag">UTC ahora:</span>
@@ -161,37 +110,61 @@ function fmtUTC(d) {
             </div>
           </div>
 
-          <div class="panel__body" aria-live="polite">
-            <div v-if="xrError" class="panel__state panel__state--error">
-              <strong>Problema al cargar rayos X.</strong>
-              <p>{{ xrError }}</p>
-            </div>
-            <div v-else-if="xrLoading" class="panel__state panel__state--loading">
-              <span class="loader" aria-hidden="true"></span>
-              <p>Cargando rayos X…</p>
-            </div>
-            <div v-else-if="!xrHasData" class="panel__state">
-              <p>No hay datos disponibles para este rango.</p>
-            </div>
-
-            <template v-else>
-              <XRayChartFigure :long-by-sat="longBySat" :short-by-sat="shortBySat" :sats="sats" />
-              <small class="xray__foot">
-                Sats: {{ sats.join(', ') }}
-                · Pts totales Long: {{
-                  sats.reduce((acc, s) => acc + (longBySat[s]?.length || 0), 0)
-                }}
-                · Pts totales Short: {{
-                  sats.reduce((acc, s) => acc + (shortBySat[s]?.length || 0), 0)
-                }}
-                <template v-if="lastPointTime">
-                  · Último ts: {{ new Date(lastPointTime).toISOString() }}
-                </template>
-              </small>
-            </template>
+        <div class="panel__body" aria-live="polite">
+          <div v-if="xrError" class="panel__state panel__state--error">
+            <strong>Problema al cargar rayos X.</strong>
+            <p>{{ xrError }}</p>
           </div>
-        </article>
-      </div>
+          <div v-else-if="xrLoading" class="panel__state panel__state--loading">
+            <span class="loader" aria-hidden="true"></span>
+            <p>Cargando rayos X…</p>
+          </div>
+          <div v-else-if="!xrHasData" class="panel__state">
+            <p>No hay datos disponibles para este rango.</p>
+          </div>
+
+          <template v-else>
+            <XRayChartFigure :long-by-sat="longBySat" :short-by-sat="shortBySat" :sats="sats" />
+            <small class="xray__foot">
+              Sats: {{ sats.join(', ') }}
+              · Pts totales Long: {{
+                sats.reduce((acc, s) => acc + (longBySat[s]?.length || 0), 0)
+              }}
+              · Pts totales Short: {{
+                sats.reduce((acc, s) => acc + (shortBySat[s]?.length || 0), 0)
+              }}
+              <template v-if="lastPointTime">
+                · Último ts: {{ new Date(lastPointTime).toISOString() }}
+              </template>
+            </small>
+          </template>
+        </div>
+      </article>
+
+      <!-- === Último Ionograma === -->
+      <IonogramLatest class="panel panel--media" />
+
+      <!-- === Detalle Magnetómetro === -->
+      <article class="panel panel--chart">
+        <div class="panel__head">
+          <h3>Componente H (últimos 7 días)</h3>
+          <p>Promedio horario de la estación CHI.</p>
+        </div>
+        <div class="panel__body" aria-live="polite">
+          <div v-if="errorMessage" class="panel__state panel__state--error">
+            <strong>Hubo un problema al cargar los datos.</strong>
+            <p>{{ errorMessage }}</p>
+          </div>
+          <div v-else-if="isLoading" class="panel__state panel__state--loading">
+            <span class="loader" aria-hidden="true" />
+            <p>Cargando datos…</p>
+          </div>
+          <div v-else-if="!hasData" class="panel__state">
+            <p>No hay datos disponibles para este periodo.</p>
+          </div>
+          <MagnetometerChartFigure v-else :labels="labels" :series="series" :unit="unit" />
+        </div>
+      </article>
     </div>
   </section>
 </template>
@@ -210,22 +183,16 @@ function fmtUTC(d) {
 
 .home__grid {
   display: grid;
-  gap: 1.25rem;
-  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+  gap: 1rem;
+  grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
   align-items: stretch;
 }
 
-@media (min-width: 1024px) {
+@media (min-width: 1200px) {
   .home__grid {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 }
-
-.home__item { display: flex; }
-.home__item > * { flex: 1 1 auto; }
-
-/* permitir ítems de ancho completo */
-.home__item--wide { grid-column: 1 / -1; }
 
 .panel {
   background: #ffffff;
@@ -248,31 +215,14 @@ function fmtUTC(d) {
 /* Placeholders: el <p> directo del panel en negro explícito */
 .panel > p { color: #0f0f10; }
 
-.panel--tall { min-height: 320px; }
-
-/* estilos del overview ya existentes */
-.home__magneto-card :deep(.magneto__card) {
-  height: 100%;
-  box-shadow: 0 10px 22px rgba(15, 23, 42, 0.08);
-}
-/* Override suave: textos dentro del overview en negro */
-.home__magneto-card :deep(h1),
-.home__magneto-card :deep(h2),
-.home__magneto-card :deep(h3),
-.home__magneto-card :deep(p),
-.home__magneto-card :deep(small),
-.home__magneto-card :deep(span),
-.home__magneto-card :deep(label) {
-  color: #0f0f10;
+.panel--media {
+  min-height: 320px;
 }
 
-.home__magneto-card :deep(.magneto__header) { padding: 1.1rem 1.3rem 0.9rem; }
-.home__magneto-card :deep(.magneto__body)   { padding: 0 1.3rem 1.1rem; }
-.home__magneto-card :deep(.magneto__chart)  { min-height: 200px; }
-
-/* ===== Extensiones nuestras ===== */
-.panel--chart { min-height: 420px; }
-.panel--wide  { grid-column: 1 / -1; }
+/* ===== Extensiones nuestras (coexisten con lo anterior) ===== */
+.panel--chart {
+  min-height: 360px;
+}
 
 .panel__body { flex: 1; display: flex; flex-direction: column; }
 
@@ -343,4 +293,5 @@ function fmtUTC(d) {
 .ghost:hover { background: #f1f5f9; }
 
 .xray__foot { margin-top: .5rem; color: #0f0f10; }
+
 </style>
