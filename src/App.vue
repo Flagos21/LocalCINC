@@ -9,6 +9,7 @@ import { RouterLink, RouterView } from 'vue-router'
       <nav class="nav-links">
         <RouterLink to="/" class="nav-link">Home</RouterLink>
         <RouterLink to="/graphs" class="nav-link">Gráficos</RouterLink>
+        <RouterLink to="/ionograms" class="nav-link">Ionogramas</RouterLink>
       </nav>
     </header>
 
