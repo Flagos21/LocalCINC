@@ -5,9 +5,6 @@ import { RouterLink, RouterView } from 'vue-router'
 <template>
   <div class="app-shell">
     <header class="navbar">
-      <h1 class="brand">
-        <RouterLink to="/" class="brand__link">LocalCINC</RouterLink>
-      </h1>
       <nav class="nav-links">
         <RouterLink to="/" class="nav-link">Inicio</RouterLink>
         <div class="nav-item nav-dropdown">
@@ -32,6 +29,9 @@ import { RouterLink, RouterView } from 'vue-router'
           </div>
         </div>
       </nav>
+      <h1 class="brand">
+        <RouterLink to="/" class="brand__link">LocalCINC</RouterLink>
+      </h1>
     </header>
 
     <main class="content">
@@ -45,25 +45,31 @@ import { RouterLink, RouterView } from 'vue-router'
   display: flex;
   min-height: 100vh;
   flex-direction: column;
+  width: 100%;
+  overflow-x: hidden;
 }
 
 .navbar {
   display: flex;
   align-items: center;
-  justify-content: space-between;
-  padding: 1rem 1.5rem;
+  gap: clamp(1rem, 3vw, 2.5rem);
+  padding: 1rem clamp(1rem, 2vw, 1.5rem);
   background-color: #1f2933;
   color: #ffffff;
   box-shadow: 0 2px 6px rgba(0, 0, 0, 0.1);
   position: sticky;
   top: 0;
   z-index: 1000;
+  width: 100%;
+  box-sizing: border-box;
 }
 
 .brand {
   font-size: 1.25rem;
   font-weight: 600;
   margin: 0;
+  margin-left: auto;
+  text-align: right;
 }
 
 .brand__link {
@@ -73,8 +79,12 @@ import { RouterLink, RouterView } from 'vue-router'
 
 .nav-links {
   display: flex;
-  gap: 1.25rem;
+  gap: clamp(0.75rem, 2vw, 1.5rem);
   align-items: center;
+  flex-wrap: wrap;
+  flex: 1 1 auto;
+  justify-content: center;
+  min-width: 0;
 }
 
 .nav-link {
@@ -192,5 +202,21 @@ import { RouterLink, RouterView } from 'vue-router'
   padding: 1.5rem;
   background-color: #f3f4f6;
   overflow: hidden;
+}
+
+@media (max-width: 720px) {
+  .navbar {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .nav-links {
+    justify-content: center;
+  }
+
+  .brand {
+    margin-left: 0;
+    text-align: center;
+  }
 }
 </style>
