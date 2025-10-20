@@ -14,6 +14,11 @@ const router = createRouter({
       name: 'graphs',
       component: () => import('../views/GraphsView.vue'),
     },
+    {
+      path: '/ionograms',
+      name: 'ionograms',
+      component: () => import('../views/IonogramGalleryView.vue'),
+    },
   ],
 })
 

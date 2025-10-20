@@ -1,6 +1,7 @@
 <script setup>
 import SunViewer from '@/components/SunViewer.vue';
 import MagnetometerChartOverview from '@/components/MagnetometerChartOverview.vue';
+import IonogramLatest from '@/components/IonogramLatest.vue';
 
 const placeholders = [
   { title: 'Sección 3', description: 'Espacio reservado para un gráfico o imagen.' },
@@ -28,6 +29,10 @@ const placeholders = [
 
       <div class="home__item">
         <MagnetometerChartOverview class="home__magneto-card" />
+      </div>
+
+      <div class="home__item">
+        <IonogramLatest />
       </div>
 
       <div v-for="section in placeholders" :key="section.title" class="home__item">
