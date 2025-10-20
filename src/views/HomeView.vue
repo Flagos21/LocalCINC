@@ -112,18 +112,18 @@ function fmtUTC(value) {
             </div>
           </div>
 
-          <div class="panel__body" aria-live="polite">
-            <div v-if="xrError" class="panel__state panel__state--error">
-              <strong>Problema al cargar rayos X.</strong>
-              <p>{{ xrError }}</p>
-            </div>
-            <div v-else-if="xrLoading" class="panel__state panel__state--loading">
-              <span class="loader" aria-hidden="true"></span>
-              <p>Cargando rayos X…</p>
-            </div>
-            <div v-else-if="!xrHasData" class="panel__state">
-              <p>No hay datos disponibles para este rango.</p>
-            </div>
+        <div class="panel__body" aria-live="polite">
+          <div v-if="xrError" class="panel__state panel__state--error">
+            <strong>Problema al cargar rayos X.</strong>
+            <p>{{ xrError }}</p>
+          </div>
+          <div v-else-if="xrLoading" class="panel__state panel__state--loading">
+            <span class="loader" aria-hidden="true"></span>
+            <p>Cargando rayos X…</p>
+          </div>
+          <div v-else-if="!xrHasData" class="panel__state">
+            <p>No hay datos disponibles para este rango.</p>
+          </div>
 
             <template v-else>
               <XRayChartFigure
@@ -172,14 +172,23 @@ function fmtUTC(value) {
   height: 100%;
 }
 
-.home__header h2 {
-  font-size: 1.75rem;
-  font-weight: 600;
-  color: #1f2933;
+/* FORZAR NEGRO EN TITULARES Y PÁRRAFOS DEL HEADER */
+.home__header h2 { color: #0f0f10; }
+.home__header p  { color: #0f0f10; }
+
+.home__grid {
+  flex: 1;
+  min-height: 0;
+  display: grid;
+  gap: 1rem;
+  grid-template-columns: minmax(0, 1fr);
+  grid-auto-rows: auto;
 }
 
-.home__header p {
-  color: #52606d;
+.home__cell {
+  display: flex;
+  min-height: 0;
+  width: 100%;
 }
 
 .home__grid {
@@ -250,6 +259,7 @@ function fmtUTC(value) {
   min-height: 0;
 }
 
+/* Estados dentro de panel (mantienen su propio color cuando aplica) */
 .panel__state {
   margin-top: auto;
   margin-bottom: auto;
