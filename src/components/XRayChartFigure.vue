@@ -208,3 +208,38 @@ const options = computed(() => ({
     :series="chartSeries"
   />
 </template>
+
+<style scoped>
+:deep(.apexcharts-toolbar) {
+  backdrop-filter: none;
+  background: rgba(255, 255, 255, 0.92);
+  border-radius: 0.5rem;
+  padding: 0.2rem;
+  box-shadow: 0 6px 20px rgba(15, 23, 42, 0.2);
+}
+
+:deep(.apexcharts-toolbar svg) {
+  fill: #0f172a;
+  transition: fill 0.2s ease;
+}
+
+:deep(.apexcharts-toolbar svg:hover) {
+  fill: #0369a1;
+}
+
+:deep(.apexcharts-menu) {
+  background: #0f172a;
+  border: 1px solid #1e293b;
+  border-radius: 0.5rem;
+  box-shadow: 0 15px 30px rgba(15, 23, 42, 0.35);
+}
+
+:deep(.apexcharts-menu-item) {
+  color: #f8fafc;
+  font-weight: 500;
+}
+
+:deep(.apexcharts-menu-item:hover) {
+  background: rgba(148, 163, 184, 0.3);
+}
+</style>

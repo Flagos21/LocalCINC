@@ -139,6 +139,8 @@ function fmtUTC(value) {
   gap: 1.5rem;
   flex: 1;
   min-height: 0;
+  width: min(100%, 68rem);
+  margin: 0 auto;
 }
 
 .xray__header {
