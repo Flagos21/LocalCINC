@@ -241,8 +241,8 @@ onBeforeUnmount(() => {
 </script>
 
 <template>
-  <section class="magneto magneto--compact">
-    <div class="magneto__card">
+  <section class="magneto">
+    <article class="magneto__card">
       <header class="magneto__header">
         <div>
           <h1 class="magneto__title">Magnetómetro – Estación única</h1>
@@ -251,7 +251,7 @@ onBeforeUnmount(() => {
           </p>
         </div>
 
-        <div class="magneto__filters magneto__filters--compact">
+        <div class="magneto__filters">
           <div class="magneto__field">
             <span class="magneto__label">Rangos rápidos</span>
             <div class="magneto__quick">
@@ -297,38 +297,37 @@ onBeforeUnmount(() => {
 
         <p v-if="errorMessage" class="magneto__error">⚠️ {{ errorMessage }}</p>
       </div>
-    </div>
+    </article>
   </section>
 </template>
 
 <style scoped>
 .magneto {
-  padding: 0;
+  height: 100%;
 }
 
 .magneto__card {
   width: 100%;
-  background: linear-gradient(135deg, #ffffff 0%, #eef2ff 45%, #e0e7ff 100%);
-  border-radius: 20px;
-  border: 1px solid rgba(15, 23, 42, 0.08);
-  box-shadow: 0 16px 32px rgba(15, 23, 42, 0.12);
   display: flex;
   flex-direction: column;
-  gap: 1.25rem;
-  overflow: hidden;
+  background: #ffffff;
+  border-radius: 0.75rem;
+  border: 1px solid #e2e8f0;
+  box-shadow: 0 6px 14px rgba(15, 23, 42, 0.06);
+  gap: 0.75rem;
+  padding: 0.9rem 1rem;
+  min-height: 0;
+  height: 100%;
 }
 
 .magneto__header {
   display: flex;
   flex-direction: column;
-  gap: 1.25rem;
-  padding: 1.5rem 1.75rem 1.25rem;
-  background: rgba(255, 255, 255, 0.7);
-  backdrop-filter: blur(10px);
+  gap: 0.75rem;
 }
 
 .magneto__title {
-  font-size: 1.5rem;
+  font-size: 1.1rem;
   font-weight: 600;
   color: #0f172a;
 }
@@ -336,17 +335,13 @@ onBeforeUnmount(() => {
 .magneto__description {
   color: #475569;
   font-size: 0.9rem;
-  line-height: 1.45;
+  line-height: 1.4;
 }
 
 .magneto__filters {
   display: flex;
   flex-wrap: wrap;
-  gap: 1rem;
-  align-items: flex-start;
-}
-
-.magneto__filters--compact {
+  gap: 0.65rem;
   align-items: center;
 }
 
@@ -354,11 +349,11 @@ onBeforeUnmount(() => {
   display: flex;
   flex-direction: column;
   gap: 0.35rem;
-  min-width: 180px;
+  min-width: 160px;
 }
 
 .magneto__label {
-  font-size: 0.7rem;
+  font-size: 0.65rem;
   letter-spacing: 0.08em;
   text-transform: uppercase;
   color: #64748b;
@@ -367,25 +362,25 @@ onBeforeUnmount(() => {
 
 .magneto__quick {
   display: flex;
-  gap: 0.5rem;
+  gap: 0.35rem;
   flex-wrap: wrap;
 }
 
 .magneto__quick-button {
-  border: 1px solid rgba(37, 99, 235, 0.3);
-  background: rgba(37, 99, 235, 0.1);
+  border: 1px solid rgba(37, 99, 235, 0.35);
+  background: rgba(37, 99, 235, 0.12);
   color: #1d4ed8;
-  padding: 0.35rem 0.65rem;
+  padding: 0.3rem 0.55rem;
   border-radius: 999px;
-  font-size: 0.8rem;
+  font-size: 0.78rem;
   font-weight: 600;
-  transition: background-color 0.2s ease, color 0.2s ease, border-color 0.2s ease;
   cursor: pointer;
+  transition: background-color 0.2s ease, color 0.2s ease, border-color 0.2s ease;
 }
 
 .magneto__quick-button:hover,
 .magneto__quick-button:focus-visible {
-  background: rgba(37, 99, 235, 0.18);
+  background: rgba(37, 99, 235, 0.2);
   border-color: #2563eb;
   color: #1e3a8a;
   outline: none;
@@ -399,12 +394,11 @@ onBeforeUnmount(() => {
 
 .magneto__summary {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
-  gap: 0.65rem;
-  padding: 0.65rem 0.85rem;
-  background: rgba(37, 99, 235, 0.08);
-  border-radius: 14px;
-  border: 1px solid rgba(37, 99, 235, 0.12);
+  grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+  gap: 0.5rem;
+  padding: 0.5rem;
+  border-radius: 0.65rem;
+  background: #f1f5f9;
   color: #1e3a8a;
 }
 
@@ -415,7 +409,7 @@ onBeforeUnmount(() => {
 }
 
 .magneto__summary-label {
-  font-size: 0.65rem;
+  font-size: 0.6rem;
   text-transform: uppercase;
   letter-spacing: 0.08em;
   font-weight: 600;
@@ -429,22 +423,26 @@ onBeforeUnmount(() => {
 }
 
 .magneto__body {
-  padding: 0 1.75rem 1.75rem;
   display: flex;
   flex-direction: column;
-  gap: 0.85rem;
+  gap: 0.65rem;
+  flex: 1;
+  min-height: 0;
 }
 
 .magneto__chart-wrapper {
   position: relative;
-  border-radius: 16px;
+  border-radius: 0.65rem;
   overflow: hidden;
-  border: 1px solid rgba(15, 23, 42, 0.08);
+  border: 1px solid #e2e8f0;
   background: #ffffff;
+  flex: 1;
+  display: flex;
+  min-height: 0;
 }
 
 .magneto__chart {
-  height: 320px;
+  height: min(240px, 100%);
   width: 100%;
 }
 
@@ -456,14 +454,14 @@ onBeforeUnmount(() => {
   text-align: center;
   gap: 0.75rem;
   background: rgba(255, 255, 255, 0.85);
-  backdrop-filter: blur(6px);
+  backdrop-filter: blur(4px);
   color: #1e293b;
-  font-size: 0.95rem;
+  font-size: 0.9rem;
 }
 
 .magneto__spinner {
-  width: 1.5rem;
-  height: 1.5rem;
+  width: 1.4rem;
+  height: 1.4rem;
   border-radius: 50%;
   border: 3px solid rgba(37, 99, 235, 0.25);
   border-top-color: #2563eb;
@@ -471,9 +469,9 @@ onBeforeUnmount(() => {
 }
 
 .magneto__empty {
-  padding: 0.85rem 1.1rem;
+  padding: 0.75rem 1rem;
   background: rgba(59, 130, 246, 0.12);
-  border-radius: 12px;
+  border-radius: 0.65rem;
   color: #1d4ed8;
   font-weight: 500;
   text-align: center;
@@ -496,18 +494,8 @@ onBeforeUnmount(() => {
 }
 
 @media (max-width: 768px) {
-  .magneto__card {
-    border-radius: 18px;
-  }
-
   .magneto__chart {
-    height: 280px;
-  }
-}
-
-@media (max-width: 520px) {
-  .magneto__title {
-    font-size: 1.35rem;
+    height: min(220px, 100%);
   }
 }
 </style>
