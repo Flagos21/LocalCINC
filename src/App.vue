@@ -1,5 +1,32 @@
 <script setup>
 import { RouterLink, RouterView } from 'vue-router'
+import { ref, onMounted, onBeforeUnmount, computed } from 'vue'
+
+const now = ref(new Date())
+let timerId
+
+onMounted(() => {
+  timerId = setInterval(() => {
+    now.value = new Date()
+  }, 1000)
+})
+
+onBeforeUnmount(() => {
+  clearInterval(timerId)
+})
+
+function formatDT(date, timeZone) {
+  return new Intl.DateTimeFormat('es-CL', {
+    timeZone,
+    hour12: false,
+    dateStyle: 'short',   // ej: 21-10-25
+    timeStyle: 'medium',  // ej: 23:15:30
+  }).format(date)
+}
+
+const utcText = computed(() => formatDT(now.value, 'UTC'))
+const clText  = computed(() => formatDT(now.value, 'America/Santiago'))
+const utcISO  = computed(() => now.value.toISOString()) // para el <time datetime=...>
 </script>
 
 <template>
@@ -33,6 +60,19 @@ import { RouterLink, RouterView } from 'vue-router'
         <RouterLink to="/" class="brand__link">LocalCINC</RouterLink>
       </h1>
     </header>
+
+    <!-- ⬇️ Franja de horas debajo del banner -->
+    <div class="timebar" aria-live="polite">
+      <div class="time-item">
+        <span class="time-label">UTC</span>
+        <time :datetime="utcISO">{{ utcText }}</time>
+      </div>
+      <span class="time-sep">•</span>
+      <div class="time-item">
+        <span class="time-label">Chile (America/Santiago)</span>
+        <span>{{ clText }}</span>
+      </div>
+    </div>
 
     <main class="content">
       <RouterView />
@@ -105,9 +145,7 @@ import { RouterLink, RouterView } from 'vue-router'
   border-color: rgba(255, 255, 255, 0.5);
 }
 
-.nav-item {
-  position: relative;
-}
+.nav-item { position: relative; }
 
 .nav-link--trigger {
   background: none;
@@ -120,9 +158,7 @@ import { RouterLink, RouterView } from 'vue-router'
   padding: 0;
 }
 
-.nav-caret {
-  font-size: 0.75rem;
-}
+.nav-caret { font-size: 0.75rem; }
 
 .dropdown-menu {
   position: absolute;
@@ -177,9 +213,7 @@ import { RouterLink, RouterView } from 'vue-router'
   cursor: pointer;
 }
 
-.dropdown-submenu {
-  position: relative;
-}
+.dropdown-submenu { position: relative; }
 
 .dropdown-menu--nested {
   top: 0;
@@ -192,6 +226,36 @@ import { RouterLink, RouterView } from 'vue-router'
   opacity: 1;
   pointer-events: auto;
   transform: translateY(0) translateX(0);
+}
+
+/* ---- Franja de hora ---- */
+.timebar {
+  background: #0f172a;      /* combina con el dropdown */
+  color: #e5e7eb;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.75rem;
+  padding: 0.4rem 1rem;
+  font-size: 0.95rem;
+  box-shadow: inset 0 1px 0 rgba(255,255,255,0.06);
+  flex-wrap: wrap;
+}
+
+.time-item {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 0.5rem;
+  font-variant-numeric: tabular-nums; /* números alineados */
+}
+
+.time-label {
+  font-weight: 600;
+  color: #93c5fd; /* azul suave */
+}
+
+.time-sep {
+  opacity: 0.6;
 }
 
 .content {
@@ -210,9 +274,7 @@ import { RouterLink, RouterView } from 'vue-router'
     align-items: stretch;
   }
 
-  .nav-links {
-    justify-content: center;
-  }
+  .nav-links { justify-content: center; }
 
   .brand {
     margin-left: 0;
