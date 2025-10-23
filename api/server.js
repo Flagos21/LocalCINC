@@ -42,6 +42,43 @@ const queryApi = influx.getQueryApi(INFLUX_ORG);
 
 const imageExtensions = new Set(['.png', '.jpg', '.jpeg', '.gif', '.webp']);
 
+const MONTH_ABBREVIATIONS = {
+  jan: 0,
+  feb: 1,
+  mar: 2,
+  apr: 3,
+  may: 4,
+  jun: 5,
+  jul: 6,
+  aug: 7,
+  sep: 8,
+  oct: 9,
+  nov: 10,
+  dec: 11
+};
+
+const MINUTE_MS = 60 * 1000;
+const HOUR_MS = 60 * MINUTE_MS;
+const DAY_MS = 24 * HOUR_MS;
+const LOCAL_BUCKETS_MS = [
+  MINUTE_MS,
+  2 * MINUTE_MS,
+  5 * MINUTE_MS,
+  10 * MINUTE_MS,
+  15 * MINUTE_MS,
+  30 * MINUTE_MS,
+  HOUR_MS,
+  2 * HOUR_MS,
+  3 * HOUR_MS,
+  6 * HOUR_MS,
+  12 * HOUR_MS,
+  DAY_MS,
+  2 * DAY_MS,
+  7 * DAY_MS,
+  14 * DAY_MS,
+  30 * DAY_MS
+];
+
 function isImageFile(name) {
   const ext = path.extname(name).toLowerCase();
   return imageExtensions.has(ext);
