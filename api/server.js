@@ -310,7 +310,7 @@ app.get('/api/local-magnetometer/series', async (req, res) => {
       const now = new Date();
       const defaultEnd = toUtcEnd(now);
       const defaultStart = toUtcStart(new Date(now));
-      defaultStart.setUTCFullYear(defaultStart.getUTCFullYear() - 5);
+      defaultStart.setUTCFullYear(defaultStart.getUTCFullYear() - 2);
 
       rangeStart = defaultStart;
       rangeEnd = defaultEnd;
