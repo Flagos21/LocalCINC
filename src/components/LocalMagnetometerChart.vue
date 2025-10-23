@@ -6,6 +6,8 @@ import 'litepicker/dist/css/litepicker.css'
 import VueApexCharts from 'vue3-apexcharts'
 import { useMagnetometerSeries } from '@/composables/useMagnetometerSeries'
 
+const DEFAULT_RANGE_YEARS = 2
+
 const rangeInputRef = ref(null)
 const pickerRef = ref(null)
 const pendingRange = ref(null)
@@ -193,14 +195,28 @@ function formatEveryLabel(every) {
   return `${amount.toLocaleString('es-CL')} ${label}`
 }
 
-function setDefaultFiveYears() {
+function setDefaultRange() {
   const end = dayjs()
-  const start = end.subtract(5, 'year')
+  const start = end.subtract(DEFAULT_RANGE_YEARS, 'year')
   const normalized = normalizeRange(start, end, { clampToFullDays: true })
   from.value = normalized.start
   to.value = normalized.end
   pendingRange.value = null
 }
+
+const defaultRangeDisplay = computed(() => {
+  if (DEFAULT_RANGE_YEARS === 1) {
+    return {
+      button: 'Último año',
+      description: 'el último año'
+    }
+  }
+
+  return {
+    button: `Últimos ${DEFAULT_RANGE_YEARS} años`,
+    description: `los últimos ${DEFAULT_RANGE_YEARS} años`
+  }
+})
 
 function applyPendingRange() {
   if (!pendingRange.value) {
@@ -223,7 +239,7 @@ function applyPendingRange() {
 }
 
 function resetRange() {
-  setDefaultFiveYears()
+  setDefaultRange()
 }
 
 const hasPendingRange = computed(() => {
@@ -322,7 +338,7 @@ function draw() {
     : []
 }
 
-setDefaultFiveYears()
+setDefaultRange()
 
 const rangeHint = computed(() => {
   if (!hasValidSelection.value) {
@@ -494,7 +510,7 @@ onBeforeUnmount(() => {
           <h1 class="magneto__title">Magnetómetro – Fuente local</h1>
           <p class="magneto__description">
             Explora la componente H generada por los archivos DataMin del magnetómetro de Chillán.
-            Selecciona el rango en el calendario para cargar los datos disponibles (por defecto se muestran los últimos 5 años).
+            Selecciona el rango en el calendario para cargar los datos disponibles (por defecto se muestran {{ defaultRangeDisplay.description }}).
           </p>
         </div>
 
@@ -521,7 +537,7 @@ onBeforeUnmount(() => {
                 class="magneto__reset"
                 @click="resetRange"
               >
-                Últimos 5 años
+                {{ defaultRangeDisplay.button }}
               </button>
             </div>
             <p v-if="hasPendingChange" class="magneto__pending">Pendiente: {{ pendingHint }}</p>
