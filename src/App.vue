@@ -2,6 +2,9 @@
 import { RouterLink, RouterView } from 'vue-router'
 import { ref, onMounted, onBeforeUnmount, computed } from 'vue'
 
+// ⬇️ NUEVO: importa el componente del mapa
+import DayNightMap from '@/components/DayNightMap.vue'
+
 const now = ref(new Date())
 let timerId
 
@@ -74,6 +77,15 @@ const utcISO  = computed(() => now.value.toISOString()) // para el <time datetim
       </div>
     </div>
 
+<section class="maps-grid">
+  <!-- Fondo oscuro: sombra un poco más fuerte -->
+  <DayNightMap height="380px" basemap="carto-dark" :nightOpacity="0.45" />
+
+  <!-- Fondo claro: sombra más suave para que contraste sin tapar -->
+  <DayNightMap height="380px" basemap="carto-light" :nightOpacity="0.25" />
+</section>
+
+
     <main class="content">
       <RouterView />
     </main>
@@ -88,6 +100,22 @@ const utcISO  = computed(() => now.value.toISOString()) // para el <time datetim
   width: 100%;
   overflow-x: hidden;
 }
+
+.maps-grid {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 16px;
+  padding: 12px 16px;
+  background: #0b1220;
+}
+
+@media (min-width: 1100px) {
+  .maps-grid {
+    grid-template-columns: 1fr 1fr; /* dos columnas lado a lado */
+  }
+}
+
+
 
 .navbar {
   display: flex;
@@ -256,6 +284,12 @@ const utcISO  = computed(() => now.value.toISOString()) // para el <time datetim
 
 .time-sep {
   opacity: 0.6;
+}
+
+/* ---- Contenedor del mapa debajo del banner ---- */
+.below-banner {
+  padding: 12px 16px;
+  background: #0b1220; /* separa visualmente del main */
 }
 
 .content {
