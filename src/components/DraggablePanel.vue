@@ -144,7 +144,9 @@ function startDrag(event) {
   const container = props.containerRef?.value
   if (!panelRef.value || !container) return
   const handle = event.target.closest('[data-drag-handle]')
-  if (!handle || !panelRef.value.contains(handle)) return
+  const hasDedicatedHandle = !!panelRef.value.querySelector('[data-drag-handle]')
+  if (handle && !panelRef.value.contains(handle)) return
+  if (!handle && hasDedicatedHandle) return
   event.preventDefault()
   panelRef.value.setPointerCapture?.(event.pointerId)
   dragSession.value = {
