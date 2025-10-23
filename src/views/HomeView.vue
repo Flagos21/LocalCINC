@@ -198,8 +198,8 @@ function fmtUTC(value) {
 }
 
 /* Titulares en negro sobre fondo oscuro del main */
-.home__header h2 { color: #0f0f10; }
-.home__header p  { color: #0f0f10; }
+.home__header h2 { color: #ffffff; }
+.home__header p  { color: #ffffff; }
 
 .home__grid {
   flex: 1;

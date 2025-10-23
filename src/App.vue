@@ -107,7 +107,7 @@ const utcISO  = computed(() => now.value.toISOString())
 /* Franja hora */
 .timebar {
   background:#0f172a; color:#e5e7eb; display:flex; align-items:center; justify-content:center;
-  gap:.75rem; padding:.4rem 1rem; font-size:.95rem; box-shadow: inset 0 1px 0 rgba(255,255,255,.06); flex-wrap:wrap;
+  gap:.75rem; padding:.4rem 1rem; font-size:1.5rem; box-shadow: inset 0 1px 0 rgba(255,255,255,.06); flex-wrap:wrap;
 }
 .time-item { display:inline-flex; align-items:baseline; gap:.5rem; font-variant-numeric: tabular-nums; }
 .time-label { font-weight:600; color:#93c5fd; }
