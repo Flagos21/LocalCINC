@@ -3,20 +3,21 @@
     <header class="magneto-local__header">
       <div>
         <h2>Magnetómetros — Fuente local</h2>
-        <p>Esta vista estará disponible próximamente con datos locales.</p>
+        <p>
+          Visualiza la componente H (nT) obtenida desde los archivos DataMin locales generados por
+          el magnetómetro de Chillán.
+        </p>
       </div>
     </header>
 
-    <div class="magneto-local__placeholder">
-      <div class="placeholder-card">
-        <p>Estamos preparando la visualización para fuentes locales.</p>
-        <p class="placeholder-card__hint">Vuelve pronto para conocer las novedades.</p>
-      </div>
+    <div class="magneto-local__content">
+      <LocalMagnetometerChart />
     </div>
   </section>
 </template>
 
 <script setup>
+import LocalMagnetometerChart from '@/components/LocalMagnetometerChart.vue'
 </script>
 
 <style scoped>
@@ -38,29 +39,8 @@
   margin-top: 0.25rem;
 }
 
-.magneto-local__placeholder {
+.magneto-local__content {
   flex: 1;
-  display: grid;
-  place-items: center;
-  min-height: 16rem;
-}
-
-.placeholder-card {
-  background: #ffffff;
-  padding: 2rem;
-  border-radius: 0.75rem;
-  box-shadow: 0 1px 2px rgba(15, 23, 42, 0.08), 0 4px 12px rgba(15, 23, 42, 0.06);
-  text-align: center;
-  max-width: 28rem;
-}
-
-.placeholder-card p {
-  margin: 0;
-  color: #1f2933;
-}
-
-.placeholder-card__hint {
-  margin-top: 0.5rem;
-  color: #64748b;
+  min-height: 0;
 }
 </style>
