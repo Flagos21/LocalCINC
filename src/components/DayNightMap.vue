@@ -1,5 +1,5 @@
 <script setup>
-import { onMounted, onBeforeUnmount, ref, watch } from 'vue'
+import { onMounted, onBeforeUnmount, ref, watch, computed } from 'vue'
 import L from 'leaflet'
 import 'leaflet/dist/leaflet.css'
 import SunCalc from 'suncalc'
@@ -25,12 +25,17 @@ const props = defineProps({
 
 /* ---------- estado ---------- */
 const mapEl = ref(null)
-const lastUpdated = ref(new Date())
+const displayTime = ref(new Date())
+const isAnimating = ref(false)
 let map, baseLayer, labelsLayer
 let nightPoly=null, civilPoly=null, nautPoly=null, astroPoly=null
 let sunMarker=null, moonMarker=null
 let timer=null
 const mode = ref(props.mode)
+let animFrameId=null
+let animButtonEl=null
+
+const INITIAL_VIEW = { center:[5,20], zoom:2 }
 
 /* ---------- helpers astronómicos (igual que antes) ---------- */
 const d2r = d => d*Math.PI/180, r2d = r => r*180/Math.PI
@@ -96,18 +101,18 @@ function makeBaseAndLabels(currentMode){
     // Satélite (Esri) + rótulos transparentes
     baseLayer = L.tileLayer(
       'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}',
-      { minZoom:1, maxZoom:7, attribution:'Esri, Maxar, Earthstar Geographics' }
+      { minZoom:1, maxZoom:7, attribution:'Esri, Maxar, Earthstar Geographics', noWrap:true }
     ).addTo(map)
 
     labelsLayer = L.tileLayer(
       'https://server.arcgisonline.com/ArcGIS/rest/services/Reference/World_Boundaries_and_Places/MapServer/tile/{z}/{y}/{x}',
-      { pane:'labels', minZoom:1, maxZoom:7, opacity:0.9 }
+      { pane:'labels', minZoom:1, maxZoom:7, opacity:0.9, noWrap:true }
     ).addTo(map)
   } else {
     // Mapa claro con etiquetas (Carto Positron)
     baseLayer = L.tileLayer(
       'https://{s}.basemaps.cartocdn.com/rastertiles/light_all/{z}/{x}/{y}.png',
-      { minZoom:1, maxZoom:7, subdomains:'abcd', attribution:'© OSM, © CARTO' }
+      { minZoom:1, maxZoom:7, subdomains:'abcd', attribution:'© OSM, © CARTO', noWrap:true }
     ).addTo(map)
     // Extra opcional de labels (normalmente no hace falta porque Positron ya trae):
     labelsLayer = null
@@ -115,9 +120,9 @@ function makeBaseAndLabels(currentMode){
 }
 
 /* ---------- dibujar terminador ---------- */
-function redrawAll(){
-  const now = new Date()
-  lastUpdated.value = now
+function redrawAll(date = new Date()){
+  const now = date instanceof Date ? date : new Date(date)
+  displayTime.value = now
 
   const { curve: zero, lambda_s } = curveAtElevation(now, 0, 1)
   const dayNorth = sideIsNorth(zero, lambda_s)
@@ -184,6 +189,90 @@ function addModeSwitch(){
   map.addControl(new C())
 }
 
+function addExtrasControls(){
+  const C = L.Control.extend({
+    options:{ position:'topleft' },
+    onAdd(){
+      const el = L.DomUtil.create('div','map-tools')
+      el.innerHTML = `
+        <button class="btn reset" type="button" title="Restablecer vista" aria-label="Restablecer vista">
+          ⟲
+        </button>
+        <button class="btn anim" type="button" title="Animar sombra diaria" aria-label="Animar sombra diaria">
+          Animar día
+        </button>
+      `
+      const [resetBtn, animBtn] = el.querySelectorAll('button')
+      animButtonEl = animBtn
+
+      L.DomEvent.disableClickPropagation(el)
+      L.DomEvent.disableScrollPropagation(el)
+
+      resetBtn.addEventListener('click', () => {
+        map.setView(INITIAL_VIEW.center, INITIAL_VIEW.zoom, { animate:true })
+      })
+
+      animBtn.addEventListener('click', () => {
+        if (isAnimating.value) stopAnimation()
+        else startAnimation()
+      })
+
+      updateAnimButton()
+
+      return el
+    }
+  })
+
+  map.addControl(new C())
+}
+
+function updateAnimButton(){
+  if (!animButtonEl) return
+  animButtonEl.textContent = isAnimating.value ? 'Detener animación' : 'Animar día'
+  animButtonEl.classList.toggle('active', isAnimating.value)
+  animButtonEl.setAttribute('aria-pressed', String(isAnimating.value))
+}
+
+function startAnimation(){
+  if (isAnimating.value) return
+  stopTimer()
+  isAnimating.value = true
+  updateAnimButton()
+
+  const now = new Date()
+  const dayStart = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate()))
+  const dayEnd = now
+  const durationMs = 20000
+  const startTs = performance.now()
+
+  function step(ts){
+    if (!isAnimating.value) return
+    const t = Math.min((ts - startTs)/durationMs, 1)
+    const simDate = new Date(dayStart.getTime() + (dayEnd.getTime() - dayStart.getTime())*t)
+    redrawAll(simDate)
+    if (t < 1){
+      animFrameId = requestAnimationFrame(step)
+    } else {
+      stopAnimation()
+    }
+  }
+
+  redrawAll(dayStart)
+  animFrameId = requestAnimationFrame(step)
+}
+
+function stopAnimation(){
+  if (!isAnimating.value) return
+  isAnimating.value = false
+  if (animFrameId){ cancelAnimationFrame(animFrameId); animFrameId=null }
+  updateAnimButton()
+  redrawAll(new Date())
+  startTimer()
+}
+
+const timeLabel = computed(() => isAnimating.value ? 'Simulación' : 'UTC')
+const timeHint = computed(() => isAnimating.value ? '(modo animación)' : '(actualizado cada 1 min)')
+
 /* ---------- icons ---------- */
 function sunIcon(){ return L.divIcon({ className:'sun-ico', html:`<svg viewBox="0 0 64 64" width="38" height="38">
   <circle cx="32" cy="32" r="14" fill="#FDB813" stroke="#F59E0B" stroke-width="3"/>
@@ -199,12 +288,20 @@ function moonIcon(){ return L.divIcon({ className:'moon-ico', html:`<svg viewBox
   iconSize:[34,34], iconAnchor:[17,17] }) }
 
 /* ---------- ciclo de vida ---------- */
-function startTimer(){ if (!timer) timer=setInterval(redrawAll, props.autoRefreshMs) }
+function startTimer(){
+  if (isAnimating.value) return
+  if (!timer) timer=setInterval(() => redrawAll(), props.autoRefreshMs)
+}
 function stopTimer(){ if (timer){ clearInterval(timer); timer=null } }
 
 onMounted(() => {
-  map = L.map(mapEl.value, { worldCopyJump:true, zoomControl:true, attributionControl:false })
-        .setView([5,20], 2)
+  map = L.map(mapEl.value, {
+    zoomControl:true,
+    attributionControl:false,
+    worldCopyJump:false,
+    maxBounds:[[-85,-180],[85,180]],
+    maxBoundsViscosity:1.0,
+  }).setView(INITIAL_VIEW.center, INITIAL_VIEW.zoom)
 
   makeBaseAndLabels(mode.value)
   // arreglos de tamaño
@@ -214,12 +311,15 @@ onMounted(() => {
   ro.observe(mapEl.value); map.__ro = ro
 
   addModeSwitch()
+  addExtrasControls()
   redrawAll(); startTimer()
 })
 onBeforeUnmount(() => {
+  stopAnimation()
   stopTimer(); if (map?.__ro) map.__ro.disconnect(); map?.remove()
 })
 watch(() => props.autoRefreshMs, () => { stopTimer(); startTimer() })
+watch(isAnimating, updateAnimButton)
 </script>
 
 <template>
@@ -227,8 +327,8 @@ watch(() => props.autoRefreshMs, () => { stopTimer(); startTimer() })
     <div ref="mapEl" class="tad-map" :style="{ height }"></div>
     <div class="tad-footer">
       <span class="tad-time">
-        <strong>UTC</strong> — {{ lastUpdated.toLocaleString('es-CL',{ timeZone:'UTC', hour12:false }) }}
-        <em>(actualizado cada 1 min)</em>
+        <strong>{{ timeLabel }}</strong> — {{ displayTime.toLocaleString('es-CL',{ timeZone:'UTC', hour12:false }) }}
+        <em>{{ timeHint }}</em>
       </span>
     </div>
   </div>
@@ -264,4 +364,28 @@ watch(() => props.autoRefreshMs, () => { stopTimer(); startTimer() })
 /* por si el base trae labels fuertes, mantener nuestras capas visibles */
 :deep(.leaflet-control-attribution){ display:none; }
 :deep(.leaflet-pane .sun-ico), :deep(.leaflet-pane .moon-ico){ filter:drop-shadow(0 1px 2px rgba(0,0,0,.5)); }
+
+:deep(.map-tools){
+  display:flex;
+  gap:6px;
+  background:rgba(15,23,42,.82);
+  padding:6px;
+  border-radius:8px;
+  backdrop-filter:blur(4px);
+  box-shadow:0 4px 16px rgba(0,0,0,.35);
+}
+:deep(.map-tools .btn){
+  border:none;
+  cursor:pointer;
+  padding:.35rem .6rem;
+  border-radius:6px;
+  color:#e5e7eb;
+  background:#1f2937;
+  font-weight:600;
+  display:flex;
+  align-items:center;
+  gap:.35rem;
+}
+:deep(.map-tools .btn.reset){ font-size:1.1rem; line-height:1; }
+:deep(.map-tools .btn.active){ background:#2563eb; color:#fff; }
 </style>
