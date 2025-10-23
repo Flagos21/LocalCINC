@@ -161,6 +161,38 @@ function normalizeRange(start, end, { clampToFullDays = false } = {}) {
   }
 }
 
+function formatEveryLabel(every) {
+  if (!every) {
+    return ''
+  }
+
+  const match = every.match(/^(\d+)([smhd])$/)
+  if (!match) {
+    return every
+  }
+
+  const [, amountRaw, unit] = match
+  const amount = Number.parseInt(amountRaw, 10)
+
+  if (!Number.isFinite(amount)) {
+    return every
+  }
+
+  const unitLabels = {
+    s: amount === 1 ? 'segundo' : 'segundos',
+    m: amount === 1 ? 'minuto' : 'minutos',
+    h: amount === 1 ? 'hora' : 'horas',
+    d: amount === 1 ? 'día' : 'días'
+  }
+
+  const label = unitLabels[unit]
+  if (!label) {
+    return every
+  }
+
+  return `${amount.toLocaleString('es-CL')} ${label}`
+}
+
 function setDefaultFiveYears() {
   const end = dayjs()
   const start = end.subtract(5, 'year')
@@ -322,28 +354,54 @@ const dataWindowHint = computed(() => {
 })
 
 const metaSummary = computed(() => {
-  if (!meta.value) {
+  const value = meta.value
+  if (!value) {
     return null
   }
 
-  const files = Array.isArray(meta.value.files) ? meta.value.files : []
+  const files = Array.isArray(value.files) ? value.files : []
   const fileCount = files.length
   const first = files[0]
   const last = files[fileCount - 1]
-  const points = Number(meta.value.points ?? 0)
+
+  const visiblePointsRaw = Number(value.points ?? 0)
+  const originalPointsRaw = Number(value.originalPoints ?? visiblePointsRaw)
+  const visiblePoints = Number.isFinite(visiblePointsRaw) ? visiblePointsRaw : 0
+  const originalPoints = Number.isFinite(originalPointsRaw) ? originalPointsRaw : visiblePoints
+
+  const bucketInfo = value.bucket ?? null
+  const bucketEvery = typeof bucketInfo?.size === 'string' ? bucketInfo.size : ''
+  const resolutionText = formatEveryLabel(bucketEvery)
+
+  const fileLabel = fileCount === 1
+    ? `${fileCount} archivo DataMin`
+    : `${fileCount} archivos DataMin`
+
+  const dateLabel = first && last
+    ? `${dayjs(first.date).format('YYYY-MM-DD')} → ${dayjs(last.date).format('YYYY-MM-DD')}`
+    : fileCount === 1 && first
+      ? dayjs(first.date).format('YYYY-MM-DD')
+      : ''
+
+  const basePointsLabel = visiblePoints === 1
+    ? '1 punto visible'
+    : `${visiblePoints.toLocaleString('es-CL')} puntos visibles`
+
+  const pointsLabel = originalPoints > visiblePoints
+    ? `${basePointsLabel} (de ${originalPoints.toLocaleString('es-CL')} totales)`
+    : basePointsLabel
+
+  const resolutionLabel = resolutionText
+    ? bucketInfo?.downsampled
+      ? `Resolución media: ${resolutionText}`
+      : `Resolución: ${resolutionText}`
+    : ''
 
   return {
-    fileLabel: fileCount === 1
-      ? `${fileCount} archivo DataMin`
-      : `${fileCount} archivos DataMin`,
-    dateLabel: first && last
-      ? `${dayjs(first.date).format('YYYY-MM-DD')} → ${dayjs(last.date).format('YYYY-MM-DD')}`
-      : fileCount === 1 && first
-        ? dayjs(first.date).format('YYYY-MM-DD')
-        : 'Sin detalle',
-    pointsLabel: points === 1
-      ? '1 punto disponible'
-      : `${points.toLocaleString('es-CL')} puntos disponibles`
+    fileLabel,
+    dateLabel,
+    pointsLabel,
+    resolutionLabel
   }
 })
 
@@ -474,6 +532,9 @@ onBeforeUnmount(() => {
               <span class="magneto__summary-label">Archivos y puntos</span>
               <span class="magneto__summary-value">
                 {{ metaSummary.fileLabel }} · {{ metaSummary.pointsLabel }}
+                <template v-if="metaSummary.resolutionLabel">
+                  <br />{{ metaSummary.resolutionLabel }}
+                </template>
                 <template v-if="metaSummary.dateLabel">
                   <br />{{ metaSummary.dateLabel }}
                 </template>

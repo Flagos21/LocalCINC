@@ -53,6 +53,28 @@ const MONTH_ABBREVIATIONS = {
   dec: 11
 };
 
+const MINUTE_MS = 60 * 1000;
+const HOUR_MS = 60 * MINUTE_MS;
+const DAY_MS = 24 * HOUR_MS;
+const LOCAL_BUCKETS_MS = [
+  MINUTE_MS,
+  2 * MINUTE_MS,
+  5 * MINUTE_MS,
+  10 * MINUTE_MS,
+  15 * MINUTE_MS,
+  30 * MINUTE_MS,
+  HOUR_MS,
+  2 * HOUR_MS,
+  3 * HOUR_MS,
+  6 * HOUR_MS,
+  12 * HOUR_MS,
+  DAY_MS,
+  2 * DAY_MS,
+  7 * DAY_MS,
+  14 * DAY_MS,
+  30 * DAY_MS
+];
+
 function isImageFile(name) {
   const ext = path.extname(name).toLowerCase();
   return imageExtensions.has(ext);
@@ -208,6 +230,70 @@ async function readLocalMagnetometerFile(fileInfo) {
     }
     throw err;
   }
+}
+
+function pickLocalBucketSize(rangeStart, rangeEnd, totalPoints, targetPoints = 4000) {
+  if (!Number.isFinite(rangeStart) || !Number.isFinite(rangeEnd) || rangeEnd <= rangeStart) {
+    return MINUTE_MS;
+  }
+
+  if (!Number.isFinite(totalPoints) || totalPoints <= 0) {
+    return MINUTE_MS;
+  }
+
+  const spanMs = rangeEnd - rangeStart;
+  const rawSpacing = Math.max(Math.floor(spanMs / targetPoints), MINUTE_MS);
+  return LOCAL_BUCKETS_MS.find((bucket) => rawSpacing <= bucket) ?? LOCAL_BUCKETS_MS[LOCAL_BUCKETS_MS.length - 1];
+}
+
+function aggregateLocalPoints(points, bucketMs) {
+  if (!Array.isArray(points) || points.length === 0) {
+    return [];
+  }
+
+  const buckets = new Map();
+
+  for (const point of points) {
+    const time = new Date(point.t).getTime();
+    const value = Number(point.v);
+
+    if (!Number.isFinite(time) || !Number.isFinite(value)) {
+      continue;
+    }
+
+    const bucketStart = Math.floor(time / bucketMs) * bucketMs;
+    let entry = buckets.get(bucketStart);
+
+    if (!entry) {
+      entry = { sum: 0, count: 0, minTime: time, maxTime: time };
+      buckets.set(bucketStart, entry);
+    }
+
+    entry.sum += value;
+    entry.count += 1;
+    if (time < entry.minTime) entry.minTime = time;
+    if (time > entry.maxTime) entry.maxTime = time;
+  }
+
+  const aggregated = [];
+
+  for (const [bucketStart, entry] of buckets.entries()) {
+    if (!entry || entry.count <= 0) {
+      continue;
+    }
+
+    const timestamp = new Date((entry.minTime ?? bucketStart)).toISOString();
+    const average = entry.sum / entry.count;
+
+    if (!Number.isFinite(average)) {
+      continue;
+    }
+
+    aggregated.push({ t: timestamp, v: average });
+  }
+
+  aggregated.sort((a, b) => new Date(a.t) - new Date(b.t));
+  return aggregated;
 }
 
 function parseDateQuery(value, { isEnd = false } = {}) {
@@ -469,8 +555,24 @@ app.get('/api/local-magnetometer/series', async (req, res) => {
 
     combinedPoints.sort((a, b) => new Date(a.t) - new Date(b.t));
 
-    const labels = combinedPoints.map((point) => point.t);
-    const values = combinedPoints.map((point) => point.v);
+    const totalPoints = combinedPoints.length;
+    const rangeStartMs = Number(rangeStart?.getTime?.()) || 0;
+    const rangeEndMs = Number(rangeEnd?.getTime?.()) || rangeStartMs;
+    const bucketMs = pickLocalBucketSize(rangeStartMs, rangeEndMs, totalPoints);
+
+    let pointsForChart = combinedPoints;
+    let wasDownsampled = false;
+
+    if (bucketMs > MINUTE_MS && totalPoints > 4000) {
+      const aggregated = aggregateLocalPoints(combinedPoints, bucketMs);
+      if (aggregated.length) {
+        pointsForChart = aggregated;
+        wasDownsampled = aggregated.length !== totalPoints;
+      }
+    }
+
+    const labels = pointsForChart.map((point) => point.t);
+    const values = pointsForChart.map((point) => point.v);
     const startLabel = labels[0] ?? null;
     const endLabel = labels[labels.length - 1] ?? null;
 
@@ -486,6 +588,14 @@ app.get('/api/local-magnetometer/series', async (req, res) => {
         station,
         source: 'local-directory',
         points: labels.length,
+        originalPoints: totalPoints,
+        bucket: {
+          size: toFluxDuration(bucketMs),
+          ms: bucketMs,
+          downsampled: wasDownsampled,
+          returned: labels.length,
+          original: totalPoints
+        },
         range: startLabel && endLabel ? { start: startLabel, end: endLabel } : null,
         files: fileSummaries,
         from: rangeStart.toISOString(),
