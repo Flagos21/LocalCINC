@@ -7,6 +7,10 @@ import path from 'path';
 import fs from 'fs/promises';
 import { fileURLToPath } from 'url';
 import process from 'node:process';
+import {
+  listDataMinFiles,
+  loadLocalSeries
+} from './localMagnetometer.js';
 
 const app = express();
 app.use(cors());
@@ -97,203 +101,6 @@ function buildImagePayload({ year, month, day, filename }) {
     time: safeTime,
     timestamp: isoTimestamp,
   };
-}
-
-function parseDataMinFilename(filename) {
-  const match = filename.match(/^([a-z]{3})(\d{2})([a-z]{3})\.(\d{2})m$/i);
-  if (!match) {
-    return null;
-  }
-
-  const [, stationRaw, dayStr, monthRaw, yearStr] = match;
-  const station = stationRaw.toUpperCase();
-  const monthIndex = MONTH_ABBREVIATIONS[monthRaw.toLowerCase()];
-
-  if (monthIndex === undefined) {
-    return null;
-  }
-
-  const day = Number.parseInt(dayStr, 10);
-  const year = 2000 + Number.parseInt(yearStr, 10);
-
-  if (!Number.isFinite(day) || !Number.isFinite(year)) {
-    return null;
-  }
-
-  const timestamp = Date.UTC(year, monthIndex, day);
-  const isoDate = new Date(timestamp).toISOString().slice(0, 10);
-
-  return {
-    station,
-    day,
-    monthIndex,
-    year,
-    isoDate,
-    timestamp,
-    filename,
-    fullPath: path.join(magnetometerLocalRoot, filename)
-  };
-}
-
-async function listLocalMagnetometerFiles(station) {
-  try {
-    const entries = await fs.readdir(magnetometerLocalRoot, { withFileTypes: true });
-    return entries
-      .filter((entry) => entry.isFile() && entry.name.toLowerCase().endsWith('m'))
-      .map((entry) => parseDataMinFilename(entry.name))
-      .filter((info) => info && (!station || info.station === station.toUpperCase()))
-      .sort((a, b) => a.timestamp - b.timestamp);
-  } catch (err) {
-    if (err.code === 'ENOENT') {
-      return [];
-    }
-    throw err;
-  }
-}
-
-async function readLocalMagnetometerFile(fileInfo) {
-  try {
-    const raw = await fs.readFile(fileInfo.fullPath, 'utf8');
-    const lines = raw.split(/\r?\n/);
-
-    const labels = [];
-    const values = [];
-
-    const dataLinePattern = /^\s*\d{2}\s+\d{2}\s+\d{4}\s+\d{2}\s+\d{2}/;
-
-    for (const line of lines) {
-      if (!dataLinePattern.test(line)) {
-        continue;
-      }
-
-      const parts = line.trim().split(/\s+/);
-      if (parts.length < 7) {
-        continue;
-      }
-
-      const [dayStr, monthStr, yearStr, hourStr, minuteStr, , hValueStr] = parts;
-
-      const year = Number.parseInt(yearStr, 10);
-      const month = Number.parseInt(monthStr, 10);
-      const day = Number.parseInt(dayStr, 10);
-      const hour = Number.parseInt(hourStr, 10);
-      const minute = Number.parseInt(minuteStr, 10);
-      const hValue = Number.parseFloat(hValueStr);
-
-      if ([year, month, day, hour, minute].some((value) => !Number.isFinite(value))) {
-        continue;
-      }
-
-      if (!Number.isFinite(hValue)) {
-        continue;
-      }
-
-      const timestamp = Date.UTC(year, month - 1, day, hour, minute);
-      labels.push(new Date(timestamp).toISOString());
-      values.push(hValue);
-    }
-
-    const start = labels[0] ?? null;
-    const end = labels[labels.length - 1] ?? null;
-
-    return {
-      labels,
-      series: [
-        {
-          name: 'H',
-          data: values
-        }
-      ],
-      meta: {
-        station: fileInfo.station,
-        filename: fileInfo.filename,
-        date: fileInfo.isoDate,
-        points: labels.length,
-        range: start && end ? { start, end } : null,
-        source: 'local-directory'
-      }
-    };
-  } catch (err) {
-    if (err.code === 'ENOENT') {
-      return {
-        labels: [],
-        series: [{ name: 'H', data: [] }],
-        meta: {
-          station: fileInfo.station,
-          filename: fileInfo.filename,
-          date: fileInfo.isoDate,
-          points: 0,
-          range: null,
-          source: 'local-directory'
-        }
-      };
-    }
-    throw err;
-  }
-}
-
-function pickLocalBucketSize(rangeStart, rangeEnd, totalPoints, targetPoints = 4000) {
-  if (!Number.isFinite(rangeStart) || !Number.isFinite(rangeEnd) || rangeEnd <= rangeStart) {
-    return MINUTE_MS;
-  }
-
-  if (!Number.isFinite(totalPoints) || totalPoints <= 0) {
-    return MINUTE_MS;
-  }
-
-  const spanMs = rangeEnd - rangeStart;
-  const rawSpacing = Math.max(Math.floor(spanMs / targetPoints), MINUTE_MS);
-  return LOCAL_BUCKETS_MS.find((bucket) => rawSpacing <= bucket) ?? LOCAL_BUCKETS_MS[LOCAL_BUCKETS_MS.length - 1];
-}
-
-function aggregateLocalPoints(points, bucketMs) {
-  if (!Array.isArray(points) || points.length === 0) {
-    return [];
-  }
-
-  const buckets = new Map();
-
-  for (const point of points) {
-    const time = new Date(point.t).getTime();
-    const value = Number(point.v);
-
-    if (!Number.isFinite(time) || !Number.isFinite(value)) {
-      continue;
-    }
-
-    const bucketStart = Math.floor(time / bucketMs) * bucketMs;
-    let entry = buckets.get(bucketStart);
-
-    if (!entry) {
-      entry = { sum: 0, count: 0, minTime: time, maxTime: time };
-      buckets.set(bucketStart, entry);
-    }
-
-    entry.sum += value;
-    entry.count += 1;
-    if (time < entry.minTime) entry.minTime = time;
-    if (time > entry.maxTime) entry.maxTime = time;
-  }
-
-  const aggregated = [];
-
-  for (const [bucketStart, entry] of buckets.entries()) {
-    if (!entry || entry.count <= 0) {
-      continue;
-    }
-
-    const timestamp = new Date((entry.minTime ?? bucketStart)).toISOString();
-    const average = entry.sum / entry.count;
-
-    if (!Number.isFinite(average)) {
-      continue;
-    }
-
-    aggregated.push({ t: timestamp, v: average });
-  }
-
-  aggregated.sort((a, b) => new Date(a.t) - new Date(b.t));
-  return aggregated;
 }
 
 function parseDateQuery(value, { isEnd = false } = {}) {
@@ -430,7 +237,7 @@ app.get('/api/local-magnetometer/days', async (req, res) => {
   const station = (req.query.station || DEFAULT_STATION).toString().toUpperCase();
 
   try {
-    const files = await listLocalMagnetometerFiles(station);
+    const files = await listDataMinFiles({ root: magnetometerLocalRoot, station });
 
     res.json({
       station,
@@ -453,7 +260,7 @@ app.get('/api/local-magnetometer/series', async (req, res) => {
   const toParam = req.query.to?.toString();
 
   try {
-    const files = await listLocalMagnetometerFiles(station);
+    const files = await listDataMinFiles({ root: magnetometerLocalRoot, station });
 
     if (!files.length) {
       return res.status(404).json({ error: 'No se encontraron archivos locales para la estación indicada.' });
@@ -461,7 +268,6 @@ app.get('/api/local-magnetometer/series', async (req, res) => {
 
     let rangeStart;
     let rangeEnd;
-    let selectedFiles = [];
 
     if (fromParam || toParam) {
       if (!fromParam || !toParam) {
@@ -481,11 +287,6 @@ app.get('/api/local-magnetometer/series', async (req, res) => {
 
       rangeStart = parsedFrom;
       rangeEnd = parsedTo;
-      selectedFiles = files.filter((file) => {
-        const dayStart = toUtcStart(new Date(file.timestamp));
-        const dayEnd = toUtcEnd(new Date(file.timestamp));
-        return dayEnd.getTime() >= rangeStart.getTime() && dayStart.getTime() <= rangeEnd.getTime();
-      });
     } else if (dateParam) {
       if (!/^\d{4}-\d{2}-\d{2}$/.test(dateParam)) {
         return res.status(400).json({ error: 'Parámetro date inválido. Usa YYYY-MM-DD.' });
@@ -505,7 +306,6 @@ app.get('/api/local-magnetometer/series', async (req, res) => {
 
       rangeStart = toUtcStart(parsedDate);
       rangeEnd = toUtcEnd(parsedDate);
-      selectedFiles = [found];
     } else {
       const now = new Date();
       const defaultEnd = toUtcEnd(now);
@@ -514,65 +314,21 @@ app.get('/api/local-magnetometer/series', async (req, res) => {
 
       rangeStart = defaultStart;
       rangeEnd = defaultEnd;
-      selectedFiles = files.filter((file) => {
-        const dayStart = toUtcStart(new Date(file.timestamp));
-        const dayEnd = toUtcEnd(new Date(file.timestamp));
-        return dayEnd.getTime() >= rangeStart.getTime() && dayStart.getTime() <= rangeEnd.getTime();
-      });
     }
+    const seriesPayload = await loadLocalSeries({
+      root: magnetometerLocalRoot,
+      station,
+      rangeStart,
+      rangeEnd,
+      targetPoints: 4000
+    });
 
-    if (!selectedFiles.length) {
+    if (!seriesPayload.points.length) {
       return res.status(404).json({ error: 'No hay datos locales disponibles para el rango solicitado.' });
     }
 
-    const combinedPoints = [];
-    const fileSummaries = [];
-
-    for (const file of selectedFiles) {
-      const payload = await readLocalMagnetometerFile(file);
-      const labels = Array.isArray(payload.labels) ? payload.labels : [];
-      const values = Array.isArray(payload.series?.[0]?.data) ? payload.series[0].data : [];
-      const length = Math.min(labels.length, values.length);
-
-      fileSummaries.push({ date: file.isoDate, filename: file.filename });
-
-      for (let index = 0; index < length; index += 1) {
-        const label = labels[index];
-        const value = Number(values[index]);
-        const time = new Date(label).getTime();
-
-        if (!label || Number.isNaN(time) || !Number.isFinite(value)) {
-          continue;
-        }
-
-        if (time < rangeStart.getTime() || time > rangeEnd.getTime()) {
-          continue;
-        }
-
-        combinedPoints.push({ t: label, v: value });
-      }
-    }
-
-    combinedPoints.sort((a, b) => new Date(a.t) - new Date(b.t));
-
-    const totalPoints = combinedPoints.length;
-    const rangeStartMs = Number(rangeStart?.getTime?.()) || 0;
-    const rangeEndMs = Number(rangeEnd?.getTime?.()) || rangeStartMs;
-    const bucketMs = pickLocalBucketSize(rangeStartMs, rangeEndMs, totalPoints);
-
-    let pointsForChart = combinedPoints;
-    let wasDownsampled = false;
-
-    if (bucketMs > MINUTE_MS && totalPoints > 4000) {
-      const aggregated = aggregateLocalPoints(combinedPoints, bucketMs);
-      if (aggregated.length) {
-        pointsForChart = aggregated;
-        wasDownsampled = aggregated.length !== totalPoints;
-      }
-    }
-
-    const labels = pointsForChart.map((point) => point.t);
-    const values = pointsForChart.map((point) => point.v);
+    const labels = seriesPayload.points.map((point) => point.t);
+    const values = seriesPayload.points.map((point) => point.v);
     const startLabel = labels[0] ?? null;
     const endLabel = labels[labels.length - 1] ?? null;
 
@@ -588,19 +344,22 @@ app.get('/api/local-magnetometer/series', async (req, res) => {
         station,
         source: 'local-directory',
         points: labels.length,
-        originalPoints: totalPoints,
-        bucket: {
-          size: toFluxDuration(bucketMs),
-          ms: bucketMs,
-          downsampled: wasDownsampled,
-          returned: labels.length,
-          original: totalPoints
-        },
+        originalPoints: seriesPayload.totalPoints,
+        bucket: seriesPayload.bucketMs
+          ? {
+              size: toFluxDuration(seriesPayload.bucketMs),
+              ms: seriesPayload.bucketMs,
+              downsampled: seriesPayload.downsampled,
+              returned: labels.length,
+              original: seriesPayload.totalPoints
+            }
+          : null,
         range: startLabel && endLabel ? { start: startLabel, end: endLabel } : null,
-        files: fileSummaries,
-        from: rangeStart.toISOString(),
-        to: rangeEnd.toISOString(),
-        filename: selectedFiles.length === 1 ? selectedFiles[0].filename : null
+        files: seriesPayload.files,
+        from: seriesPayload.requestedRange.start,
+        to: seriesPayload.requestedRange.end,
+        availableRange: seriesPayload.availableRange,
+        filename: seriesPayload.files.length === 1 ? seriesPayload.files[0].filename : null
       }
     });
   } catch (err) {

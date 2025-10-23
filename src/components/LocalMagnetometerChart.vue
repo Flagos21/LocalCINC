@@ -346,11 +346,16 @@ const pendingHint = computed(() => {
 })
 
 const dataWindowHint = computed(() => {
-  if (!dataExtent.value) {
-    return ''
+  if (dataExtent.value) {
+    return `${dayjs(dataExtent.value.start).format('YYYY-MM-DD HH:mm')} → ${dayjs(dataExtent.value.end).format('YYYY-MM-DD HH:mm')}`
   }
 
-  return `${dayjs(dataExtent.value.start).format('YYYY-MM-DD HH:mm')} → ${dayjs(dataExtent.value.end).format('YYYY-MM-DD HH:mm')}`
+  const available = meta.value?.availableRange
+  if (available?.start && available?.end) {
+    return `${dayjs(available.start).format('YYYY-MM-DD HH:mm')} → ${dayjs(available.end).format('YYYY-MM-DD HH:mm')}`
+  }
+
+  return ''
 })
 
 const metaSummary = computed(() => {
@@ -377,11 +382,14 @@ const metaSummary = computed(() => {
     ? `${fileCount} archivo DataMin`
     : `${fileCount} archivos DataMin`
 
-  const dateLabel = first && last
-    ? `${dayjs(first.date).format('YYYY-MM-DD')} → ${dayjs(last.date).format('YYYY-MM-DD')}`
-    : fileCount === 1 && first
-      ? dayjs(first.date).format('YYYY-MM-DD')
-      : ''
+  let dateLabel = ''
+  if (first && last) {
+    dateLabel = `${dayjs(first.date).format('YYYY-MM-DD')} → ${dayjs(last.date).format('YYYY-MM-DD')}`
+  } else if (fileCount === 1 && first) {
+    dateLabel = dayjs(first.date).format('YYYY-MM-DD')
+  } else if (value.availableRange?.start && value.availableRange?.end) {
+    dateLabel = `${dayjs(value.availableRange.start).format('YYYY-MM-DD')} → ${dayjs(value.availableRange.end).format('YYYY-MM-DD')}`
+  }
 
   const basePointsLabel = visiblePoints === 1
     ? '1 punto visible'
