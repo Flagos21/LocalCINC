@@ -15,6 +15,7 @@ app.use(express.json());
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 const ionogramRoot = path.join(__dirname, 'ionograms');
+const magnetometerLocalRoot = path.join(__dirname, 'magnetometro', 'DataMin');
 
 const {
   INFLUX_URL,
@@ -36,6 +37,21 @@ const influx = new InfluxDB({ url: INFLUX_URL, token: INFLUX_TOKEN });
 const queryApi = influx.getQueryApi(INFLUX_ORG);
 
 const imageExtensions = new Set(['.png', '.jpg', '.jpeg', '.gif', '.webp']);
+
+const MONTH_ABBREVIATIONS = {
+  jan: 0,
+  feb: 1,
+  mar: 2,
+  apr: 3,
+  may: 4,
+  jun: 5,
+  jul: 6,
+  aug: 7,
+  sep: 8,
+  oct: 9,
+  nov: 10,
+  dec: 11
+};
 
 function isImageFile(name) {
   const ext = path.extname(name).toLowerCase();
@@ -59,6 +75,139 @@ function buildImagePayload({ year, month, day, filename }) {
     time: safeTime,
     timestamp: isoTimestamp,
   };
+}
+
+function parseDataMinFilename(filename) {
+  const match = filename.match(/^([a-z]{3})(\d{2})([a-z]{3})\.(\d{2})m$/i);
+  if (!match) {
+    return null;
+  }
+
+  const [, stationRaw, dayStr, monthRaw, yearStr] = match;
+  const station = stationRaw.toUpperCase();
+  const monthIndex = MONTH_ABBREVIATIONS[monthRaw.toLowerCase()];
+
+  if (monthIndex === undefined) {
+    return null;
+  }
+
+  const day = Number.parseInt(dayStr, 10);
+  const year = 2000 + Number.parseInt(yearStr, 10);
+
+  if (!Number.isFinite(day) || !Number.isFinite(year)) {
+    return null;
+  }
+
+  const timestamp = Date.UTC(year, monthIndex, day);
+  const isoDate = new Date(timestamp).toISOString().slice(0, 10);
+
+  return {
+    station,
+    day,
+    monthIndex,
+    year,
+    isoDate,
+    timestamp,
+    filename,
+    fullPath: path.join(magnetometerLocalRoot, filename)
+  };
+}
+
+async function listLocalMagnetometerFiles(station) {
+  try {
+    const entries = await fs.readdir(magnetometerLocalRoot, { withFileTypes: true });
+    return entries
+      .filter((entry) => entry.isFile() && entry.name.toLowerCase().endsWith('m'))
+      .map((entry) => parseDataMinFilename(entry.name))
+      .filter((info) => info && (!station || info.station === station.toUpperCase()))
+      .sort((a, b) => a.timestamp - b.timestamp);
+  } catch (err) {
+    if (err.code === 'ENOENT') {
+      return [];
+    }
+    throw err;
+  }
+}
+
+async function readLocalMagnetometerFile(fileInfo) {
+  try {
+    const raw = await fs.readFile(fileInfo.fullPath, 'utf8');
+    const lines = raw.split(/\r?\n/);
+
+    const labels = [];
+    const values = [];
+
+    const dataLinePattern = /^\s*\d{2}\s+\d{2}\s+\d{4}\s+\d{2}\s+\d{2}/;
+
+    for (const line of lines) {
+      if (!dataLinePattern.test(line)) {
+        continue;
+      }
+
+      const parts = line.trim().split(/\s+/);
+      if (parts.length < 7) {
+        continue;
+      }
+
+      const [dayStr, monthStr, yearStr, hourStr, minuteStr, , hValueStr] = parts;
+
+      const year = Number.parseInt(yearStr, 10);
+      const month = Number.parseInt(monthStr, 10);
+      const day = Number.parseInt(dayStr, 10);
+      const hour = Number.parseInt(hourStr, 10);
+      const minute = Number.parseInt(minuteStr, 10);
+      const hValue = Number.parseFloat(hValueStr);
+
+      if ([year, month, day, hour, minute].some((value) => !Number.isFinite(value))) {
+        continue;
+      }
+
+      if (!Number.isFinite(hValue)) {
+        continue;
+      }
+
+      const timestamp = Date.UTC(year, month - 1, day, hour, minute);
+      labels.push(new Date(timestamp).toISOString());
+      values.push(hValue);
+    }
+
+    const start = labels[0] ?? null;
+    const end = labels[labels.length - 1] ?? null;
+
+    return {
+      labels,
+      series: [
+        {
+          name: 'H',
+          data: values
+        }
+      ],
+      meta: {
+        station: fileInfo.station,
+        filename: fileInfo.filename,
+        date: fileInfo.isoDate,
+        points: labels.length,
+        range: start && end ? { start, end } : null,
+        source: 'local-directory'
+      }
+    };
+  } catch (err) {
+    if (err.code === 'ENOENT') {
+      return {
+        labels: [],
+        series: [{ name: 'H', data: [] }],
+        meta: {
+          station: fileInfo.station,
+          filename: fileInfo.filename,
+          date: fileInfo.isoDate,
+          points: 0,
+          range: null,
+          source: 'local-directory'
+        }
+      };
+    }
+    throw err;
+  }
 }
 
 async function listIonogramsForDate(dateStr) {
@@ -159,6 +308,67 @@ app.get('/api/ionograms/list', async (req, res) => {
 });
 
 app.use('/api/ionograms', express.static(ionogramRoot, { fallthrough: true }));
+
+app.get('/api/local-magnetometer/days', async (req, res) => {
+  const station = (req.query.station || DEFAULT_STATION).toString().toUpperCase();
+
+  try {
+    const files = await listLocalMagnetometerFiles(station);
+
+    res.json({
+      station,
+      days: files.map((file) => ({
+        date: file.isoDate,
+        filename: file.filename,
+        timestamp: file.timestamp
+      }))
+    });
+  } catch (err) {
+    console.error('API /api/local-magnetometer/days error:', err);
+    res.status(500).json({ error: 'No se pudieron listar los datos locales disponibles.' });
+  }
+});
+
+app.get('/api/local-magnetometer/series', async (req, res) => {
+  const station = (req.query.station || DEFAULT_STATION).toString().toUpperCase();
+  const dateParam = req.query.date?.toString();
+
+  try {
+    const files = await listLocalMagnetometerFiles(station);
+
+    if (!files.length) {
+      return res.status(404).json({ error: 'No se encontraron archivos locales para la estación indicada.' });
+    }
+
+    let target = files[files.length - 1];
+
+    if (dateParam) {
+      if (!/^\d{4}-\d{2}-\d{2}$/.test(dateParam)) {
+        return res.status(400).json({ error: 'Parámetro date inválido. Usa YYYY-MM-DD.' });
+      }
+
+      const targetDate = new Date(`${dateParam}T00:00:00Z`);
+      if (Number.isNaN(targetDate.getTime())) {
+        return res.status(400).json({ error: 'Parámetro date inválido. Usa YYYY-MM-DD.' });
+      }
+
+      const iso = targetDate.toISOString().slice(0, 10);
+      const found = files.find((file) => file.isoDate === iso);
+
+      if (!found) {
+        return res.status(404).json({ error: `No hay datos locales para la fecha ${iso}.` });
+      }
+
+      target = found;
+    }
+
+    const payload = await readLocalMagnetometerFile(target);
+    res.json(payload);
+  } catch (err) {
+    console.error('API /api/local-magnetometer/series error:', err);
+    res.status(500).json({ error: 'No se pudo obtener la serie local.' });
+  }
+});
 
 // Helpers
 function toFluxDuration(ms) {
