@@ -4,6 +4,7 @@ import { ref, onMounted, onBeforeUnmount } from 'vue'
 import SunViewer from '@/components/SunViewer.vue'
 import IonogramLatest from '@/components/IonogramLatest.vue'
 import MagnetometerChartOverview from '@/components/MagnetometerChartOverview.vue'
+import DraggablePanel from '@/components/DraggablePanel.vue'
 
 import XRayChartFigure from '@/components/XRayChartFigure.vue'
 import { useGoesXrays } from '@/composables/useGoesXrays'
@@ -27,6 +28,35 @@ const {
 
 const utcNow = ref(new Date())
 let clockTimer = null // 👈 sin tipos TS
+
+const workspaceRef = ref(null)
+
+const panelDefaults = {
+  sun: {
+    position: { x: 24, y: 24 },
+    size: { width: 420, height: 420 },
+    min: { width: 320, height: 280 },
+    max: { width: 560, height: 560 },
+  },
+  xray: {
+    position: { x: 500, y: 24 },
+    size: { width: 640, height: 420 },
+    min: { width: 420, height: 320 },
+    max: { width: 780, height: 560 },
+  },
+  magneto: {
+    position: { x: 24, y: 500 },
+    size: { width: 520, height: 420 },
+    min: { width: 360, height: 300 },
+    max: { width: 720, height: 560 },
+  },
+  ionogram: {
+    position: { x: 620, y: 500 },
+    size: { width: 520, height: 420 },
+    min: { width: 360, height: 320 },
+    max: { width: 720, height: 560 },
+  },
+}
 
 onMounted(() => {
   clockTimer = window.setInterval(() => {
@@ -58,7 +88,7 @@ function fmtUTC(value) {
     </header>
 
       <!-- Day/Night: ocupa todo el ancho y centrado -->
-      <div class="home__cell home__cell--daynight">
+      <div class="home__daynight">
         <div class="daynight-wrap">
           <!-- refresco cada 1 minuto -->
           <DayNightMap
@@ -77,28 +107,42 @@ function fmtUTC(value) {
         </div>
       </div>
 
-    <div class="home__grid">
-      <!-- Sol -->
-      <div class="home__cell home__cell--sun">
-        <article class="panel">
+    <div ref="workspaceRef" class="home__workspace">
+      <DraggablePanel
+        panel-id="sun"
+        :container-ref="workspaceRef"
+        :default-position="panelDefaults.sun.position"
+        :default-size="panelDefaults.sun.size"
+        :min-size="panelDefaults.sun.min"
+        :max-size="panelDefaults.sun.max"
+        :order="0"
+      >
+        <article class="panel" data-drag-handle>
           <div class="panel__head">
             <h3>El Sol (SUVI)</h3>
             <p>Vista en tiempo (casi) real del Sol por longitudes de onda EUV.</p>
           </div>
           <SunViewer />
         </article>
-      </div>
+      </DraggablePanel>
 
-      <!-- Rayos X -->
-      <div class="home__cell home__cell--xray">
-        <article class="panel panel--chart">
+      <DraggablePanel
+        panel-id="xray"
+        :container-ref="workspaceRef"
+        :default-position="panelDefaults.xray.position"
+        :default-size="panelDefaults.xray.size"
+        :min-size="panelDefaults.xray.min"
+        :max-size="panelDefaults.xray.max"
+        :order="1"
+      >
+        <article class="panel panel--chart" data-drag-handle>
           <div class="panel__head xray__head">
             <div class="xray__title">
               <h3>GOES X-ray Flux (0.05–0.4 nm y 0.1–0.8 nm)</h3>
               <p>Escala logarítmica con umbrales A/B/C/M/X. Fuente: SWPC.</p>
             </div>
 
-            <div class="xray__controls">
+            <div class="xray__controls" data-no-drag>
               <div class="xray__clock">
                 <span class="tag">UTC ahora:</span>
                 <span class="mono">{{ fmtUTC(utcNow) }}</span>
@@ -133,7 +177,7 @@ function fmtUTC(value) {
             </div>
           </div>
 
-          <div class="panel__body" aria-live="polite">
+          <div class="panel__body" aria-live="polite" data-no-drag>
             <div v-if="xrError" class="panel__state panel__state--error">
               <strong>Problema al cargar rayos X.</strong>
               <p>{{ xrError }}</p>
@@ -168,21 +212,33 @@ function fmtUTC(value) {
             </template>
           </div>
         </article>
-      </div>
+      </DraggablePanel>
 
-      <!-- Magnetómetro -->
-      <div class="home__cell home__cell--magneto">
-        <div class="panel panel--flush home__magneto-card">
+      <DraggablePanel
+        panel-id="magneto"
+        :container-ref="workspaceRef"
+        :default-position="panelDefaults.magneto.position"
+        :default-size="panelDefaults.magneto.size"
+        :min-size="panelDefaults.magneto.min"
+        :max-size="panelDefaults.magneto.max"
+        :order="2"
+      >
+        <div class="panel panel--flush home__magneto-card" data-drag-handle>
           <MagnetometerChartOverview />
         </div>
-      </div>
+      </DraggablePanel>
 
-      <!-- Ionograma -->
-      <div class="home__cell home__cell--ionogram">
-        <IonogramLatest />
-      </div>
-
-
+      <DraggablePanel
+        panel-id="ionogram"
+        :container-ref="workspaceRef"
+        :default-position="panelDefaults.ionogram.position"
+        :default-size="panelDefaults.ionogram.size"
+        :min-size="panelDefaults.ionogram.min"
+        :max-size="panelDefaults.ionogram.max"
+        :order="3"
+      >
+        <IonogramLatest data-drag-handle />
+      </DraggablePanel>
     </div>
   </section>
 </template>
@@ -201,22 +257,30 @@ function fmtUTC(value) {
 .home__header h2 { color: #ffffff; }
 .home__header p  { color: #ffffff; }
 
-.home__grid {
+.home__workspace {
+  position: relative;
   flex: 1;
-  min-height: 0;
-  display: grid;
-  gap: 1rem;
-  grid-template-columns: repeat(auto-fit, minmax(min(20rem, 100%), 1fr));
-  grid-auto-rows: auto;
-  align-items: start;
+  width: 100%;
+  min-height: 820px;
+  height: clamp(1100px, 82vh, 1600px);
+  border-radius: 1rem;
+  background: linear-gradient(160deg, rgba(15, 23, 42, 0.18), rgba(15, 23, 42, 0.05));
+  overflow: hidden;
 }
 
-.home__cell { width: 100%; }
-.home__cell > * { width: 100%; }
+.home__workspace::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  border: 1px solid rgba(148, 163, 184, 0.25);
+  pointer-events: none;
+}
 
 /* Day/Night a lo ancho y centrado */
-.home__cell--daynight {
-  grid-column: 1 / -1; /* ocupa todas las columnas del grid */
+
+.home__daynight {
+  width: 100%;
 }
 
 .daynight-wrap{
@@ -240,7 +304,7 @@ function fmtUTC(value) {
   display: flex;
   flex-direction: column;
   gap: 0.6rem;
-  height: auto;
+  height: 100%;
 }
 
 .panel--chart { padding-bottom: 0.75rem; }
@@ -302,12 +366,6 @@ function fmtUTC(value) {
 .home__magneto-card :deep(.magneto__chart-wrapper){ flex:1; min-height:0; }
 .home__magneto-card :deep(.magneto__chart){ height:100%; min-height:0; }
 
-@media (min-width: 960px) {
-  .home__grid { grid-template-columns: repeat(auto-fit, minmax(18rem, 1fr)); }
-}
-@media (min-width: 1280px) {
-  .home__grid { grid-template-columns: repeat(4, minmax(0, 1fr)); }
-}
 @media (max-width: 600px) {
   .panel { padding: .75rem; }
 }
