@@ -1,35 +1,48 @@
 @import './base.css';
 
+body {
+  background-color: #e5e7eb;
+}
+
 #app {
-  max-width: 1280px;
-  margin: 0 auto;
-  padding: 2rem;
+  min-height: 100vh;
   font-weight: normal;
 }
 
-a,
-.green {
-  text-decoration: none;
-  color: hsla(160, 100%, 37%, 1);
-  transition: 0.4s;
-  padding: 3px;
+a {
+  color: inherit;
 }
 
-@media (hover: hover) {
-  a:hover {
-    background-color: hsla(160, 100%, 37%, 0.2);
-  }
+* {
+  transition: color 0.2s ease, background-color 0.2s ease;
 }
 
-@media (min-width: 1024px) {
-  body {
-    display: flex;
-    place-items: center;
-  }
+/* ApexCharts tooltip overrides */
+.apexcharts-tooltip,
+.apexcharts-tooltip.apexcharts-theme-light,
+.apexcharts-tooltip.apexcharts-theme-dark {
+  background: rgba(15, 23, 42, 0.96) !important;
+  color: #f8fafc !important;
+  border: 1px solid rgba(148, 163, 184, 0.55) !important;
+  box-shadow: 0 18px 40px rgba(15, 23, 42, 0.32) !important;
+  backdrop-filter: none !important;
+  border-radius: 0.75rem !important;
+  overflow: hidden;
+}
 
-  #app {
-    display: grid;
-    grid-template-columns: 1fr 1fr;
-    padding: 0 2rem;
-  }
+.apexcharts-tooltip-title {
+  background: rgba(30, 41, 59, 0.92) !important;
+  color: #e2e8f0 !important;
+  border-bottom: 1px solid rgba(148, 163, 184, 0.35) !important;
+  font-weight: 600 !important;
+  letter-spacing: 0.01em;
+}
+
+.apexcharts-tooltip-series-group {
+  padding: 0.45rem 0.75rem !important;
+}
+
+.apexcharts-tooltip-marker {
+  opacity: 1 !important;
+  border: 1px solid rgba(255, 255, 255, 0.65);
 }

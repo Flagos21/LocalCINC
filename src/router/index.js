@@ -10,12 +10,37 @@ const router = createRouter({
       component: HomeView,
     },
     {
-      path: '/about',
-      name: 'about',
-      // route level code-splitting
-      // this generates a separate chunk (About.[hash].js) for this route
-      // which is lazy-loaded when the route is visited.
-      component: () => import('../views/AboutView.vue'),
+      path: '/sol',
+      name: 'sun',
+      component: () => import('../views/SunView.vue'),
+    },
+    {
+      path: '/rayos-x',
+      name: 'xray',
+      component: () => import('../views/XRayView.vue'),
+    },
+    {
+      path: '/ionograms',
+      name: 'ionograms',
+      component: () => import('../views/IonogramGalleryView.vue'),
+    },
+    {
+      path: '/magnetometros/influxdb',
+      name: 'magnetometers-influxdb',
+      component: () => import('../views/MagnetometerInfluxView.vue'),
+    },
+    {
+      path: '/magnetometros/local',
+      name: 'magnetometers-local',
+      component: () => import('../views/MagnetometerLocalView.vue'),
+    },
+    {
+      path: '/graphs',
+      redirect: { name: 'magnetometers-influxdb' },
+    },
+    {
+      path: '/magnetometros',
+      redirect: { name: 'magnetometers-influxdb' },
     },
   ],
 })
