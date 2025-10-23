@@ -4,6 +4,7 @@ import { ref, onMounted, onBeforeUnmount } from 'vue'
 import SunViewer from '@/components/SunViewer.vue'
 import IonogramLatest from '@/components/IonogramLatest.vue'
 import MagnetometerChartOverview from '@/components/MagnetometerChartOverview.vue'
+import DraggablePanel from '@/components/DraggablePanel.vue'
 
 import XRayChartFigure from '@/components/XRayChartFigure.vue'
 import { useGoesXrays } from '@/composables/useGoesXrays'
@@ -28,12 +29,59 @@ const {
 const utcNow = ref(new Date())
 let clockTimer = null // 👈 sin tipos TS
 
+const workspaceRef = ref(null)
+const workspaceHeight = ref(860)
+
+const panelDefaults = {
+  map: {
+    position: { x: 24, y: 24 },
+    size: { width: 760, height: 300 },
+    min: { width: 560, height: 260 },
+    max: { width: 1180, height: 740 },
+  },
+  sun: {
+    position: { x: 820, y: 24 },
+    size: { width: 420, height: 260 },
+    min: { width: 320, height: 200 },
+    max: { width: 560, height: 520 },
+  },
+  xray: {
+    position: { x: 24, y: 348 },
+    size: { width: 760, height: 240 },
+    min: { width: 480, height: 220 },
+    max: { width: 960, height: 600 },
+  },
+  magneto: {
+    position: { x: 820, y: 348 },
+    size: { width: 420, height: 240 },
+    min: { width: 360, height: 220 },
+    max: { width: 780, height: 600 },
+  },
+  ionogram: {
+    position: { x: 24, y: 612 },
+    size: { width: 760, height: 220 },
+    min: { width: 380, height: 200 },
+    max: { width: 980, height: 620 },
+  },
+}
+
+function updateWorkspaceMetrics() {
+  if (typeof window === 'undefined') return
+  const viewportHeight = window.innerHeight || 0
+  workspaceHeight.value = Math.max(860, Math.round(viewportHeight - 140))
+}
+
 onMounted(() => {
+  updateWorkspaceMetrics()
   clockTimer = window.setInterval(() => {
     utcNow.value = new Date()
   }, 1000)
+  window.addEventListener('resize', updateWorkspaceMetrics)
 })
-onBeforeUnmount(() => { if (clockTimer) clearInterval(clockTimer) })
+onBeforeUnmount(() => {
+  if (clockTimer) clearInterval(clockTimer)
+  window.removeEventListener('resize', updateWorkspaceMetrics)
+})
 
 function fmtUTC(value) {
   if (!value) return '—'
@@ -57,48 +105,78 @@ function fmtUTC(value) {
       <p>Visualiza aquí los indicadores clave cuando estén disponibles.</p>
     </header>
 
-      <!-- Day/Night: ocupa todo el ancho y centrado -->
-      <div class="home__cell home__cell--daynight">
-        <div class="daynight-wrap">
-          <!-- refresco cada 1 minuto -->
-          <DayNightMap
-            mode="satellite"
-            height="clamp(520px, 55vh, 720px)"
-            :autoRefreshMs="60000"
-            :showTwilight="true"
-            :showSunMoon="true"
-            nightColor="#050a18"
-            twilightColor="#0b1736"
-            :nightOpacity="0.38"
-            :twilightCivilOpacity="0.26"
-            :twilightNauticalOpacity="0.18"
-            :twilightAstroOpacity="0.12"
-          />
+    <div
+      ref="workspaceRef"
+      class="home__workspace"
+      :style="{ height: `${workspaceHeight}px` }"
+    >
+      <DraggablePanel
+        panel-id="map"
+        :container-ref="workspaceRef"
+        :default-position="panelDefaults.map.position"
+        :default-size="panelDefaults.map.size"
+        :min-size="panelDefaults.map.min"
+        :max-size="panelDefaults.map.max"
+        :order="0"
+      >
+        <div class="map-panel">
+          <div class="map-panel__handle" data-drag-handle>
+            <strong>Mapa día/noche</strong>
+            <span>Arrastra la barra para ubicar el mapa a tu gusto.</span>
+          </div>
+          <div class="map-panel__content" data-no-drag>
+            <DayNightMap
+              mode="satellite"
+              height="100%"
+              :auto-refresh-ms="60000"
+              :show-twilight="true"
+              :show-sun-moon="true"
+              night-color="#050a18"
+              twilight-color="#0b1736"
+              :night-opacity="0.38"
+              :twilight-civil-opacity="0.26"
+              :twilight-nautical-opacity="0.18"
+              :twilight-astro-opacity="0.12"
+            />
+          </div>
         </div>
-      </div>
+      </DraggablePanel>
 
-    <div class="home__grid">
-      <!-- Sol -->
-      <div class="home__cell home__cell--sun">
-        <article class="panel">
+      <DraggablePanel
+        panel-id="sun"
+        :container-ref="workspaceRef"
+        :default-position="panelDefaults.sun.position"
+        :default-size="panelDefaults.sun.size"
+        :min-size="panelDefaults.sun.min"
+        :max-size="panelDefaults.sun.max"
+        :order="1"
+      >
+        <article class="panel" data-drag-handle>
           <div class="panel__head">
             <h3>El Sol (SUVI)</h3>
             <p>Vista en tiempo (casi) real del Sol por longitudes de onda EUV.</p>
           </div>
           <SunViewer />
         </article>
-      </div>
+      </DraggablePanel>
 
-      <!-- Rayos X -->
-      <div class="home__cell home__cell--xray">
-        <article class="panel panel--chart">
+      <DraggablePanel
+        panel-id="xray"
+        :container-ref="workspaceRef"
+        :default-position="panelDefaults.xray.position"
+        :default-size="panelDefaults.xray.size"
+        :min-size="panelDefaults.xray.min"
+        :max-size="panelDefaults.xray.max"
+        :order="2"
+      >
+        <article class="panel panel--chart" data-drag-handle>
           <div class="panel__head xray__head">
             <div class="xray__title">
               <h3>GOES X-ray Flux (0.05–0.4 nm y 0.1–0.8 nm)</h3>
               <p>Escala logarítmica con umbrales A/B/C/M/X. Fuente: SWPC.</p>
             </div>
 
-            <div class="xray__controls">
+            <div class="xray__controls" data-no-drag>
               <div class="xray__clock">
                 <span class="tag">UTC ahora:</span>
                 <span class="mono">{{ fmtUTC(utcNow) }}</span>
@@ -133,7 +211,7 @@ function fmtUTC(value) {
             </div>
           </div>
 
-          <div class="panel__body" aria-live="polite">
+          <div class="panel__body" aria-live="polite" data-no-drag>
             <div v-if="xrError" class="panel__state panel__state--error">
               <strong>Problema al cargar rayos X.</strong>
               <p>{{ xrError }}</p>
@@ -168,21 +246,41 @@ function fmtUTC(value) {
             </template>
           </div>
         </article>
-      </div>
+      </DraggablePanel>
 
-      <!-- Magnetómetro -->
-      <div class="home__cell home__cell--magneto">
-        <div class="panel panel--flush home__magneto-card">
+      <DraggablePanel
+        panel-id="magneto"
+        :container-ref="workspaceRef"
+        :default-position="panelDefaults.magneto.position"
+        :default-size="panelDefaults.magneto.size"
+        :min-size="panelDefaults.magneto.min"
+        :max-size="panelDefaults.magneto.max"
+        :order="3"
+      >
+        <div class="panel panel--flush home__magneto-card" data-drag-handle>
           <MagnetometerChartOverview />
         </div>
-      </div>
+      </DraggablePanel>
 
-      <!-- Ionograma -->
-      <div class="home__cell home__cell--ionogram">
-        <IonogramLatest />
-      </div>
-
-
+      <DraggablePanel
+        panel-id="ionogram"
+        :container-ref="workspaceRef"
+        :default-position="panelDefaults.ionogram.position"
+        :default-size="panelDefaults.ionogram.size"
+        :min-size="panelDefaults.ionogram.min"
+        :max-size="panelDefaults.ionogram.max"
+        :order="4"
+      >
+        <div class="panel panel--flush home__ionogram-card">
+          <div class="panel__handle" data-drag-handle>
+            <strong>Ionograma más reciente</strong>
+            <span>Arrastra esta barra para reorganizarlo.</span>
+          </div>
+          <div class="panel__body panel__body--ionogram" data-no-drag>
+            <IonogramLatest />
+          </div>
+        </div>
+      </DraggablePanel>
     </div>
   </section>
 </template>
@@ -201,34 +299,23 @@ function fmtUTC(value) {
 .home__header h2 { color: #ffffff; }
 .home__header p  { color: #ffffff; }
 
-.home__grid {
+.home__workspace {
+  position: relative;
   flex: 1;
-  min-height: 0;
-  display: grid;
-  gap: 1rem;
-  grid-template-columns: repeat(auto-fit, minmax(min(20rem, 100%), 1fr));
-  grid-auto-rows: auto;
-  align-items: start;
+  width: 100%;
+  min-height: 780px;
+  border-radius: 1rem;
+  background: linear-gradient(160deg, rgba(15, 23, 42, 0.18), rgba(15, 23, 42, 0.05));
+  overflow: hidden;
 }
 
-.home__cell { width: 100%; }
-.home__cell > * { width: 100%; }
-
-/* Day/Night a lo ancho y centrado */
-.home__cell--daynight {
-  grid-column: 1 / -1; /* ocupa todas las columnas del grid */
-}
-
-.daynight-wrap{
-  display: flex;
-  justify-content: center;
-  padding: 8px 0 2px;
-}
-
-/* limitar ancho del card del mapa y usar todo el ancho en móvil */
-.daynight-wrap :deep(.tad-card){
-  width: min(1280px, 100%);
-  box-shadow: 0 14px 32px rgba(0,0,0,.38);
+.home__workspace::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  border: 1px solid rgba(148, 163, 184, 0.25);
+  pointer-events: none;
 }
 
 /* ---------- Panels ---------- */
@@ -240,7 +327,7 @@ function fmtUTC(value) {
   display: flex;
   flex-direction: column;
   gap: 0.6rem;
-  height: auto;
+  height: 100%;
 }
 
 .panel--chart { padding-bottom: 0.75rem; }
@@ -273,6 +360,35 @@ function fmtUTC(value) {
 }
 @keyframes spin { to { transform: rotate(360deg) } }
 
+.panel__handle {
+  display: flex;
+  flex-direction: column;
+  gap: 0.2rem;
+  background: rgba(15, 23, 42, 0.72);
+  color: #e2e8f0;
+  padding: 0.55rem 0.8rem;
+  border-radius: 0.6rem;
+  margin-bottom: 0.6rem;
+  cursor: grab;
+  user-select: none;
+  box-shadow: 0 10px 24px rgba(15, 23, 42, 0.28);
+}
+
+.panel__handle strong {
+  font-size: 1rem;
+  font-weight: 600;
+  color: inherit;
+}
+
+.panel__handle span {
+  font-size: 0.85rem;
+  color: rgba(226, 232, 240, 0.78);
+}
+
+.panel__handle:active {
+  cursor: grabbing;
+}
+
 .xray__head { display:flex; gap:.75rem; align-items:center; justify-content:space-between; flex-wrap:wrap; }
 .xray__title h3 { margin-bottom: .25rem; }
 .xray__controls { display:flex; gap:.5rem; align-items:center; flex-wrap:wrap; }
@@ -302,12 +418,82 @@ function fmtUTC(value) {
 .home__magneto-card :deep(.magneto__chart-wrapper){ flex:1; min-height:0; }
 .home__magneto-card :deep(.magneto__chart){ height:100%; min-height:0; }
 
-@media (min-width: 960px) {
-  .home__grid { grid-template-columns: repeat(auto-fit, minmax(18rem, 1fr)); }
+.home__ionogram-card {
+  height: 100%;
+  display: flex;
+  flex-direction: column;
 }
-@media (min-width: 1280px) {
-  .home__grid { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+
+.panel__body--ionogram {
+  flex: 1;
+  min-height: 0;
 }
+
+.panel__body--ionogram :deep(.ionogram-card) {
+  height: 100%;
+  min-height: 0;
+}
+
+.map-panel {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  gap: 0.75rem;
+  padding: 0.85rem 1rem 1rem;
+}
+
+.map-panel__handle {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+  background: rgba(15, 23, 42, 0.85);
+  color: #e2e8f0;
+  padding: 0.65rem 0.9rem;
+  border-radius: 0.75rem;
+  cursor: grab;
+  user-select: none;
+  box-shadow: 0 12px 28px rgba(15, 23, 42, 0.4);
+}
+
+.map-panel__handle:active {
+  cursor: grabbing;
+}
+
+.map-panel__handle strong {
+  font-size: 1.05rem;
+  font-weight: 600;
+  color: inherit;
+}
+
+.map-panel__handle span {
+  font-size: 0.85rem;
+  color: rgba(226, 232, 240, 0.8);
+}
+
+.map-panel__content {
+  flex: 1;
+  min-height: 0;
+}
+
+.map-panel__content :deep(.tad-card) {
+  height: 100%;
+  width: 100%;
+  max-width: none;
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.map-panel__content :deep(.tad-map) {
+  flex: 1;
+  min-height: 0;
+  height: auto;
+}
+
+.map-panel__content :deep(.tad-footer) {
+  flex-shrink: 0;
+}
+
 @media (max-width: 600px) {
   .panel { padding: .75rem; }
 }
