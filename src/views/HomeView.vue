@@ -30,46 +30,58 @@ const utcNow = ref(new Date())
 let clockTimer = null // 👈 sin tipos TS
 
 const workspaceRef = ref(null)
+const workspaceHeight = ref(860)
 
 const panelDefaults = {
   map: {
     position: { x: 24, y: 24 },
-    size: { width: 820, height: 540 },
-    min: { width: 560, height: 420 },
-    max: { width: 1180, height: 780 },
+    size: { width: 760, height: 300 },
+    min: { width: 560, height: 260 },
+    max: { width: 1180, height: 740 },
   },
   sun: {
-    position: { x: 876, y: 24 },
-    size: { width: 420, height: 420 },
-    min: { width: 320, height: 280 },
-    max: { width: 560, height: 560 },
+    position: { x: 820, y: 24 },
+    size: { width: 420, height: 260 },
+    min: { width: 320, height: 200 },
+    max: { width: 560, height: 520 },
   },
   xray: {
-    position: { x: 24, y: 600 },
-    size: { width: 720, height: 420 },
-    min: { width: 480, height: 320 },
-    max: { width: 960, height: 620 },
+    position: { x: 24, y: 348 },
+    size: { width: 760, height: 240 },
+    min: { width: 480, height: 220 },
+    max: { width: 960, height: 600 },
   },
   magneto: {
-    position: { x: 780, y: 600 },
-    size: { width: 520, height: 420 },
-    min: { width: 400, height: 320 },
-    max: { width: 820, height: 620 },
+    position: { x: 820, y: 348 },
+    size: { width: 420, height: 240 },
+    min: { width: 360, height: 220 },
+    max: { width: 780, height: 600 },
   },
   ionogram: {
-    position: { x: 24, y: 1060 },
-    size: { width: 520, height: 420 },
-    min: { width: 380, height: 320 },
-    max: { width: 780, height: 620 },
+    position: { x: 24, y: 612 },
+    size: { width: 760, height: 220 },
+    min: { width: 380, height: 200 },
+    max: { width: 980, height: 620 },
   },
 }
 
+function updateWorkspaceMetrics() {
+  if (typeof window === 'undefined') return
+  const viewportHeight = window.innerHeight || 0
+  workspaceHeight.value = Math.max(860, Math.round(viewportHeight - 140))
+}
+
 onMounted(() => {
+  updateWorkspaceMetrics()
   clockTimer = window.setInterval(() => {
     utcNow.value = new Date()
   }, 1000)
+  window.addEventListener('resize', updateWorkspaceMetrics)
 })
-onBeforeUnmount(() => { if (clockTimer) clearInterval(clockTimer) })
+onBeforeUnmount(() => {
+  if (clockTimer) clearInterval(clockTimer)
+  window.removeEventListener('resize', updateWorkspaceMetrics)
+})
 
 function fmtUTC(value) {
   if (!value) return '—'
@@ -93,7 +105,11 @@ function fmtUTC(value) {
       <p>Visualiza aquí los indicadores clave cuando estén disponibles.</p>
     </header>
 
-    <div ref="workspaceRef" class="home__workspace">
+    <div
+      ref="workspaceRef"
+      class="home__workspace"
+      :style="{ height: `${workspaceHeight}px` }"
+    >
       <DraggablePanel
         panel-id="map"
         :container-ref="workspaceRef"
@@ -287,8 +303,7 @@ function fmtUTC(value) {
   position: relative;
   flex: 1;
   width: 100%;
-  min-height: 860px;
-  height: clamp(1400px, 92vh, 2000px);
+  min-height: 780px;
   border-radius: 1rem;
   background: linear-gradient(160deg, rgba(15, 23, 42, 0.18), rgba(15, 23, 42, 0.05));
   overflow: hidden;

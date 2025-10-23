@@ -143,10 +143,6 @@ function startDrag(event) {
   if (['BUTTON', 'SELECT', 'INPUT', 'TEXTAREA', 'A'].includes(event.target.tagName)) return
   const container = props.containerRef?.value
   if (!panelRef.value || !container) return
-  const handle = event.target.closest('[data-drag-handle]')
-  const hasDedicatedHandle = !!panelRef.value.querySelector('[data-drag-handle]')
-  if (handle && !panelRef.value.contains(handle)) return
-  if (!handle && hasDedicatedHandle) return
   event.preventDefault()
   panelRef.value.setPointerCapture?.(event.pointerId)
   dragSession.value = {
@@ -306,6 +302,11 @@ const panelStyle = computed(() => ({
   touch-action: none;
   user-select: none;
   transition: box-shadow 0.2s ease;
+  cursor: grab;
+}
+
+.draggable-panel:active {
+  cursor: grabbing;
 }
 
 .draggable-panel:focus-within,
