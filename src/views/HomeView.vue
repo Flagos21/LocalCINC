@@ -4,7 +4,7 @@ import { ref, onMounted, onBeforeUnmount } from 'vue'
 import SunViewer from '@/components/SunViewer.vue'
 import IonogramLatest from '@/components/IonogramLatest.vue'
 import MagnetometerChartOverview from '@/components/MagnetometerChartOverview.vue'
-import ElectricFieldChart from '@/components/ElectricFieldChart.vue'
+import ElectricFieldHomeCard from '@/components/ElectricFieldHomeCard.vue'
 
 import XRayChartFigure from '@/components/XRayChartFigure.vue'
 import { useGoesXrays } from '@/composables/useGoesXrays'
@@ -173,7 +173,7 @@ function fmtUTC(value) {
 
       <!-- Campo eléctrico local -->
       <div class="home__cell home__cell--electric">
-        <ElectricFieldChart />
+        <ElectricFieldHomeCard />
       </div>
 
       <!-- Magnetómetro -->
@@ -215,8 +215,25 @@ function fmtUTC(value) {
   align-items: start;
 }
 
-.home__cell { width: 100%; }
-.home__cell > * { width: 100%; }
+.home__cell {
+  width: 100%;
+  min-height: 0;
+}
+
+.home__cell > * {
+  width: 100%;
+  min-height: 0;
+}
+
+.home__cell:not(.home__cell--daynight) {
+  aspect-ratio: 4 / 3;
+  display: flex;
+}
+
+.home__cell:not(.home__cell--daynight) > * {
+  flex: 1 1 auto;
+  min-height: 0;
+}
 
 /* Day/Night a lo ancho y centrado */
 .home__cell--daynight {
@@ -224,19 +241,7 @@ function fmtUTC(value) {
 }
 
 .home__cell--electric {
-  grid-column: 1 / -1;
-  display: flex;
-  justify-content: center;
-}
-
-.home__cell--electric :deep(.efield) {
-  width: 100%;
-  padding: 0;
-  margin: 0;
-}
-
-.home__cell--electric :deep(.efield__card) {
-  width: min(1120px, 100%);
+  grid-column: auto;
 }
 
 .daynight-wrap{
@@ -259,7 +264,8 @@ function fmtUTC(value) {
   display: flex;
   flex-direction: column;
   gap: 0.6rem;
-  height: auto;
+  height: 100%;
+  min-height: 0;
 }
 
 .panel--chart { padding-bottom: 0.75rem; }

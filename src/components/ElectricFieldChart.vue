@@ -1,6 +1,6 @@
 <script setup>
 import { ref, onMounted, watch, computed, onBeforeUnmount } from 'vue'
-import dayjs from 'dayjs'
+import dayjs from '@/utils/dayjs'
 import Litepicker from 'litepicker'
 import 'litepicker/dist/css/litepicker.css'
 import VueApexCharts from 'vue3-apexcharts'
@@ -172,9 +172,12 @@ function normalizeRange(start, end, { clampToFullDays = false } = {}) {
     normalizedEnd = normalizedEnd.endOf('day')
   }
 
+  const startIso = normalizedStart.utc().format('YYYY-MM-DDTHH:mm:ss[Z]')
+  const endIso = normalizedEnd.utc().format('YYYY-MM-DDTHH:mm:ss[Z]')
+
   return {
-    start: normalizedStart.format('YYYY-MM-DDTHH:mm'),
-    end: normalizedEnd.format('YYYY-MM-DDTHH:mm')
+    start: startIso,
+    end: endIso
   }
 }
 
