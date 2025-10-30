@@ -35,7 +35,17 @@ const mode = ref(props.mode)
 let animFrameId=null
 let animButtonEl=null
 
-const INITIAL_VIEW = { center:[5,20], zoom:2 }
+/* === Bounds Sudamérica + helper para encajar una sola vez === */
+const LATAM_BOUNDS = L.latLngBounds(
+  [-57, -92], // sudoeste
+  [ 13, -30]   // noreste
+)
+let didInitialFit = false
+function fitLatamOnce() {
+  if (didInitialFit || !map) return
+  didInitialFit = true
+  map.fitBounds(LATAM_BOUNDS, { padding:[20,20], maxZoom:4 })
+}
 
 /* ---------- helpers astronómicos (igual que antes) ---------- */
 const d2r = d => d*Math.PI/180, r2d = r => r*180/Math.PI
@@ -108,6 +118,9 @@ function makeBaseAndLabels(currentMode){
       'https://server.arcgisonline.com/ArcGIS/rest/services/Reference/World_Boundaries_and_Places/MapServer/tile/{z}/{y}/{x}',
       { pane:'labels', minZoom:1, maxZoom:7, opacity:0.9, noWrap:true }
     ).addTo(map)
+
+    // encajar cuando carguen los tiles
+    if (baseLayer) baseLayer.once('load', () => fitLatamOnce())
   } else {
     // Mapa claro con etiquetas (Carto Positron)
     baseLayer = L.tileLayer(
@@ -116,6 +129,9 @@ function makeBaseAndLabels(currentMode){
     ).addTo(map)
     // Extra opcional de labels (normalmente no hace falta porque Positron ya trae):
     labelsLayer = null
+
+    // encajar cuando carguen los tiles
+    if (baseLayer) baseLayer.once('load', () => fitLatamOnce())
   }
 }
 
@@ -209,7 +225,8 @@ function addExtrasControls(){
       L.DomEvent.disableScrollPropagation(el)
 
       resetBtn.addEventListener('click', () => {
-        map.setView(INITIAL_VIEW.center, INITIAL_VIEW.zoom, { animate:true })
+        // volver a Sudamérica
+        map.fitBounds(LATAM_BOUNDS, { padding:[20,20], maxZoom:4 })
       })
 
       animBtn.addEventListener('click', () => {
@@ -301,14 +318,24 @@ onMounted(() => {
     worldCopyJump:false,
     maxBounds:[[-85,-180],[85,180]],
     maxBoundsViscosity:1.0,
-  }).setView(INITIAL_VIEW.center, INITIAL_VIEW.zoom)
+  })
+
+  // ✅ vista inicial provisional para que se pinten tiles altiro
+  map.setView([-15, -60], 3)
 
   makeBaseAndLabels(mode.value)
+
   // arreglos de tamaño
   requestAnimationFrame(()=> map.invalidateSize())
   setTimeout(()=> map.invalidateSize(), 400)
   const ro = new ResizeObserver(()=> map.invalidateSize())
   ro.observe(mapEl.value); map.__ro = ro
+
+  // Encajar a Sudamérica cuando el mapa esté listo y tras el primer render
+  map.whenReady(() => {
+    fitLatamOnce()
+    setTimeout(fitLatamOnce, 0)
+  })
 
   addModeSwitch()
   addExtrasControls()

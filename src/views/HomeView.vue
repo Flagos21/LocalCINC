@@ -62,7 +62,7 @@ function fmtUTC(value) {
       <div class="daynight-wrap">
         <!-- refresco cada 1 minuto -->
         <DayNightMap
-          mode="satellite"
+          mode="map"
           height="clamp(520px, 55vh, 720px)"
           :autoRefreshMs="60000"
           :showTwilight="true"
