@@ -58,6 +58,7 @@ onBeforeUnmount(() => {
               <RouterLink to="/sol" class="dropdown-link">Sol</RouterLink>
               <RouterLink to="/rayos-x" class="dropdown-link">Rayos X</RouterLink>
               <RouterLink to="/ionograms" class="dropdown-link">Ionosondas</RouterLink>
+              <RouterLink to="/campo-electrico" class="dropdown-link">Campo eléctrico</RouterLink>
               <div class="dropdown-submenu">
                 <button class="dropdown-link dropdown-link--parent" type="button">
                   Magnetómetros <span class="nav-caret" aria-hidden="true">▸</span>

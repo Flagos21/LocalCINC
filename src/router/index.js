@@ -35,6 +35,11 @@ const router = createRouter({
       component: () => import('../views/MagnetometerLocalView.vue'),
     },
     {
+      path: '/campo-electrico',
+      name: 'electric-field',
+      component: () => import('../views/ElectricFieldView.vue'),
+    },
+    {
       path: '/graphs',
       redirect: { name: 'magnetometers-influxdb' },
     },
