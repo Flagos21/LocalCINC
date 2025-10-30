@@ -1,10 +1,10 @@
 /* eslint-env node */
 import fs from 'fs/promises'
+import { createReadStream } from 'node:fs'
 import path from 'path'
+import readline from 'node:readline'
 
-import { aggregatePoints, pickBucketSize, constants } from './localMagnetometer.js'
-
-const { MINUTE_MS } = constants
+import { pickBucketSize } from './localMagnetometer.js'
 const DEFAULT_WINDOW_DAYS = 1
 
 const EFM_FILENAME_PATTERN = /^cinc_efm-(\d{2})(\d{2})(\d{4})\.efm$/i
@@ -62,98 +62,72 @@ export async function listElectricFieldFiles({ root }) {
   }
 }
 
-export async function readElectricFieldFile(fileInfo, { station } = {}) {
+function parseElectricFieldLine(line, fileInfo) {
+  const trimmed = line.trim()
+  if (!trimmed) {
+    return null
+  }
+
+  const parts = trimmed.split(',')
+  if (parts.length < 2) {
+    return null
+  }
+
+  const timePart = parts[0]?.trim()
+  const valuePart = parts[1]?.trim()
+  const stationPartRaw = parts[2]?.trim() ?? ''
+
+  if (!timePart || !valuePart) {
+    return null
+  }
+
+  const timeMatch = timePart.match(/^(\d{1,2}):(\d{2})(?::(\d{2}))?$/)
+  if (!timeMatch) {
+    return null
+  }
+
+  const hour = Number.parseInt(timeMatch[1], 10)
+  const minute = Number.parseInt(timeMatch[2], 10)
+  const second = Number.parseInt(timeMatch[3] ?? '0', 10)
+
+  if (![hour, minute, second].every((value) => Number.isFinite(value))) {
+    return null
+  }
+
+  const normalizedValue = valuePart.replace(',', '.')
+  const value = Number.parseFloat(normalizedValue)
+
+  if (!Number.isFinite(value)) {
+    return null
+  }
+
+  const timeMs = Date.UTC(fileInfo.year, fileInfo.monthIndex, fileInfo.day, hour, minute, second)
+  if (!Number.isFinite(timeMs)) {
+    return null
+  }
+
+  return {
+    timeMs,
+    value,
+    station: stationPartRaw ? stationPartRaw : null,
+  }
+}
+
+async function forEachElectricFieldPoint(fileInfo, callback) {
+  const stream = createReadStream(fileInfo.fullPath, { encoding: 'utf8' })
+  const rl = readline.createInterface({ input: stream, crlfDelay: Infinity })
+
   try {
-    const raw = await fs.readFile(fileInfo.fullPath, 'utf8')
-    const lines = raw.split(/\r?\n/)
-
-    const stationFilter = station ? station.toString() : ''
-    const normalizedFilter = stationFilter.trim()
-
-    const points = []
-    const stations = new Set()
-    const matchedStations = new Set()
-
-    for (const line of lines) {
-      const trimmed = line.trim()
-      if (!trimmed) {
+    for await (const line of rl) {
+      const parsed = parseElectricFieldLine(line, fileInfo)
+      if (!parsed) {
         continue
       }
 
-      const parts = trimmed.split(',')
-      if (parts.length < 2) {
-        continue
-      }
-
-      const timePart = parts[0]?.trim()
-      const valuePart = parts[1]?.trim()
-      const stationPartRaw = parts[2]?.trim() ?? ''
-      const stationPart = stationPartRaw
-
-      if (stationPart) {
-        stations.add(stationPart)
-      }
-
-      if (normalizedFilter && stationPart !== normalizedFilter) {
-        continue
-      }
-
-      if (!timePart || !valuePart) {
-        continue
-      }
-
-      const timeMatch = timePart.match(/^(\d{1,2}):(\d{2})(?::(\d{2}))?$/)
-      if (!timeMatch) {
-        continue
-      }
-
-      const hour = Number.parseInt(timeMatch[1], 10)
-      const minute = Number.parseInt(timeMatch[2], 10)
-      const second = Number.parseInt(timeMatch[3] ?? '0', 10)
-
-      if (![hour, minute, second].every((value) => Number.isFinite(value))) {
-        continue
-      }
-
-      const normalizedValue = valuePart.replace(',', '.')
-      const value = Number.parseFloat(normalizedValue)
-
-      if (!Number.isFinite(value)) {
-        continue
-      }
-
-      const timestamp = Date.UTC(fileInfo.year, fileInfo.monthIndex, fileInfo.day, hour, minute, second)
-      const iso = new Date(timestamp).toISOString()
-
-      points.push({ t: iso, v: value, station: stationPart || null })
-
-      if (stationPart) {
-        matchedStations.add(stationPart)
-      } else if (!normalizedFilter) {
-        matchedStations.add('')
-      }
+      await callback(parsed)
     }
-
-    points.sort((a, b) => new Date(a.t) - new Date(b.t))
-
-    return {
-      points,
-      start: points[0]?.t ?? null,
-      end: points[points.length - 1]?.t ?? null,
-      stations: Array.from(stations).sort((a, b) => a.localeCompare(b, undefined, { numeric: true })),
-      matchedStations: Array.from(matchedStations).filter((value) => value !== ''),
-    }
-  } catch (error) {
-    if (error.code === 'ENOENT') {
-      return {
-        points: [],
-        start: null,
-        end: null,
-        stations: [],
-        matchedStations: [],
-      }
-    }
-    throw error
+  } finally {
+    rl.close()
   }
 }
 
@@ -278,54 +252,109 @@ export async function loadElectricFieldSeries({
     }
   }
 
-  const combinedPoints = []
   const stationsInFiles = new Set()
   const matchedStations = new Set()
   const filterValue = station ? station.toString().trim() : ''
+  const startMs = start.getTime()
+  const endMs = end.getTime()
+
+  let totalPoints = 0
 
   for (const file of selectedFiles) {
-    const { points, stations, matchedStations: fileMatchedStations } = await readElectricFieldFile(file, { station: filterValue })
-
-    for (const stationId of stations) {
-      if (stationId) {
-        stationsInFiles.add(stationId)
+    await forEachElectricFieldPoint(file, async (point) => {
+      if (point.station) {
+        stationsInFiles.add(point.station)
       }
-    }
 
-    for (const stationId of fileMatchedStations) {
-      if (stationId) {
-        matchedStations.add(stationId)
+      if (filterValue && point.station !== filterValue) {
+        return
       }
-    }
 
-    for (const point of points) {
-      const time = new Date(point.t).getTime()
-      if (!Number.isFinite(time) || time < start.getTime() || time > end.getTime()) {
-        continue
+      if (point.timeMs < startMs || point.timeMs > endMs) {
+        return
       }
-      combinedPoints.push(point)
+
+      totalPoints += 1
+
+      if (point.station) {
+        matchedStations.add(point.station)
+      } else if (!filterValue) {
+        matchedStations.add('')
+      }
+    })
+  }
+
+  if (totalPoints === 0) {
+    return {
+      points: [],
+      files: selectedFiles.map((file) => ({ date: file.isoDate, filename: file.filename })),
+      totalPoints: 0,
+      downsampled: false,
+      bucketMs: null,
+      availableRange,
+      stations: Array.from(stationsInFiles).sort((a, b) => a.localeCompare(b, undefined, { numeric: true })),
+      matchedStations: [],
+      requestedRange: { start: start.toISOString(), end: end.toISOString() },
     }
   }
 
-  combinedPoints.sort((a, b) => new Date(a.t) - new Date(b.t))
+  const bucketMs = totalPoints > targetPoints
+    ? pickBucketSize({
+        rangeStartMs: startMs,
+        rangeEndMs: endMs,
+        totalPoints,
+        targetPoints,
+      })
+    : null
 
-  const totalPoints = combinedPoints.length
-  const bucketMs = pickBucketSize({
-    rangeStartMs: start.getTime(),
-    rangeEndMs: end.getTime(),
-    totalPoints,
-    targetPoints,
-  })
+  const shouldAggregate = Number.isFinite(bucketMs) && bucketMs !== null
+  const aggregated = new Map()
+  const rawPoints = []
 
-  let visiblePoints = combinedPoints
+  for (const file of selectedFiles) {
+    await forEachElectricFieldPoint(file, async (point) => {
+      if (filterValue && point.station !== filterValue) {
+        return
+      }
+
+      if (point.timeMs < startMs || point.timeMs > endMs) {
+        return
+      }
+
+      if (shouldAggregate && bucketMs) {
+        const bucketStart = Math.floor(point.timeMs / bucketMs) * bucketMs
+        let entry = aggregated.get(bucketStart)
+        if (!entry) {
+          entry = { sum: 0, count: 0, minTime: point.timeMs }
+          aggregated.set(bucketStart, entry)
+        }
+
+        entry.sum += point.value
+        entry.count += 1
+        if (point.timeMs < entry.minTime) {
+          entry.minTime = point.timeMs
+        }
+      } else {
+        rawPoints.push({ t: new Date(point.timeMs).toISOString(), v: point.value })
+      }
+    })
+  }
+
+  let visiblePoints
   let downsampled = false
 
-  if (bucketMs >= MINUTE_MS && totalPoints > targetPoints) {
-    const aggregated = aggregatePoints(combinedPoints, bucketMs)
-    if (aggregated.length) {
-      visiblePoints = aggregated
-      downsampled = aggregated.length !== totalPoints
-    }
+  if (shouldAggregate && bucketMs) {
+    visiblePoints = Array.from(aggregated.entries())
+      .filter(([, entry]) => entry && entry.count > 0)
+      .map(([bucketStart, entry]) => ({
+        t: new Date(entry.minTime ?? bucketStart).toISOString(),
+        v: entry.sum / entry.count,
+      }))
+      .sort((a, b) => new Date(a.t) - new Date(b.t))
+
+    downsampled = visiblePoints.length !== totalPoints
+  } else {
+    visiblePoints = rawPoints.sort((a, b) => new Date(a.t) - new Date(b.t))
   }
 
   return {
@@ -333,10 +362,12 @@ export async function loadElectricFieldSeries({
     files: selectedFiles.map((file) => ({ date: file.isoDate, filename: file.filename })),
     totalPoints,
     downsampled,
-    bucketMs,
+    bucketMs: shouldAggregate ? bucketMs : null,
     availableRange,
     stations: Array.from(stationsInFiles).sort((a, b) => a.localeCompare(b, undefined, { numeric: true })),
-    matchedStations: Array.from(matchedStations).sort((a, b) => a.localeCompare(b, undefined, { numeric: true })),
+    matchedStations: Array.from(matchedStations)
+      .filter((value) => value !== '')
+      .sort((a, b) => a.localeCompare(b, undefined, { numeric: true })),
     requestedRange: { start: start.toISOString(), end: end.toISOString() },
   }
 }

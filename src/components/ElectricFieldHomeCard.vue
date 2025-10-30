@@ -325,17 +325,20 @@ onMounted(() => {
         <p>Serie E_z a partir de los archivos EFM disponibles en el repositorio local.</p>
       </div>
 
-      <div class="efield-home__presets" role="group" aria-label="Intervalos rápidos">
-        <button
-          v-for="preset in presets"
-          :key="preset.id"
-          type="button"
-          class="efield-home__preset"
-          :class="{ 'is-active': preset.id === activePreset }"
-          @click="applyPreset(preset.id)"
-        >
-          {{ preset.label }}
-        </button>
+      <div class="efield-home__head-actions">
+        <div class="efield-home__presets" role="group" aria-label="Intervalos rápidos">
+          <button
+            v-for="preset in presets"
+            :key="preset.id"
+            type="button"
+            class="efield-home__preset"
+            :class="{ 'is-active': preset.id === activePreset }"
+            @click="applyPreset(preset.id)"
+          >
+            {{ preset.label }}
+          </button>
+        </div>
+        <slot name="aspect-control" />
       </div>
     </header>
 
@@ -391,6 +394,18 @@ onMounted(() => {
   justify-content: space-between;
   align-items: flex-start;
   gap: 1rem;
+}
+
+.efield-home__head-actions {
+  display: flex;
+  align-items: center;
+  gap: 0.65rem;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+}
+
+.efield-home__head-actions :deep(.aspect-control) {
+  flex-shrink: 0;
 }
 
 .efield-home__head h3 {
@@ -463,8 +478,10 @@ onMounted(() => {
 
 .efield-home__chart {
   position: relative;
-  flex: 1;
+  flex: 1 1 auto;
   min-height: 0;
+  aspect-ratio: var(--dashboard-aspect, 5 / 4);
+  display: flex;
 }
 
 .efield-home__chart-canvas,
@@ -517,6 +534,10 @@ onMounted(() => {
   .efield-home__head {
     flex-direction: column;
     align-items: stretch;
+  }
+
+  .efield-home__head-actions {
+    justify-content: flex-start;
   }
 
   .efield-home__presets {
