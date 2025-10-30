@@ -510,13 +510,13 @@ onBeforeUnmount(() => {
           <h1 class="magneto__title">Magnetómetro – Fuente local</h1>
           <p class="magneto__description">
             Explora la componente H generada por los archivos DataMin del magnetómetro de Chillán.
-            Selecciona el rango en el calendario para cargar los datos disponibles (por defecto se muestran {{ defaultRangeDisplay.description }}).
+            Selecciona el intervalo en el calendario para cargar los datos disponibles (por defecto se muestran {{ defaultRangeDisplay.description }}).
           </p>
         </div>
 
         <div class="magneto__filters">
           <div class="magneto__field">
-            <span class="magneto__label">Rango de fechas</span>
+            <span class="magneto__label">Intervalo de fechas</span>
             <div class="magneto__controls">
               <input
                 ref="rangeInputRef"
@@ -585,7 +585,7 @@ onBeforeUnmount(() => {
         </div>
 
         <p v-if="!isLoading && !hasVisibleData && !errorMessage" class="magneto__empty">
-          No hay datos locales disponibles para el rango seleccionado.
+          No hay datos locales disponibles para el intervalo seleccionado.
         </p>
 
         <p v-if="errorMessage" class="magneto__error">⚠️ {{ errorMessage }}</p>

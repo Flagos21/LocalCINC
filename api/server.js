@@ -271,7 +271,7 @@ app.get('/api/local-magnetometer/series', async (req, res) => {
 
     if (fromParam || toParam) {
       if (!fromParam || !toParam) {
-        return res.status(400).json({ error: 'Parámetros from y to requeridos para rangos personalizados.' });
+        return res.status(400).json({ error: 'Parámetros from y to requeridos para intervalos personalizados.' });
       }
 
       const parsedFrom = parseDateQuery(fromParam, { isEnd: false });
@@ -324,7 +324,7 @@ app.get('/api/local-magnetometer/series', async (req, res) => {
     });
 
     if (!seriesPayload.points.length) {
-      return res.status(404).json({ error: 'No hay datos locales disponibles para el rango solicitado.' });
+      return res.status(404).json({ error: 'No hay datos locales disponibles para el intervalo solicitado.' });
     }
 
     const labels = seriesPayload.points.map((point) => point.t);
@@ -462,7 +462,7 @@ from(bucket: "${INFLUX_BUCKET}")
 // --- NUEVO ENDPOINT: /api/series-dh ---
 // Calcula ΔH = H - media_diaria(H)
 // --- NUEVO ENDPOINT: /api/series-dh ---
-// ΔH = H - media del primer día del rango
+// ΔH = H - media del primer día del intervalo
 app.get('/api/series-dh', async (req, res) => {
   try {
     const station = (req.query.station || DEFAULT_STATION).toString();

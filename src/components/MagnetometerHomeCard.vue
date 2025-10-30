@@ -196,7 +196,7 @@ onMounted(() => {
         <p>Cargando datos…</p>
       </div>
       <div v-else-if="!hasData" class="magneto-card__state">
-        <p>Sin datos para el rango solicitado.</p>
+        <p>Sin datos para el intervalo solicitado.</p>
       </div>
       <div v-else class="magneto-card__plot">
         <VueApexCharts

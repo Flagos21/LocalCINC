@@ -42,7 +42,7 @@ export function useMagnetometerSeries({
     const parsedTo = toValue ? dayjs(toValue) : null;
 
     if ((parsedFrom && !parsedFrom.isValid()) || (parsedTo && !parsedTo.isValid())) {
-      errorMessage.value = 'Selecciona un rango de fechas válido.';
+      errorMessage.value = 'Selecciona un intervalo de fechas válido.';
       labels.value = [];
       series.value = [];
       if (abortController.value === controller) {

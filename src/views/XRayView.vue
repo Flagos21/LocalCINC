@@ -71,7 +71,7 @@ function fmtUTC(value) {
     <div class="xray__panel">
       <div class="xray__controls">
         <label class="xray__range">
-          <span class="tag">Rango:</span>
+          <span class="tag">Intervalo:</span>
           <select v-model="xrRange">
             <option value="6h">6 h</option>
             <option value="1d">1 día</option>
@@ -104,7 +104,7 @@ function fmtUTC(value) {
           <p>Cargando rayos X…</p>
         </div>
         <div v-else-if="!xrHasData" class="xray__state">
-          <p>No hay datos disponibles para este rango.</p>
+          <p>No hay datos disponibles para este intervalo.</p>
         </div>
 
         <template v-else>

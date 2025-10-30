@@ -239,7 +239,7 @@ function toTimestamp(value) {
   return Number.isFinite(ts) ? ts : null
 }
 
-// Dibuja (ordenando por tiempo y limitando al rango elegido)
+// Dibuja (ordenando por tiempo y limitando al intervalo elegido)
 function draw() {
   const rawPoints = (labels.value || []).map((t, i) => ({ t, v: (series.value || [])[i] }))
     .filter(p => p.t && Number.isFinite(p.v))
@@ -314,7 +314,7 @@ function draw() {
 setDefaultTwoYears()
 
 onMounted(() => {
-  // Calendario de rango (un solo input)
+  // Calendario de intervalo (un solo input)
   const picker = new Litepicker({
     element: rangeInputRef.value,
     singleMode: false,
@@ -397,14 +397,14 @@ onBeforeUnmount(() => {
         <div>
           <h1 class="magneto__title">Magnetómetro – Estación única</h1>
           <p class="magneto__description">
-            Visualiza la componente H en nanoTeslas para la estación CHI. Usa el calendario para seleccionar un rango
+            Visualiza la componente H en nanoTeslas para la estación CHI. Usa el calendario para seleccionar un intervalo
             específico o explora con el zoom interactivo del gráfico.
           </p>
         </div>
 
         <div class="magneto__filters">
           <div class="magneto__field">
-            <span class="magneto__label">Rango de fechas</span>
+            <span class="magneto__label">Intervalo de fechas</span>
             <div class="magneto__controls">
               <input
                 ref="rangeInputRef"
@@ -454,7 +454,7 @@ onBeforeUnmount(() => {
         </div>
 
         <p v-if="!isLoading && !hasVisibleData && !errorMessage" class="magneto__empty">
-          No hay datos disponibles para el rango seleccionado.
+          No hay datos disponibles para el intervalo seleccionado.
         </p>
 
         <p v-if="errorMessage" class="magneto__error">⚠️ {{ errorMessage }}</p>

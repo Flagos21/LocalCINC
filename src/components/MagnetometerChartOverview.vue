@@ -243,7 +243,7 @@ onMounted(() => {
 
         <div class="magneto__filters">
           <div class="magneto__field">
-            <span class="magneto__label">Rangos rápidos</span>
+            <span class="magneto__label">Intervalos rápidos</span>
             <div class="magneto__quick">
               <button
                 v-for="preset in presets"
@@ -288,7 +288,7 @@ onMounted(() => {
         </div>
 
         <p v-if="!isLoading && !hasVisibleData && !errorMessage" class="magneto__empty">
-          No hay datos disponibles para el rango seleccionado.
+          No hay datos disponibles para el intervalo seleccionado.
         </p>
 
         <p v-if="errorMessage" class="magneto__error">⚠️ {{ errorMessage }}</p>

@@ -45,7 +45,7 @@ const hasCompleteRange = computed(() => Boolean(startValue.value && endValue.val
 
 const displayValue = computed(() => {
   if (!startValue.value && !endValue.value) {
-    return 'Selecciona un rango de fechas';
+    return 'Selecciona un intervalo de fechas';
   }
 
   if (startValue.value && !endValue.value) {
@@ -155,7 +155,7 @@ const clearRange = () => {
       type="button"
       class="date-range-picker__clear"
       @click="clearRange"
-      aria-label="Limpiar rango de fechas"
+      aria-label="Limpiar intervalo de fechas"
     >
       Limpiar
     </button>
