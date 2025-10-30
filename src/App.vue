@@ -116,7 +116,7 @@ const utcISO  = computed(() => now.value.toISOString())
 /* Main */
 .content {
   flex:1; display:flex; flex-direction:column; min-height:0;
-  padding:1.5rem; background:#0b1220; /* más oscuro para resaltar paneles y el mapa */
+  padding:1.5rem; background:#ffffff; /* más oscuro para resaltar paneles y el mapa */
   overflow-x:hidden;
 }
 
