@@ -37,14 +37,14 @@ let animButtonEl=null
 
 /* === Bounds Sudamérica + helper para encajar una sola vez === */
 const LATAM_BOUNDS = L.latLngBounds(
-  [-57, -92], // sudoeste
-  [ 13, -30]   // noreste
+  [-60, -110], // sudoeste
+  [ 18, -25]   // noreste
 )
 let didInitialFit = false
 function fitLatamOnce() {
   if (didInitialFit || !map) return
   didInitialFit = true
-  map.fitBounds(LATAM_BOUNDS, { padding:[20,20], maxZoom:4 })
+  map.fitBounds(LATAM_BOUNDS, { padding:[20,20], maxZoom:5 })
 }
 
 /* ---------- helpers astronómicos (igual que antes) ---------- */
@@ -120,7 +120,11 @@ function makeBaseAndLabels(currentMode){
     ).addTo(map)
 
     // encajar cuando carguen los tiles
-    if (baseLayer) baseLayer.once('load', () => fitLatamOnce())
+    if (baseLayer) {
+      baseLayer.once('load', () => fitLatamOnce())
+    } else {
+      fitLatamOnce()
+    }
   } else {
     // Mapa claro con etiquetas (Carto Positron)
     baseLayer = L.tileLayer(
@@ -131,7 +135,11 @@ function makeBaseAndLabels(currentMode){
     labelsLayer = null
 
     // encajar cuando carguen los tiles
-    if (baseLayer) baseLayer.once('load', () => fitLatamOnce())
+    if (baseLayer) {
+      baseLayer.once('load', () => fitLatamOnce())
+    } else {
+      fitLatamOnce()
+    }
   }
 }
 
@@ -363,13 +371,19 @@ watch(isAnimating, updateAnimButton)
 
 <style scoped>
 .tad-card{
-  background:#0a0e14; border-radius:12px; overflow:hidden;
+  background:#0a0e14;
+  border-radius:12px;
+  overflow:hidden;
   margin-inline:auto; /* centrado */
   box-shadow:0 12px 28px rgba(0,0,0,.35);
   border:1px solid rgba(255,255,255,.06);
-  max-width: 980px; /* ancho razonable */
+  display:flex;
+  flex-direction:column;
+  height:100%;
+  min-height:0;
+  width:100%;
 }
-.tad-map{ width:100%; }
+.tad-map{ width:100%; flex:1 1 auto; min-height:0; }
 .tad-footer{
   background:#3b3b3b; color:#e5e7eb; padding:.55rem .8rem;
   font-size:.95rem; display:flex; justify-content:flex-start;

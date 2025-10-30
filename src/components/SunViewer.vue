@@ -242,8 +242,8 @@ function onSeek(evt) {
   gap: 0.75rem;
   height: 100%;
   min-height: 0;
-  width: min(100%, 34rem);
-  margin: 0 auto;
+  width: 100%;
+  margin: 0;
 }
 
 /* Top bar */
@@ -266,8 +266,8 @@ function onSeek(evt) {
 .sunviewer__frame {
   position: relative;
   width: 100%;
-  max-width: min(100%, 34rem);
-  aspect-ratio: 1;
+  max-width: 100%;
+  aspect-ratio: var(--dashboard-aspect, 1);
   border-radius: 0.75rem;
   background: #0b1020;
   overflow: hidden;

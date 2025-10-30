@@ -234,11 +234,14 @@ onMounted(() => {
   <section class="magneto">
     <article class="magneto__card">
       <header class="magneto__header">
-        <div>
-          <h1 class="magneto__title">Magnetómetro – Estación única</h1>
-          <p class="magneto__description">
-            Visualiza la componente H con atajos rápidos para cambiar el periodo observado.
-          </p>
+        <div class="magneto__header-top">
+          <div>
+            <h1 class="magneto__title">Magnetómetro – Estación única</h1>
+            <p class="magneto__description">
+              Visualiza la componente H con atajos rápidos para cambiar el periodo observado.
+            </p>
+          </div>
+          <slot name="aspect-control" />
         </div>
 
         <div class="magneto__filters">
@@ -276,7 +279,7 @@ onMounted(() => {
           <VueApexCharts
             type="line"
             class="magneto__chart"
-            height="420"
+            height="100%"
             :options="chartOptions"
             :series="chartSeries"
           />
@@ -316,11 +319,9 @@ onMounted(() => {
   height: 100%;
 }
 
-.magneto__header {
-  display: flex;
-  flex-direction: column;
-  gap: 0.75rem;
-}
+.magneto__header { display: flex; flex-direction: column; gap: 0.75rem; }
+.magneto__header-top { display: flex; justify-content: space-between; align-items: flex-start; gap: 0.75rem; }
+.magneto__header-top :deep(.aspect-control) { flex-shrink: 0; }
 
 .magneto__title {
   font-size: 1.1rem;
@@ -436,13 +437,14 @@ onMounted(() => {
   overflow: hidden;
   border: 1px solid #e2e8f0;
   background: #ffffff;
-  flex: 1;
+  flex: 1 1 auto;
   display: flex;
   min-height: 0;
+  aspect-ratio: var(--dashboard-aspect, 5 / 4);
 }
 
 .magneto__chart {
-  height: min(240px, 100%);
+  height: 100%;
   width: 100%;
 }
 
