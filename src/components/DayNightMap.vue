@@ -363,13 +363,19 @@ watch(isAnimating, updateAnimButton)
 
 <style scoped>
 .tad-card{
-  background:#0a0e14; border-radius:12px; overflow:hidden;
+  background:#0a0e14;
+  border-radius:12px;
+  overflow:hidden;
   margin-inline:auto; /* centrado */
   box-shadow:0 12px 28px rgba(0,0,0,.35);
   border:1px solid rgba(255,255,255,.06);
-  max-width: 980px; /* ancho razonable */
+  display:flex;
+  flex-direction:column;
+  height:100%;
+  min-height:0;
+  width:100%;
 }
-.tad-map{ width:100%; }
+.tad-map{ width:100%; flex:1 1 auto; min-height:0; }
 .tad-footer{
   background:#3b3b3b; color:#e5e7eb; padding:.55rem .8rem;
   font-size:.95rem; display:flex; justify-content:flex-start;

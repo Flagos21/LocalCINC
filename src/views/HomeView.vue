@@ -5,6 +5,7 @@ import SunViewer from '@/components/SunViewer.vue'
 import IonogramLatest from '@/components/IonogramLatest.vue'
 import MagnetometerChartOverview from '@/components/MagnetometerChartOverview.vue'
 import ElectricFieldHomeCard from '@/components/ElectricFieldHomeCard.vue'
+import DashboardAspectWrapper from '@/components/DashboardAspectWrapper.vue'
 
 import XRayChartFigure from '@/components/XRayChartFigure.vue'
 import { useGoesXrays } from '@/composables/useGoesXrays'
@@ -28,6 +29,23 @@ const {
 
 const utcNow = ref(new Date())
 let clockTimer = null // 👈 sin tipos TS
+
+const aspectOptions = [
+  { value: '5:4', label: '5:4' },
+  { value: '4:3', label: '4:3' },
+  { value: '3:2', label: '3:2' },
+  { value: '1:1', label: '1:1' },
+  { value: '16:9', label: '16:9' },
+]
+
+const defaultAspect = aspectOptions[0].value
+
+const sunAspect = ref(defaultAspect)
+const xrayAspect = ref(defaultAspect)
+const electricAspect = ref(defaultAspect)
+const magnetoAspect = ref(defaultAspect)
+const ionogramAspect = ref(defaultAspect)
+const mapAspect = ref(defaultAspect)
 
 onMounted(() => {
   clockTimer = window.setInterval(() => {
@@ -58,41 +76,24 @@ function fmtUTC(value) {
       <p>Visualiza aquí los indicadores clave cuando estén disponibles.</p>
     </header>
 
-    <!-- Day/Night: ocupa todo el ancho y centrado -->
-    <div class="home__cell home__cell--daynight">
-      <div class="daynight-wrap">
-        <!-- refresco cada 1 minuto -->
-        <DayNightMap
-          mode="map"
-          height="clamp(520px, 55vh, 720px)"
-          :autoRefreshMs="60000"
-          :showTwilight="true"
-          :showSunMoon="true"
-          nightColor="#050a18"
-          twilightColor="#0b1736"
-          :nightOpacity="0.38"
-          :twilightCivilOpacity="0.26"
-          :twilightNauticalOpacity="0.18"
-          :twilightAstroOpacity="0.12"
-        />
-      </div>
-    </div>
-
     <div class="home__grid">
       <!-- Sol -->
       <div class="home__cell home__cell--sun">
-        <article class="panel">
-          <div class="panel__head">
-            <h3>El Sol (SUVI)</h3>
-            <p>Vista en tiempo (casi) real del Sol por longitudes de onda EUV.</p>
-          </div>
-          <SunViewer />
-        </article>
+        <DashboardAspectWrapper v-model="sunAspect" :options="aspectOptions">
+          <article class="panel">
+            <div class="panel__head">
+              <h3>El Sol (SUVI)</h3>
+              <p>Vista en tiempo (casi) real del Sol por longitudes de onda EUV.</p>
+            </div>
+            <SunViewer />
+          </article>
+        </DashboardAspectWrapper>
       </div>
 
       <!-- Rayos X -->
       <div class="home__cell home__cell--xray">
-        <article class="panel panel--chart">
+        <DashboardAspectWrapper v-model="xrayAspect" :options="aspectOptions">
+          <article class="panel panel--chart">
           <div class="panel__head xray__head">
             <div class="xray__title">
               <h3>GOES X-ray Flux (0.05–0.4 nm y 0.1–0.8 nm)</h3>
@@ -168,24 +169,58 @@ function fmtUTC(value) {
               </small>
             </template>
           </div>
-        </article>
+          </article>
+        </DashboardAspectWrapper>
       </div>
 
       <!-- Campo eléctrico local -->
       <div class="home__cell home__cell--electric">
-        <ElectricFieldHomeCard />
+        <DashboardAspectWrapper v-model="electricAspect" :options="aspectOptions">
+          <ElectricFieldHomeCard />
+        </DashboardAspectWrapper>
       </div>
 
       <!-- Magnetómetro -->
       <div class="home__cell home__cell--magneto">
-        <div class="panel panel--flush home__magneto-card">
-          <MagnetometerChartOverview />
-        </div>
+        <DashboardAspectWrapper v-model="magnetoAspect" :options="aspectOptions">
+          <div class="panel panel--flush home__magneto-card">
+            <MagnetometerChartOverview />
+          </div>
+        </DashboardAspectWrapper>
       </div>
 
       <!-- Ionograma -->
       <div class="home__cell home__cell--ionogram">
-        <IonogramLatest />
+        <DashboardAspectWrapper v-model="ionogramAspect" :options="aspectOptions">
+          <IonogramLatest />
+        </DashboardAspectWrapper>
+      </div>
+
+      <!-- Mapa día/noche -->
+      <div class="home__cell home__cell--map">
+        <DashboardAspectWrapper v-model="mapAspect" :options="aspectOptions">
+          <article class="panel panel--map">
+            <div class="panel__head">
+              <h3>Mapa día/noche</h3>
+              <p>Observa el terminador solar y penumbras actualizadas cada minuto.</p>
+            </div>
+            <div class="panel__body panel__body--map">
+              <DayNightMap
+                mode="map"
+                height="100%"
+                :autoRefreshMs="60000"
+                :showTwilight="true"
+                :showSunMoon="true"
+                nightColor="#050a18"
+                twilightColor="#0b1736"
+                :nightOpacity="0.38"
+                :twilightCivilOpacity="0.26"
+                :twilightNauticalOpacity="0.18"
+                :twilightAstroOpacity="0.12"
+              />
+            </div>
+          </article>
+        </DashboardAspectWrapper>
       </div>
     </div>
   </section>
@@ -218,41 +253,13 @@ function fmtUTC(value) {
 .home__cell {
   width: 100%;
   min-height: 0;
+  display: flex;
 }
 
 .home__cell > * {
-  width: 100%;
-  min-height: 0;
-}
-
-.home__cell:not(.home__cell--daynight) {
-  aspect-ratio: 4 / 3;
-  display: flex;
-}
-
-.home__cell:not(.home__cell--daynight) > * {
   flex: 1 1 auto;
   min-height: 0;
-}
-
-/* Day/Night a lo ancho y centrado */
-.home__cell--daynight {
-  grid-column: 1 / -1;
-}
-
-.home__cell--electric {
-  grid-column: auto;
-}
-
-.daynight-wrap{
-  display: flex;
-  justify-content: center;
-  padding: 8px 0 2px;
-}
-
-.daynight-wrap :deep(.tad-card){
-  width: min(1280px, 100%);
-  box-shadow: 0 14px 32px rgba(0,0,0,.38);
+  width: 100%;
 }
 
 /* ---------- Panels ---------- */
@@ -275,6 +282,18 @@ function fmtUTC(value) {
 .panel__head p   { color: #69707d; margin-bottom: 0.25rem; font-size: 0.85rem; }
 
 .panel__body { flex: 0 1 auto; display: flex; flex-direction: column; min-height: 0; }
+.panel__body--map { flex: 1 1 auto; }
+.panel__body--map :deep(.tad-card) {
+  flex: 1 1 auto;
+  min-height: 0;
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+}
+.panel__body--map :deep(.tad-map) {
+  flex: 1 1 auto;
+  min-height: 0;
+}
 
 /* Estados */
 .panel__state {
