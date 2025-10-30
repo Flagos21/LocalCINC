@@ -46,6 +46,19 @@ const queryApi = influx.getQueryApi(INFLUX_ORG);
 
 const imageExtensions = new Set(['.png', '.jpg', '.jpeg', '.gif', '.webp']);
 
+function isConnectionRefusedError(err) {
+  if (!err) return false;
+  if (err.code === 'ECONNREFUSED') return true;
+  if (err.cause && isConnectionRefusedError(err.cause)) return true;
+  if (Array.isArray(err.errors)) {
+    return err.errors.some((nested) => isConnectionRefusedError(nested));
+  }
+  if (typeof err.message === 'string' && err.message.includes('ECONNREFUSED')) {
+    return true;
+  }
+  return false;
+}
+
 function isImageFile(name) {
   const ext = path.extname(name).toLowerCase();
   return imageExtensions.has(ext);
@@ -520,6 +533,10 @@ from(bucket: "${INFLUX_BUCKET}")
       meta: { every, station, unit, field: FIELD, measurement: MEASUREMENT, startISO, stopISO }
     });
   } catch (err) {
+    if (isConnectionRefusedError(err)) {
+      console.error('API /api/series error: InfluxDB no está disponible (conexión rechazada).');
+      return res.status(503).json({ error: 'InfluxDB no está disponible. Intenta más tarde.' });
+    }
     console.error('API /api/series error:', err);
     res.status(500).json({ error: 'No se pudieron obtener datos del servicio.' });
   }
@@ -580,6 +597,10 @@ from(bucket: "${INFLUX_BUCKET}")
       meta: { station, unit, baseline, field: FIELD, measurement: MEASUREMENT }
     });
   } catch (err) {
+    if (isConnectionRefusedError(err)) {
+      console.error('API /api/series-dh error: InfluxDB no está disponible (conexión rechazada).');
+      return res.status(503).json({ error: 'InfluxDB no está disponible. Intenta más tarde.' });
+    }
     console.error('API /api/series-dh error:', err);
     res.status(500).json({ error: 'No se pudieron calcular ΔH.' });
   }
