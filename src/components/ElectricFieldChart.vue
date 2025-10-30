@@ -6,7 +6,8 @@ import 'litepicker/dist/css/litepicker.css'
 import VueApexCharts from 'vue3-apexcharts'
 import { useMagnetometerSeries } from '@/composables/useMagnetometerSeries'
 
-const DEFAULT_RANGE_DAYS = 7
+const DEFAULT_RANGE_DAYS = 1
+const DEFAULT_AXIS_SPAN = 5
 
 const rangeInputRef = ref(null)
 const pickerRef = ref(null)
@@ -35,6 +36,8 @@ const chartSeries = ref([])
 const xDomain = ref({ min: null, max: null })
 const visiblePoints = ref(0)
 const dataExtent = ref(null)
+const yDomain = ref({ min: -DEFAULT_AXIS_SPAN, max: DEFAULT_AXIS_SPAN })
+const hasBootstrappedRange = ref(false)
 
 const hasValidSelection = computed(() => dayjs(from.value).isValid() && dayjs(to.value).isValid())
 const hasVisibleData = computed(() => visiblePoints.value > 0)
@@ -73,17 +76,29 @@ const chartOptions = computed(() => ({
   },
   yaxis: {
     title: { text: 'E_z (kV/m)' },
+    min: Number.isFinite(yDomain.value.min) ? yDomain.value.min : -DEFAULT_AXIS_SPAN,
+    max: Number.isFinite(yDomain.value.max) ? yDomain.value.max : DEFAULT_AXIS_SPAN,
     labels: {
       formatter: (val) => (Number.isFinite(val) ? Number(val).toFixed(2) : '')
     },
     decimalsInFloat: 2,
     axisBorder: { show: false },
-    tickAmount: 6
+    tickAmount: 8
   },
   grid: {
     borderColor: '#e2e8f0',
     strokeDashArray: 4,
     padding: { left: 16, right: 16 }
+  },
+  annotations: {
+    yaxis: [
+      {
+        y: 0,
+        borderColor: '#94a3b8',
+        strokeDashArray: 6,
+        opacity: 0.7
+      }
+    ]
   },
   tooltip: {
     theme: 'dark',
@@ -195,15 +210,6 @@ function formatEveryLabel(every) {
   return `${amount.toLocaleString('es-CL')} ${label}`
 }
 
-function setDefaultRange() {
-  const end = dayjs()
-  const start = end.subtract(DEFAULT_RANGE_DAYS - 1, 'day')
-  const normalized = normalizeRange(start.startOf('day'), end.endOf('day'), { clampToFullDays: true })
-  from.value = normalized.start
-  to.value = normalized.end
-  pendingRange.value = null
-}
-
 const defaultRangeDisplay = computed(() => {
   if (DEFAULT_RANGE_DAYS === 1) {
     return {
@@ -217,6 +223,58 @@ const defaultRangeDisplay = computed(() => {
     description: `los últimos ${DEFAULT_RANGE_DAYS} días`
   }
 })
+
+const defaultRangeValue = computed(() => {
+  const availableEndRaw = meta.value?.availableRange?.end ?? meta.value?.to ?? null
+  const availableStartRaw = meta.value?.availableRange?.start ?? null
+
+  const endCandidate = availableEndRaw ? dayjs(availableEndRaw) : null
+  const availableStart = availableStartRaw ? dayjs(availableStartRaw) : null
+
+  if (endCandidate?.isValid?.()) {
+    let startCandidate = endCandidate.subtract(DEFAULT_RANGE_DAYS - 1, 'day')
+
+    if (availableStart?.isValid?.() && startCandidate.isBefore(availableStart)) {
+      startCandidate = availableStart
+    }
+
+    return normalizeRange(startCandidate.startOf('day'), endCandidate.endOf('day'), {
+      clampToFullDays: true
+    })
+  }
+
+  if (meta.value?.range?.start && meta.value?.range?.end) {
+    return normalizeRange(meta.value.range.start, meta.value.range.end)
+  }
+
+  return { start: '', end: '' }
+})
+
+function setDefaultRange({ allowFallback = true } = {}) {
+  const normalized = defaultRangeValue.value
+
+  if (normalized.start && normalized.end) {
+    hasBootstrappedRange.value = true
+    from.value = normalized.start
+    to.value = normalized.end
+    pendingRange.value = null
+    return
+  }
+
+  if (!allowFallback) {
+    return
+  }
+
+  const fallbackEnd = dayjs()
+  const fallbackStart = fallbackEnd.subtract(DEFAULT_RANGE_DAYS - 1, 'day')
+  const fallback = normalizeRange(fallbackStart.startOf('day'), fallbackEnd.endOf('day'), {
+    clampToFullDays: true
+  })
+
+  from.value = fallback.start
+  to.value = fallback.end
+  pendingRange.value = null
+}
 
 function applyPendingRange() {
   if (!pendingRange.value) {
@@ -293,7 +351,34 @@ function draw() {
       })
     : rawPoints
 
-  visiblePoints.value = filteredPoints.length
+  const chartPoints = filteredPoints
+    .map((point) => {
+      const ts = toTimestamp(point.t)
+      const numericValue = Number(point.v)
+      if (ts === null || !Number.isFinite(numericValue)) {
+        return null
+      }
+      return [ts, numericValue]
+    })
+    .filter((entry) => entry !== null)
+
+  visiblePoints.value = chartPoints.length
+
+  if (chartPoints.length) {
+    const values = chartPoints.map(([, value]) => value)
+    const minValue = Math.min(...values)
+    const maxValue = Math.max(...values)
+    const maxAbs = Math.max(DEFAULT_AXIS_SPAN, Math.abs(minValue), Math.abs(maxValue))
+    const padding = Number.isFinite(maxAbs) ? maxAbs * 0.1 : DEFAULT_AXIS_SPAN * 0.1
+    const limit = Math.max(maxAbs + padding, DEFAULT_AXIS_SPAN)
+    const round = (value) => Math.round(value * 100) / 100
+    yDomain.value = {
+      min: -round(limit),
+      max: round(limit)
+    }
+  } else {
+    yDomain.value = { min: -DEFAULT_AXIS_SPAN, max: DEFAULT_AXIS_SPAN }
+  }
 
   let xRange = null
 
@@ -317,8 +402,8 @@ function draw() {
     xRange = [now.subtract(1, 'day'), now.add(1, 'day')]
   }
 
-  const titleStart = filteredPoints.length ? dayjs(filteredPoints[0].t) : selectionStart || dayjs()
-  const titleEnd = filteredPoints.length ? dayjs(filteredPoints[filteredPoints.length - 1].t) : selectionEnd || titleStart
+  const titleStart = chartPoints.length ? dayjs(chartPoints[0][0]) : selectionStart || dayjs()
+  const titleEnd = chartPoints.length ? dayjs(chartPoints[chartPoints.length - 1][0]) : selectionEnd || titleStart
 
   const domain = {
     min: Number.isFinite(xRange[0]?.valueOf?.()) ? xRange[0].valueOf() : null,
@@ -327,18 +412,13 @@ function draw() {
 
   xDomain.value = domain
 
-  chartSeries.value = filteredPoints.length
+  chartSeries.value = chartPoints.length
     ? [{
         name: `E_z – ${titleStart.format('YYYY-MM-DD')} a ${titleEnd.format('YYYY-MM-DD')}`,
-        data: filteredPoints.map((point) => {
-          const ts = toTimestamp(point.t)
-          return [ts, point.v]
-        }).filter(([ts]) => ts !== null)
+        data: chartPoints
       }]
     : []
 }
-
-setDefaultRange()
 
 const rangeHint = computed(() => {
   if (!hasValidSelection.value) {
@@ -496,6 +576,17 @@ onMounted(() => {
   pickerRef.value = picker
 
   draw()
+})
+
+watch(meta, () => {
+  if (hasBootstrappedRange.value) {
+    return
+  }
+
+  const normalized = defaultRangeValue.value
+  if (normalized.start && normalized.end) {
+    setDefaultRange({ allowFallback: false })
+  }
 })
 
 watch([labels, series], draw, { immediate: true })

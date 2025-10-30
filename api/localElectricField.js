@@ -4,7 +4,8 @@ import path from 'path'
 
 import { aggregatePoints, pickBucketSize, constants } from './localMagnetometer.js'
 
-const { MINUTE_MS, DAY_MS } = constants
+const { MINUTE_MS } = constants
+const DEFAULT_WINDOW_DAYS = 1
 
 const EFM_FILENAME_PATTERN = /^cinc_efm-(\d{2})(\d{2})(\d{4})\.efm$/i
 
@@ -168,6 +169,29 @@ function clampToUtcEnd(date) {
   return copy
 }
 
+function toDate(value) {
+  if (!value) {
+    return null
+  }
+
+  if (value instanceof Date) {
+    return Number.isNaN(value.getTime()) ? null : value
+  }
+
+  const parsed = new Date(value)
+  return Number.isNaN(parsed.getTime()) ? null : parsed
+}
+
+function subtractDaysClamped(date, days) {
+  const copy = new Date(date)
+  if (!Number.isFinite(copy.getTime())) {
+    return copy
+  }
+
+  copy.setUTCDate(copy.getUTCDate() - Math.max(days, 0))
+  return copy
+}
+
 export async function loadElectricFieldSeries({
   root,
   station,
@@ -187,13 +211,56 @@ export async function loadElectricFieldSeries({
     }
   }
 
+  const availableStart = clampToUtcStart(new Date(files[0].timestamp))
+  const availableEnd = clampToUtcEnd(new Date(files[files.length - 1].timestamp))
+
   const availableRange = {
-    start: new Date(files[0].timestamp).toISOString(),
-    end: new Date(files[files.length - 1].timestamp + DAY_MS - 1).toISOString(),
+    start: availableStart.toISOString(),
+    end: availableEnd.toISOString(),
   }
 
-  const start = clampToUtcStart(rangeStart)
-  const end = clampToUtcEnd(rangeEnd)
+  const requestedStart = toDate(rangeStart)
+  const requestedEnd = toDate(rangeEnd)
+
+  let end = requestedEnd ? clampToUtcEnd(requestedEnd) : availableEnd
+
+  if (end.getTime() > availableEnd.getTime()) {
+    end = new Date(availableEnd.getTime())
+  }
+
+  if (end.getTime() < availableStart.getTime()) {
+    end = new Date(availableEnd.getTime())
+  }
+
+  let start
+
+  if (requestedStart) {
+    start = clampToUtcStart(requestedStart)
+  } else {
+    const daysToSubtract = Math.max(DEFAULT_WINDOW_DAYS - 1, 0)
+    start = clampToUtcStart(subtractDaysClamped(end, daysToSubtract))
+  }
+
+  if (start.getTime() > end.getTime()) {
+    start = clampToUtcStart(subtractDaysClamped(end, DEFAULT_WINDOW_DAYS - 1))
+  }
+
+  if (start.getTime() < availableStart.getTime()) {
+    start = new Date(availableStart.getTime())
+  }
+
+  if (end.getTime() > availableEnd.getTime()) {
+    end = new Date(availableEnd.getTime())
+  }
+
+  if (start.getTime() > availableEnd.getTime()) {
+    start = new Date(availableStart.getTime())
+    end = new Date(availableEnd.getTime())
+  }
+
+  if (start.getTime() > end.getTime()) {
+    start = new Date(availableStart.getTime())
+  }
 
   const selectedFiles = files.filter((file) => {
     const dayStart = clampToUtcStart(new Date(file.timestamp))
@@ -253,7 +320,7 @@ export async function loadElectricFieldSeries({
   let visiblePoints = combinedPoints
   let downsampled = false
 
-  if (bucketMs > MINUTE_MS && totalPoints > targetPoints) {
+  if (bucketMs >= MINUTE_MS && totalPoints > targetPoints) {
     const aggregated = aggregatePoints(combinedPoints, bucketMs)
     if (aggregated.length) {
       visiblePoints = aggregated

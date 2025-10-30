@@ -4,6 +4,7 @@ import { ref, onMounted, onBeforeUnmount } from 'vue'
 import SunViewer from '@/components/SunViewer.vue'
 import IonogramLatest from '@/components/IonogramLatest.vue'
 import MagnetometerChartOverview from '@/components/MagnetometerChartOverview.vue'
+import ElectricFieldChart from '@/components/ElectricFieldChart.vue'
 
 import XRayChartFigure from '@/components/XRayChartFigure.vue'
 import { useGoesXrays } from '@/composables/useGoesXrays'
@@ -170,6 +171,11 @@ function fmtUTC(value) {
         </article>
       </div>
 
+      <!-- Campo eléctrico local -->
+      <div class="home__cell home__cell--electric">
+        <ElectricFieldChart />
+      </div>
+
       <!-- Magnetómetro -->
       <div class="home__cell home__cell--magneto">
         <div class="panel panel--flush home__magneto-card">
@@ -215,6 +221,22 @@ function fmtUTC(value) {
 /* Day/Night a lo ancho y centrado */
 .home__cell--daynight {
   grid-column: 1 / -1;
+}
+
+.home__cell--electric {
+  grid-column: 1 / -1;
+  display: flex;
+  justify-content: center;
+}
+
+.home__cell--electric :deep(.efield) {
+  width: 100%;
+  padding: 0;
+  margin: 0;
+}
+
+.home__cell--electric :deep(.efield__card) {
+  width: min(1120px, 100%);
 }
 
 .daynight-wrap{
