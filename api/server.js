@@ -11,6 +11,9 @@ import {
   listDataMinFiles,
   loadLocalSeries
 } from './localMagnetometer.js';
+import {
+  loadElectricFieldSeries
+} from './localElectricField.js';
 
 const app = express();
 app.use(cors());
@@ -20,6 +23,7 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 const ionogramRoot = path.join(__dirname, 'ionograms');
 const magnetometerLocalRoot = path.join(__dirname, 'magnetometro', 'DataMin');
+const electricFieldRoot = path.join(__dirname, 'campoelectrico', 'cinc_efm');
 
 const {
   INFLUX_URL,
@@ -41,43 +45,6 @@ const influx = new InfluxDB({ url: INFLUX_URL, token: INFLUX_TOKEN });
 const queryApi = influx.getQueryApi(INFLUX_ORG);
 
 const imageExtensions = new Set(['.png', '.jpg', '.jpeg', '.gif', '.webp']);
-
-const MONTH_ABBREVIATIONS = {
-  jan: 0,
-  feb: 1,
-  mar: 2,
-  apr: 3,
-  may: 4,
-  jun: 5,
-  jul: 6,
-  aug: 7,
-  sep: 8,
-  oct: 9,
-  nov: 10,
-  dec: 11
-};
-
-const MINUTE_MS = 60 * 1000;
-const HOUR_MS = 60 * MINUTE_MS;
-const DAY_MS = 24 * HOUR_MS;
-const LOCAL_BUCKETS_MS = [
-  MINUTE_MS,
-  2 * MINUTE_MS,
-  5 * MINUTE_MS,
-  10 * MINUTE_MS,
-  15 * MINUTE_MS,
-  30 * MINUTE_MS,
-  HOUR_MS,
-  2 * HOUR_MS,
-  3 * HOUR_MS,
-  6 * HOUR_MS,
-  12 * HOUR_MS,
-  DAY_MS,
-  2 * DAY_MS,
-  7 * DAY_MS,
-  14 * DAY_MS,
-  30 * DAY_MS
-];
 
 function isImageFile(name) {
   const ext = path.extname(name).toLowerCase();
@@ -365,6 +332,104 @@ app.get('/api/local-magnetometer/series', async (req, res) => {
   } catch (err) {
     console.error('API /api/local-magnetometer/series error:', err);
     res.status(500).json({ error: 'No se pudo obtener la serie local.' });
+  }
+});
+
+app.get('/api/electric-field/series', async (req, res) => {
+  const stationParam = req.query.station?.toString().trim() ?? '';
+  const dateParam = req.query.date?.toString();
+  const fromParam = req.query.from?.toString();
+  const toParam = req.query.to?.toString();
+
+  try {
+    let rangeStart;
+    let rangeEnd;
+
+    if (fromParam || toParam) {
+      if (!fromParam || !toParam) {
+        return res.status(400).json({ error: 'Parámetros from y to requeridos para intervalos personalizados.' });
+      }
+
+      const parsedFrom = parseDateQuery(fromParam, { isEnd: false });
+      const parsedTo = parseDateQuery(toParam, { isEnd: true });
+
+      if (!parsedFrom || !parsedTo) {
+        return res.status(400).json({ error: 'Parámetros from/to inválidos. Usa formato YYYY-MM-DD o YYYY-MM-DDTHH:mm.' });
+      }
+
+      if (parsedFrom.getTime() > parsedTo.getTime()) {
+        return res.status(400).json({ error: 'La fecha inicial no puede ser posterior a la final.' });
+      }
+
+      rangeStart = parsedFrom;
+      rangeEnd = parsedTo;
+    } else if (dateParam) {
+      if (!/^\d{4}-\d{2}-\d{2}$/.test(dateParam)) {
+        return res.status(400).json({ error: 'Parámetro date inválido. Usa YYYY-MM-DD.' });
+      }
+
+      const parsedDate = parseDateQuery(dateParam);
+      if (!parsedDate) {
+        return res.status(400).json({ error: 'Parámetro date inválido. Usa YYYY-MM-DD.' });
+      }
+
+      rangeStart = toUtcStart(parsedDate);
+      rangeEnd = toUtcEnd(parsedDate);
+    } else {
+      rangeStart = undefined;
+      rangeEnd = undefined;
+    }
+
+    const seriesPayload = await loadElectricFieldSeries({
+      root: electricFieldRoot,
+      station: stationParam || undefined,
+      rangeStart,
+      rangeEnd,
+      targetPoints: 4000,
+    });
+
+    if (!seriesPayload.points.length) {
+      return res.status(404).json({ error: 'No hay datos locales disponibles para el intervalo solicitado.' });
+    }
+
+    const labels = seriesPayload.points.map((point) => point.t);
+    const values = seriesPayload.points.map((point) => point.v);
+    const startLabel = labels[0] ?? null;
+    const endLabel = labels[labels.length - 1] ?? null;
+
+    return res.json({
+      labels,
+      series: [
+        {
+          name: 'E_z',
+          data: values,
+        },
+      ],
+      meta: {
+        station: stationParam || null,
+        stationsAvailable: seriesPayload.stations,
+        stationsMatched: seriesPayload.matchedStations,
+        points: labels.length,
+        originalPoints: seriesPayload.totalPoints,
+        bucket: seriesPayload.bucketMs
+          ? {
+              size: toFluxDuration(seriesPayload.bucketMs),
+              ms: seriesPayload.bucketMs,
+              downsampled: seriesPayload.downsampled,
+              returned: labels.length,
+              original: seriesPayload.totalPoints,
+            }
+          : null,
+        range: startLabel && endLabel ? { start: startLabel, end: endLabel } : null,
+        files: seriesPayload.files,
+        from: seriesPayload.requestedRange?.start,
+        to: seriesPayload.requestedRange?.end,
+        availableRange: seriesPayload.availableRange,
+      },
+    });
+  } catch (err) {
+    console.error('API /api/electric-field/series error:', err);
+    res.status(500).json({ error: 'No se pudo obtener la serie de campo eléctrico local.' });
   }
 });
 
