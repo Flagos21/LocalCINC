@@ -5,6 +5,7 @@ import SunViewer from '@/components/SunViewer.vue'
 import IonogramLatest from '@/components/IonogramLatest.vue'
 import MagnetometerChartOverview from '@/components/MagnetometerChartOverview.vue'
 import ElectricFieldHomeCard from '@/components/ElectricFieldHomeCard.vue'
+import AspectRatioControl from '@/components/AspectRatioControl.vue'
 
 import XRayChartFigure from '@/components/XRayChartFigure.vue'
 import { useGoesXrays } from '@/composables/useGoesXrays'
