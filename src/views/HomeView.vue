@@ -1,5 +1,5 @@
 <script setup>
-import { computed, ref, onMounted, onBeforeUnmount } from 'vue'
+import { ref, onMounted, onBeforeUnmount } from 'vue'
 
 import SunViewer from '@/components/SunViewer.vue'
 import IonogramLatest from '@/components/IonogramLatest.vue'
@@ -28,42 +28,6 @@ const {
 
 const utcNow = ref(new Date())
 let clockTimer = null // 👈 sin tipos TS
-
-const aspectOptions = [
-  { value: '5:4', label: '5:4' },
-  { value: '4:3', label: '4:3' },
-  { value: '3:2', label: '3:2' },
-  { value: '1:1', label: '1:1' },
-  { value: '16:9', label: '16:9' },
-]
-
-const defaultAspect = aspectOptions[0].value
-
-const sunAspect = ref(defaultAspect)
-const xrayAspect = ref(defaultAspect)
-const electricAspect = ref(defaultAspect)
-const magnetoAspect = ref(defaultAspect)
-const ionogramAspect = ref(defaultAspect)
-const mapAspect = ref(defaultAspect)
-
-function toAspectCss(value) {
-  const [w, h] = String(value)
-    .split(':')
-    .map((part) => Number(part.trim()))
-
-  if (!Number.isFinite(w) || !Number.isFinite(h) || w <= 0 || h <= 0) {
-    return '5 / 4'
-  }
-
-  return `${w} / ${h}`
-}
-
-const sunAspectVars = computed(() => ({ '--dashboard-aspect': toAspectCss(sunAspect.value) }))
-const xrayAspectVars = computed(() => ({ '--dashboard-aspect': toAspectCss(xrayAspect.value) }))
-const electricAspectVars = computed(() => ({ '--dashboard-aspect': toAspectCss(electricAspect.value) }))
-const magnetoAspectVars = computed(() => ({ '--dashboard-aspect': toAspectCss(magnetoAspect.value) }))
-const ionogramAspectVars = computed(() => ({ '--dashboard-aspect': toAspectCss(ionogramAspect.value) }))
-const mapAspectVars = computed(() => ({ '--dashboard-aspect': toAspectCss(mapAspect.value) }))
 
 onMounted(() => {
   clockTimer = window.setInterval(() => {
@@ -96,183 +60,133 @@ function fmtUTC(value) {
 
     <div class="home__grid">
       <!-- Sol -->
-      <div class="home__cell home__cell--sun">
-        <article class="panel panel--sun">
-          <div class="panel__head">
+      <article class="home__tile home__tile--sun">
+        <header class="home__tile-head">
+          <div>
             <h3>El Sol (SUVI)</h3>
             <p>Vista en tiempo (casi) real del Sol por longitudes de onda EUV.</p>
           </div>
-          <div class="panel__body panel__body--sun">
-            <SunViewer />
-          </div>
-        </article>
-      </div>
+        </header>
+
+        <div class="home__tile-visual home__tile-visual--sun">
+          <SunViewer />
+        </div>
+      </article>
 
       <!-- Rayos X -->
-      <div class="home__cell home__cell--xray">
-        <article class="panel panel--chart" :style="xrayAspectVars">
-          <div class="panel__head xray__head">
-            <div class="xray__title">
-              <h3>GOES X-ray Flux (0.05–0.4 nm y 0.1–0.8 nm)</h3>
-              <p>Escala logarítmica con umbrales A/B/C/M/X. Fuente: SWPC.</p>
-            </div>
-
-            <div class="xray__controls">
-              <div class="xray__clock">
-                <span class="tag">UTC ahora:</span>
-                <span class="mono">{{ fmtUTC(utcNow) }}</span>
-              </div>
-              <div class="xray__clock">
-                <span class="tag">Última muestra:</span>
-                <span class="mono">{{ fmtUTC(lastPointTime) }}</span>
-              </div>
-
-              <label class="xray__range">
-                <span class="tag">Intervalo:</span>
-                <select v-model="xrRange">
-                  <option value="6h">6 h</option>
-                  <option value="1d">1 día</option>
-                  <option value="3d">3 días</option>
-                  <option value="7d">7 días</option>
-                </select>
-              </label>
-
-              <button
-                class="toggle"
-                :class="{ 'is-on': autoRefresh }"
-                @click="toggleAuto"
-                type="button"
-                :aria-pressed="autoRefresh"
-              >
-                <span class="knob"></span>
-                <span class="label">{{ autoRefresh ? 'Auto-refresh ON' : 'Auto-refresh OFF' }}</span>
-              </button>
-
-              <button class="ghost" type="button" @click="refresh">Refrescar</button>
-              <AspectRatioControl v-model="xrayAspect" :options="aspectOptions" />
-            </div>
+      <article class="home__tile home__tile--xray">
+        <header class="home__tile-head xray__head">
+          <div class="xray__title">
+            <h3>GOES X-ray Flux (0.05–0.4 nm y 0.1–0.8 nm)</h3>
+            <p>Escala logarítmica con umbrales A/B/C/M/X. Fuente: SWPC.</p>
           </div>
 
-          <div class="panel__body" aria-live="polite">
-            <div v-if="xrError" class="panel__state panel__state--error">
-              <strong>Problema al cargar rayos X.</strong>
-              <p>{{ xrError }}</p>
+          <div class="xray__controls">
+            <div class="xray__clock">
+              <span class="tag">UTC ahora:</span>
+              <span class="mono">{{ fmtUTC(utcNow) }}</span>
             </div>
-            <div v-else-if="xrLoading" class="panel__state panel__state--loading">
-              <span class="loader" aria-hidden="true"></span>
-              <p>Cargando rayos X…</p>
-            </div>
-            <div v-else-if="!xrHasData" class="panel__state">
-              <p>No hay datos disponibles para este intervalo.</p>
+            <div class="xray__clock">
+              <span class="tag">Última muestra:</span>
+              <span class="mono">{{ fmtUTC(lastPointTime) }}</span>
             </div>
 
-            <template v-else>
-              <div class="panel__aspect-target panel__aspect-target--chart">
-                <XRayChartFigure
-                  :long-by-sat="longBySat"
-                  :short-by-sat="shortBySat"
-                  :sats="sats"
-                  :height="'100%'"
-                />
-              </div>
-              <small class="xray__foot">
-                Sats: {{ sats.join(', ') }}
-                · Pts totales Long: {{
-                  sats.reduce((acc, s) => acc + (longBySat[s]?.length || 0), 0)
-                }}
-                · Pts totales Short: {{
-                  sats.reduce((acc, s) => acc + (shortBySat[s]?.length || 0), 0)
-                }}
-                <template v-if="lastPointTime">
-                  · Último ts: {{ new Date(lastPointTime).toISOString() }}
-                </template>
-              </small>
-            </template>
+            <label class="xray__range">
+              <span class="tag">Intervalo:</span>
+              <select v-model="xrRange">
+                <option value="6h">6 h</option>
+                <option value="1d">1 día</option>
+                <option value="3d">3 días</option>
+                <option value="7d">7 días</option>
+              </select>
+            </label>
+
+            <button
+              class="toggle"
+              :class="{ 'is-on': autoRefresh }"
+              @click="toggleAuto"
+              type="button"
+              :aria-pressed="autoRefresh"
+            >
+              <span class="knob"></span>
+              <span class="label">{{ autoRefresh ? 'Auto-refresh ON' : 'Auto-refresh OFF' }}</span>
+            </button>
+
+            <button class="ghost" type="button" @click="refresh">Refrescar</button>
           </div>
-        </article>
-      </div>
+        </header>
 
-      <!-- Campo eléctrico local -->
-      <div class="home__cell home__cell--electric">
-        <ElectricFieldHomeCard />
-      </div>
-
-      <!-- Magnetómetro -->
-      <div class="home__cell home__cell--magneto">
-        <div class="panel panel--flush home__magneto-card" :style="magnetoAspectVars">
-          <MagnetometerChartOverview>
-            <template #aspect-control>
-              <AspectRatioControl v-model="magnetoAspect" :options="aspectOptions" />
-            </template>
-          </MagnetometerChartOverview>
-        </div>
-      </div>
-
-      <!-- Ionograma -->
-      <div class="home__cell home__cell--ionogram">
-        <IonogramLatest :style="ionogramAspectVars">
-          <template #aspect-control>
-            <AspectRatioControl v-model="ionogramAspect" :options="aspectOptions" />
-          </template>
-        </IonogramLatest>
-      </div>
-
-      <!-- Mapa día/noche -->
-      <div class="home__cell home__cell--map">
-        <article class="panel panel--map" :style="mapAspectVars">
-          <div class="panel__head">
-            <div>
-              <h3>Mapa día/noche</h3>
-              <p>Observa el terminador solar y penumbras actualizadas cada minuto.</p>
-            </div>
-            <AspectRatioControl v-model="mapAspect" :options="aspectOptions" />
+        <div class="home__tile-body" aria-live="polite">
+          <div v-if="xrError" class="home__tile-state home__tile-state--error">
+            <strong>Problema al cargar rayos X.</strong>
+            <p>{{ xrError }}</p>
           </div>
-          <div class="panel__body panel__body--map">
-            <div class="panel__aspect-target panel__aspect-target--map">
-              <DayNightMap
-                mode="map"
-                height="100%"
-                :autoRefreshMs="60000"
-                :showTwilight="true"
-                :showSunMoon="true"
-                nightColor="#050a18"
-                twilightColor="#0b1736"
-                :nightOpacity="0.38"
-                :twilightCivilOpacity="0.26"
-                :twilightNauticalOpacity="0.18"
-                :twilightAstroOpacity="0.12"
+          <div v-else-if="xrLoading" class="home__tile-state home__tile-state--loading">
+            <span class="loader" aria-hidden="true"></span>
+            <p>Cargando rayos X…</p>
+          </div>
+          <div v-else-if="!xrHasData" class="home__tile-state">
+            <p>No hay datos disponibles para este intervalo.</p>
+          </div>
+
+          <template v-else>
+            <div class="home__tile-visual home__tile-visual--chart">
+              <XRayChartFigure
+                :long-by-sat="longBySat"
+                :short-by-sat="shortBySat"
+                :sats="sats"
+                :height="'100%'"
               />
             </div>
-          </div>
-        </article>
-      </div>
+            <small class="xray__foot">
+              Sats: {{ sats.join(', ') }}
+              · Pts totales Long: {{
+                sats.reduce((acc, s) => acc + (longBySat[s]?.length || 0), 0)
+              }}
+              · Pts totales Short: {{
+                sats.reduce((acc, s) => acc + (shortBySat[s]?.length || 0), 0)
+              }}
+              <template v-if="lastPointTime">
+                · Último ts: {{ new Date(lastPointTime).toISOString() }}
+              </template>
+            </small>
+          </template>
+        </div>
+      </article>
+
+      <!-- Campo eléctrico local -->
+      <article class="home__tile home__tile--electric">
+        <ElectricFieldHomeCard />
+      </article>
+
+      <!-- Magnetómetro -->
+      <article class="home__tile home__tile--magneto">
+        <MagnetometerChartOverview />
+      </article>
+
+      <!-- Ionograma -->
+      <article class="home__tile home__tile--ionogram">
+        <IonogramLatest />
+      </article>
 
       <!-- Mapa día/noche -->
-      <div class="home__cell home__cell--map">
-        <article class="panel panel--map">
-          <div class="panel__head">
-            <div>
-              <h3>Mapa día/noche</h3>
-              <p>Observa el terminador solar y penumbras actualizadas cada minuto.</p>
-            </div>
+      <article class="home__tile home__tile--map">
+        <header class="home__tile-head">
+          <div>
+            <h3>Mapa día/noche</h3>
+            <p>Observa el terminador solar y penumbras actualizadas cada minuto.</p>
           </div>
-          <div class="panel__body panel__body--map">
-            <DayNightMap
-              mode="map"
-              height="clamp(360px, 55vh, 640px)"
-              :autoRefreshMs="60000"
-              :showTwilight="true"
-              :showSunMoon="true"
-              nightColor="#050a18"
-              twilightColor="#0b1736"
-              :nightOpacity="0.38"
-              :twilightCivilOpacity="0.26"
-              :twilightNauticalOpacity="0.18"
-              :twilightAstroOpacity="0.12"
-            />
-          </div>
-        </article>
-      </div>
+        </header>
+        <div class="home__tile-visual home__tile-visual--map">
+          <DayNightMap
+            mode="map"
+            height="100%"
+            :autoRefreshMs="60000"
+            :showTwilight="true"
+            :showSunMoon="true"
+          />
+        </div>
+      </article>
     </div>
   </section>
 </template>
@@ -296,152 +210,116 @@ function fmtUTC(value) {
   min-height: 0;
   display: grid;
   gap: 1rem;
-  grid-template-columns: repeat(auto-fit, minmax(min(20rem, 100%), 1fr));
-  grid-auto-rows: auto;
-  align-items: start;
+  grid-template-columns: repeat(auto-fit, minmax(22rem, 1fr));
+  align-items: stretch;
 }
 
-.home__cell { width: 100%; }
-.home__cell > * { width: 100%; }
-
-.home__cell--electric {
-  grid-column: 1 / -1;
-  display: flex;
-  justify-content: center;
-}
-
-.home__cell--electric :deep(.efield-home) {
-  width: min(1120px, 100%);
-}
-
-.home__cell--magneto {
-  grid-column: 1 / -1;
-}
-
-.home__cell--map {
-  grid-column: 1 / -1;
-}
-
-/* ---------- Panels ---------- */
-.panel {
+.home__tile {
   background: #ffffff;
   border-radius: 0.75rem;
-  padding: 0.75rem 1rem;
+  padding: 0.9rem 1rem 1rem;
   box-shadow: 0 6px 14px rgba(15, 23, 42, 0.08);
   display: flex;
   flex-direction: column;
-  gap: 0.6rem;
+  gap: 0.75rem;
   height: 100%;
   min-height: 0;
 }
 
-.panel--chart { padding-bottom: 0.75rem; }
-.panel--flush { padding: 0; background: transparent; box-shadow: none; }
-
-.panel__head {
+.home__tile-head {
   display: flex;
   justify-content: space-between;
   align-items: flex-start;
   gap: 0.75rem;
+  flex-wrap: wrap;
 }
 
-.panel__head :deep(.aspect-control) {
-  flex-shrink: 0;
+.home__tile-head h3 {
+  font-size: 1.05rem;
+  font-weight: 600;
+  color: #1f2933;
 }
 
-.panel__head > * {
-  min-width: 0;
+.home__tile-head p {
+  color: #69707d;
+  margin-top: 0.25rem;
+  font-size: 0.9rem;
 }
 
-.panel__head h3 { font-size: 1.05rem; font-weight: 600; color: #1f2933; }
-.panel__head p   { color: #69707d; margin-bottom: 0.25rem; font-size: 0.85rem; }
-
-.panel__body { flex: 0 1 auto; display: flex; flex-direction: column; min-height: 0; }
-.panel__body--map { flex: 1 1 auto; }
-.panel__body--map :deep(.tad-card) {
+.home__tile-body {
   flex: 1 1 auto;
-  min-height: 0;
-  height: 100%;
   display: flex;
   flex-direction: column;
-}
-.panel__body--map :deep(.tad-map) {
-  flex: 1 1 auto;
+  gap: 0.75rem;
   min-height: 0;
 }
 
-.panel__body--sun {
-  flex: 1 1 auto;
-  min-height: 0;
-  display: flex;
-  align-items: stretch;
-}
 
-.panel__aspect-target--sun {
-  background: #050a18;
+.home__tile-visual {
+  width: 100%;
+  height: clamp(15rem, 28vw, 21rem);
   border-radius: 0.75rem;
   overflow: hidden;
+  position: relative;
+  display: flex;
+  align-items: stretch;
+  justify-content: center;
+  background: #f8fafc;
+  border: 1px solid #e2e8f0;
 }
 
-.panel__aspect-target--sun :deep(.sunviewer) {
+.home__tile-visual > * {
   flex: 1 1 auto;
   min-height: 0;
   width: 100%;
-  display: flex;
-  flex-direction: column;
 }
 
-.panel__aspect-target--sun :deep(.sunviewer__frame) {
+.home__tile-visual--chart {
+  background: #ffffff;
+  padding: 0.4rem;
+}
+
+.home__tile-visual--chart :deep(svg),
+.home__tile-visual--chart :deep(canvas) {
+  width: 100%;
+  height: 100%;
+}
+
+.home__tile-visual--sun {
+  background: #ffffff;
+}
+
+.home__tile-visual--sun :deep(.sunviewer) {
+  display: flex;
+  flex-direction: column;
+  flex: 1 1 auto;
+  min-height: 0;
+}
+
+.home__tile-visual--sun :deep(.sunviewer__frame) {
   margin: 0;
   flex: 1 1 auto;
   min-height: 0;
-  width: 100%;
-  max-width: 100%;
 }
 
-.panel__aspect-target--sun :deep(.sunviewer__img) {
-  max-height: 100%;
+.home__tile-visual--map {
+  background: #ffffff;
 }
 
-.panel__aspect-target {
-  width: 100%;
-  aspect-ratio: var(--dashboard-aspect, 5 / 4);
+.home__tile-visual--map :deep(.tad-card) {
+  flex: 1 1 auto;
   display: flex;
-  flex: 1 1 auto;
-  min-height: 0;
-}
-
-.panel__aspect-target > * {
-  flex: 1 1 auto;
+  flex-direction: column;
   min-height: 0;
   width: 100%;
 }
 
-.panel__body--sun {
-  flex: 1 1 auto;
-  min-height: 0;
-  display: flex;
-  justify-content: center;
-}
-
-.panel__body--sun :deep(.sunviewer) {
-  width: min(100%, 34rem);
-  margin: 0 auto;
-}
-
-.panel__body--map {
+.home__tile-visual--map :deep(.tad-map) {
   flex: 1 1 auto;
   min-height: 0;
 }
 
-.panel__body--map :deep(.tad-card) {
-  width: 100%;
-  max-width: 980px;
-  margin: 0 auto;
-}
-
-/* Estados */
-.panel__state {
+.home__tile-state {
   margin: auto 0;
   display: grid;
   place-items: center;
@@ -452,20 +330,23 @@ function fmtUTC(value) {
   border: 1px dashed #d3dae6;
   border-radius: 0.75rem;
 }
-.panel__state--error { color: #b42318; border-color: rgba(180,35,24,.35); background: rgba(180,35,24,.06); }
-.panel__state--loading { color: #0f0f10; }
+
+.home__tile-state--error { color: #b42318; border-color: rgba(180,35,24,.35); background: rgba(180,35,24,.06); }
+.home__tile-state--loading { color: #0f0f10; }
 
 .loader {
   width: 1.75rem; height: 1.75rem; border-radius: 50%;
   border: 3px solid rgba(37,99,235,.2); border-top-color:#2563eb;
   animation: spin 1s linear infinite;
 }
+
 @keyframes spin { to { transform: rotate(360deg) } }
 
-.xray__head { display:flex; gap:.75rem; align-items:center; justify-content:space-between; flex-wrap:wrap; }
+.xray__head { gap: .75rem; }
 .xray__title h3 { margin-bottom: .25rem; }
 .xray__controls { display:flex; gap:.5rem; align-items:center; flex-wrap:wrap; justify-content:flex-end; }
 .xray__clock { display:flex; gap:.35rem; align-items:baseline; }
+.xray__range select { border-radius: 0.5rem; padding: 0.3rem 0.45rem; border: 1px solid #cbd5e1; }
 .tag { color:#0f0f10; font-size:.85rem; }
 .mono { font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, 'Liberation Mono', monospace; color:#0f0f10; }
 
@@ -474,6 +355,7 @@ function fmtUTC(value) {
   border:1px solid #cbd5e1; background:#f8fafc; border-radius:9999px;
   padding:.25rem .6rem .25rem .25rem; cursor:pointer; color:#0f0f10;
 }
+
 .toggle .knob { width:1.25rem; height:1.25rem; border-radius:9999px; background:#94a3b8; transition:all .2s ease; }
 .toggle.is-on { border-color:#2563eb; background:#eff6ff; }
 .toggle.is-on .knob { background:#2563eb; transform: translateX(1.1rem); }
@@ -482,20 +364,86 @@ function fmtUTC(value) {
 .ghost { background:transparent; border:1px solid #cbd5e1; color:#0f0f10; padding:.35rem .6rem; border-radius:.5rem; cursor:pointer; }
 .ghost:hover { background:#f1f5f9; }
 
-.xray__foot { margin-top:.5rem; color:#0f0f10; }
+.xray__foot { margin-top:.25rem; color:#0f0f10; display:block; }
 
-.home__magneto-card { height:100%; min-height:0; }
-.home__magneto-card :deep(.magneto) { height:100%; min-height:0; }
-.home__magneto-card :deep(.magneto__card){ height:100%; min-height:0; display:flex; flex-direction:column; }
-.home__magneto-card :deep(.magneto__body){ flex:1; min-height:0; display:flex; flex-direction:column; }
+.home__tile--electric {
+  padding: 0;
+  background: transparent;
+  box-shadow: none;
+}
+
+.home__tile--electric :deep(.efield-home) {
+  height: 100%;
+  min-height: 0;
+}
+
+.home__tile--magneto,
+.home__tile--ionogram {
+  padding: 0;
+  background: transparent;
+  box-shadow: none;
+}
+
+.home__tile--magneto > *,
+.home__tile--ionogram > * {
+  height: 100%;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.home__tile--magneto :deep(.magneto__body) {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  flex: 1 1 auto;
+  min-height: 0;
+}
+
+.home__tile--magneto :deep(.magneto__chart-wrapper) {
+  width: 100%;
+  height: clamp(15rem, 28vw, 21rem);
+  border-radius: 0.75rem;
+  overflow: hidden;
+  background: #ffffff;
+  border: 1px solid #e2e8f0;
+  display: flex;
+  align-items: stretch;
+  justify-content: center;
+}
+
+.home__tile--magneto :deep(.magneto__chart) {
+  flex: 1 1 auto;
+  min-height: 0;
+}
+
+.home__tile--ionogram :deep(.ionogram-card) {
+  height: 100%;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.home__tile--ionogram :deep(.ionogram-card__body) {
+  height: clamp(15rem, 28vw, 21rem);
+  border-radius: 0.75rem;
+  overflow: hidden;
+  border: 1px solid #e2e8f0;
+  background: #ffffff;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
 
 @media (min-width: 960px) {
-  .home__grid { grid-template-columns: repeat(auto-fit, minmax(18rem, 1fr)); }
+  .home__grid { grid-template-columns: repeat(auto-fit, minmax(20rem, 1fr)); }
 }
+
 @media (min-width: 1280px) {
-  .home__grid { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+  .home__grid { grid-template-columns: repeat(3, minmax(0, 1fr)); }
 }
+
 @media (max-width: 600px) {
-  .panel { padding: .75rem; }
+  .home__tile { padding: 0.75rem; }
 }
 </style>
