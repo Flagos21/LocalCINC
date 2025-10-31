@@ -5,6 +5,7 @@ import SunViewer from '@/components/SunViewer.vue'
 import IonogramLatest from '@/components/IonogramLatest.vue'
 import MagnetometerChartOverview from '@/components/MagnetometerChartOverview.vue'
 import ElectricFieldHomeCard from '@/components/ElectricFieldHomeCard.vue'
+import AspectRatioControl from '@/components/AspectRatioControl.vue'
 
 import XRayChartFigure from '@/components/XRayChartFigure.vue'
 import { useGoesXrays } from '@/composables/useGoesXrays'
@@ -97,181 +98,168 @@ function fmtUTC(value) {
     <div class="home__grid">
       <!-- Sol -->
       <div class="home__cell home__cell--sun">
-        <article class="panel panel--sun">
-          <div class="panel__head">
-            <h3>El Sol (SUVI)</h3>
-            <p>Vista en tiempo (casi) real del Sol por longitudes de onda EUV.</p>
-          </div>
-          <div class="panel__body panel__body--sun">
-            <SunViewer />
-          </div>
-        </article>
+        <div class="home__tile" :style="sunAspectVars">
+          <article class="panel panel--sun">
+            <div class="panel__head">
+              <h3>El Sol (SUVI)</h3>
+              <p>Vista en tiempo (casi) real del Sol por longitudes de onda EUV.</p>
+            </div>
+            <div class="panel__body panel__body--sun">
+              <div class="panel__aspect-target panel__aspect-target--sun">
+                <SunViewer />
+              </div>
+            </div>
+          </article>
+        </div>
       </div>
 
       <!-- Rayos X -->
       <div class="home__cell home__cell--xray">
-        <article class="panel panel--chart" :style="xrayAspectVars">
-          <div class="panel__head xray__head">
-            <div class="xray__title">
-              <h3>GOES X-ray Flux (0.05–0.4 nm y 0.1–0.8 nm)</h3>
-              <p>Escala logarítmica con umbrales A/B/C/M/X. Fuente: SWPC.</p>
-            </div>
-
-            <div class="xray__controls">
-              <div class="xray__clock">
-                <span class="tag">UTC ahora:</span>
-                <span class="mono">{{ fmtUTC(utcNow) }}</span>
-              </div>
-              <div class="xray__clock">
-                <span class="tag">Última muestra:</span>
-                <span class="mono">{{ fmtUTC(lastPointTime) }}</span>
+        <div class="home__tile" :style="xrayAspectVars">
+          <article class="panel panel--chart">
+            <div class="panel__head xray__head">
+              <div class="xray__title">
+                <h3>GOES X-ray Flux (0.05–0.4 nm y 0.1–0.8 nm)</h3>
+                <p>Escala logarítmica con umbrales A/B/C/M/X. Fuente: SWPC.</p>
               </div>
 
-              <label class="xray__range">
-                <span class="tag">Intervalo:</span>
-                <select v-model="xrRange">
-                  <option value="6h">6 h</option>
-                  <option value="1d">1 día</option>
-                  <option value="3d">3 días</option>
-                  <option value="7d">7 días</option>
-                </select>
-              </label>
+              <div class="xray__controls">
+                <div class="xray__clock">
+                  <span class="tag">UTC ahora:</span>
+                  <span class="mono">{{ fmtUTC(utcNow) }}</span>
+                </div>
+                <div class="xray__clock">
+                  <span class="tag">Última muestra:</span>
+                  <span class="mono">{{ fmtUTC(lastPointTime) }}</span>
+                </div>
 
-              <button
-                class="toggle"
-                :class="{ 'is-on': autoRefresh }"
-                @click="toggleAuto"
-                type="button"
-                :aria-pressed="autoRefresh"
-              >
-                <span class="knob"></span>
-                <span class="label">{{ autoRefresh ? 'Auto-refresh ON' : 'Auto-refresh OFF' }}</span>
-              </button>
+                <label class="xray__range">
+                  <span class="tag">Intervalo:</span>
+                  <select v-model="xrRange">
+                    <option value="6h">6 h</option>
+                    <option value="1d">1 día</option>
+                    <option value="3d">3 días</option>
+                    <option value="7d">7 días</option>
+                  </select>
+                </label>
 
-              <button class="ghost" type="button" @click="refresh">Refrescar</button>
-              <AspectRatioControl v-model="xrayAspect" :options="aspectOptions" />
-            </div>
-          </div>
+                <button
+                  class="toggle"
+                  :class="{ 'is-on': autoRefresh }"
+                  @click="toggleAuto"
+                  type="button"
+                  :aria-pressed="autoRefresh"
+                >
+                  <span class="knob"></span>
+                  <span class="label">{{ autoRefresh ? 'Auto-refresh ON' : 'Auto-refresh OFF' }}</span>
+                </button>
 
-          <div class="panel__body" aria-live="polite">
-            <div v-if="xrError" class="panel__state panel__state--error">
-              <strong>Problema al cargar rayos X.</strong>
-              <p>{{ xrError }}</p>
-            </div>
-            <div v-else-if="xrLoading" class="panel__state panel__state--loading">
-              <span class="loader" aria-hidden="true"></span>
-              <p>Cargando rayos X…</p>
-            </div>
-            <div v-else-if="!xrHasData" class="panel__state">
-              <p>No hay datos disponibles para este intervalo.</p>
-            </div>
-
-            <template v-else>
-              <div class="panel__aspect-target panel__aspect-target--chart">
-                <XRayChartFigure
-                  :long-by-sat="longBySat"
-                  :short-by-sat="shortBySat"
-                  :sats="sats"
-                  :height="'100%'"
-                />
+                <button class="ghost" type="button" @click="refresh">Refrescar</button>
+                <AspectRatioControl v-model="xrayAspect" :options="aspectOptions" />
               </div>
-              <small class="xray__foot">
-                Sats: {{ sats.join(', ') }}
-                · Pts totales Long: {{
-                  sats.reduce((acc, s) => acc + (longBySat[s]?.length || 0), 0)
-                }}
-                · Pts totales Short: {{
-                  sats.reduce((acc, s) => acc + (shortBySat[s]?.length || 0), 0)
-                }}
-                <template v-if="lastPointTime">
-                  · Último ts: {{ new Date(lastPointTime).toISOString() }}
-                </template>
-              </small>
-            </template>
-          </div>
-        </article>
+            </div>
+
+            <div class="panel__body" aria-live="polite">
+              <div v-if="xrError" class="panel__state panel__state--error">
+                <strong>Problema al cargar rayos X.</strong>
+                <p>{{ xrError }}</p>
+              </div>
+              <div v-else-if="xrLoading" class="panel__state panel__state--loading">
+                <span class="loader" aria-hidden="true"></span>
+                <p>Cargando rayos X…</p>
+              </div>
+              <div v-else-if="!xrHasData" class="panel__state">
+                <p>No hay datos disponibles para este intervalo.</p>
+              </div>
+
+              <template v-else>
+                <div class="panel__aspect-target panel__aspect-target--chart">
+                  <XRayChartFigure
+                    :long-by-sat="longBySat"
+                    :short-by-sat="shortBySat"
+                    :sats="sats"
+                    :height="'100%'"
+                  />
+                </div>
+                <small class="xray__foot">
+                  Sats: {{ sats.join(', ') }}
+                  · Pts totales Long: {{
+                    sats.reduce((acc, s) => acc + (longBySat[s]?.length || 0), 0)
+                  }}
+                  · Pts totales Short: {{
+                    sats.reduce((acc, s) => acc + (shortBySat[s]?.length || 0), 0)
+                  }}
+                  <template v-if="lastPointTime">
+                    · Último ts: {{ new Date(lastPointTime).toISOString() }}
+                  </template>
+                </small>
+              </template>
+            </div>
+          </article>
+        </div>
       </div>
 
       <!-- Campo eléctrico local -->
       <div class="home__cell home__cell--electric">
-        <ElectricFieldHomeCard />
+        <div class="home__tile" :style="electricAspectVars">
+          <ElectricFieldHomeCard />
+        </div>
       </div>
 
       <!-- Magnetómetro -->
       <div class="home__cell home__cell--magneto">
-        <div class="panel panel--flush home__magneto-card" :style="magnetoAspectVars">
-          <MagnetometerChartOverview>
-            <template #aspect-control>
-              <AspectRatioControl v-model="magnetoAspect" :options="aspectOptions" />
-            </template>
-          </MagnetometerChartOverview>
+        <div class="home__tile" :style="magnetoAspectVars">
+          <div class="panel panel--flush home__magneto-card">
+            <MagnetometerChartOverview>
+              <template #aspect-control>
+                <AspectRatioControl v-model="magnetoAspect" :options="aspectOptions" />
+              </template>
+            </MagnetometerChartOverview>
+          </div>
         </div>
       </div>
 
       <!-- Ionograma -->
       <div class="home__cell home__cell--ionogram">
-        <IonogramLatest :style="ionogramAspectVars">
-          <template #aspect-control>
-            <AspectRatioControl v-model="ionogramAspect" :options="aspectOptions" />
-          </template>
-        </IonogramLatest>
+        <div class="home__tile" :style="ionogramAspectVars">
+          <IonogramLatest>
+            <template #aspect-control>
+              <AspectRatioControl v-model="ionogramAspect" :options="aspectOptions" />
+            </template>
+          </IonogramLatest>
+        </div>
       </div>
 
       <!-- Mapa día/noche -->
       <div class="home__cell home__cell--map">
-        <article class="panel panel--map" :style="mapAspectVars">
-          <div class="panel__head">
-            <div>
-              <h3>Mapa día/noche</h3>
-              <p>Observa el terminador solar y penumbras actualizadas cada minuto.</p>
+        <div class="home__tile" :style="mapAspectVars">
+          <article class="panel panel--map">
+            <div class="panel__head">
+              <div>
+                <h3>Mapa día/noche</h3>
+                <p>Observa el terminador solar y penumbras actualizadas cada minuto.</p>
+              </div>
+              <AspectRatioControl v-model="mapAspect" :options="aspectOptions" />
             </div>
-            <AspectRatioControl v-model="mapAspect" :options="aspectOptions" />
-          </div>
-          <div class="panel__body panel__body--map">
-            <div class="panel__aspect-target panel__aspect-target--map">
-              <DayNightMap
-                mode="map"
-                height="100%"
-                :autoRefreshMs="60000"
-                :showTwilight="true"
-                :showSunMoon="true"
-                nightColor="#050a18"
-                twilightColor="#0b1736"
-                :nightOpacity="0.38"
-                :twilightCivilOpacity="0.26"
-                :twilightNauticalOpacity="0.18"
-                :twilightAstroOpacity="0.12"
-              />
+            <div class="panel__body panel__body--map">
+              <div class="panel__aspect-target panel__aspect-target--map">
+                <DayNightMap
+                  mode="map"
+                  height="100%"
+                  :autoRefreshMs="60000"
+                  :showTwilight="true"
+                  :showSunMoon="true"
+                  nightColor="#050a18"
+                  twilightColor="#0b1736"
+                  :nightOpacity="0.38"
+                  :twilightCivilOpacity="0.26"
+                  :twilightNauticalOpacity="0.18"
+                  :twilightAstroOpacity="0.12"
+                />
+              </div>
             </div>
-          </div>
-        </article>
-      </div>
-
-      <!-- Mapa día/noche -->
-      <div class="home__cell home__cell--map">
-        <article class="panel panel--map">
-          <div class="panel__head">
-            <div>
-              <h3>Mapa día/noche</h3>
-              <p>Observa el terminador solar y penumbras actualizadas cada minuto.</p>
-            </div>
-          </div>
-          <div class="panel__body panel__body--map">
-            <DayNightMap
-              mode="map"
-              height="clamp(360px, 55vh, 640px)"
-              :autoRefreshMs="60000"
-              :showTwilight="true"
-              :showSunMoon="true"
-              nightColor="#050a18"
-              twilightColor="#0b1736"
-              :nightOpacity="0.38"
-              :twilightCivilOpacity="0.26"
-              :twilightNauticalOpacity="0.18"
-              :twilightAstroOpacity="0.12"
-            />
-          </div>
-        </article>
+          </article>
+        </div>
       </div>
     </div>
   </section>
@@ -297,29 +285,27 @@ function fmtUTC(value) {
   display: grid;
   gap: 1rem;
   grid-template-columns: repeat(auto-fit, minmax(min(20rem, 100%), 1fr));
-  grid-auto-rows: auto;
-  align-items: start;
+  grid-auto-rows: 1fr;
+  align-items: stretch;
 }
 
-.home__cell { width: 100%; }
+.home__cell { width: 100%; display: flex; }
 .home__cell > * { width: 100%; }
 
-.home__cell--electric {
-  grid-column: 1 / -1;
+.home__tile {
+  width: 100%;
+  aspect-ratio: var(--dashboard-aspect, 5 / 4);
   display: flex;
-  justify-content: center;
+  flex-direction: column;
+  min-height: 0;
+  background: transparent;
+  overflow: hidden;
 }
 
-.home__cell--electric :deep(.efield-home) {
-  width: min(1120px, 100%);
-}
-
-.home__cell--magneto {
-  grid-column: 1 / -1;
-}
-
-.home__cell--map {
-  grid-column: 1 / -1;
+.home__tile > * {
+  flex: 1 1 auto;
+  min-height: 0;
+  width: 100%;
 }
 
 /* ---------- Panels ---------- */
@@ -356,7 +342,13 @@ function fmtUTC(value) {
 .panel__head h3 { font-size: 1.05rem; font-weight: 600; color: #1f2933; }
 .panel__head p   { color: #69707d; margin-bottom: 0.25rem; font-size: 0.85rem; }
 
-.panel__body { flex: 0 1 auto; display: flex; flex-direction: column; min-height: 0; }
+.panel__body { flex: 1 1 auto; display: flex; flex-direction: column; min-height: 0; }
+.panel__body--sun {
+  flex: 1 1 auto;
+  min-height: 0;
+  display: flex;
+}
+
 .panel__body--map { flex: 1 1 auto; }
 .panel__body--map :deep(.tad-card) {
   flex: 1 1 auto;
@@ -364,17 +356,26 @@ function fmtUTC(value) {
   height: 100%;
   display: flex;
   flex-direction: column;
+  width: 100%;
+  max-width: 980px;
+  margin: 0 auto;
 }
 .panel__body--map :deep(.tad-map) {
   flex: 1 1 auto;
   min-height: 0;
 }
 
-.panel__body--sun {
+.panel__aspect-target {
+  width: 100%;
+  display: flex;
   flex: 1 1 auto;
   min-height: 0;
-  display: flex;
-  align-items: stretch;
+}
+
+.panel__aspect-target > * {
+  flex: 1 1 auto;
+  min-height: 0;
+  width: 100%;
 }
 
 .panel__aspect-target--sun {
@@ -401,43 +402,6 @@ function fmtUTC(value) {
 
 .panel__aspect-target--sun :deep(.sunviewer__img) {
   max-height: 100%;
-}
-
-.panel__aspect-target {
-  width: 100%;
-  aspect-ratio: var(--dashboard-aspect, 5 / 4);
-  display: flex;
-  flex: 1 1 auto;
-  min-height: 0;
-}
-
-.panel__aspect-target > * {
-  flex: 1 1 auto;
-  min-height: 0;
-  width: 100%;
-}
-
-.panel__body--sun {
-  flex: 1 1 auto;
-  min-height: 0;
-  display: flex;
-  justify-content: center;
-}
-
-.panel__body--sun :deep(.sunviewer) {
-  width: min(100%, 34rem);
-  margin: 0 auto;
-}
-
-.panel__body--map {
-  flex: 1 1 auto;
-  min-height: 0;
-}
-
-.panel__body--map :deep(.tad-card) {
-  width: 100%;
-  max-width: 980px;
-  margin: 0 auto;
 }
 
 /* Estados */
