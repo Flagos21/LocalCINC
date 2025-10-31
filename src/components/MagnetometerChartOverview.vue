@@ -26,7 +26,7 @@ const dataExtent = ref(null)
 const chartOptions = computed(() => ({
   chart: {
     type: 'line',
-    height: 420,
+    height: '100%',
     toolbar: { show: true, tools: { download: true, selection: true, zoom: true, zoomin: true, zoomout: true, pan: true } },
     background: 'transparent',
     foreColor: '#0f172a',

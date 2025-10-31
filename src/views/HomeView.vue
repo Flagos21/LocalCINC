@@ -107,7 +107,9 @@ function fmtUTC(value) {
             <AspectRatioControl v-model="sunAspect" :options="aspectOptions" />
           </header>
           <div class="panel__body panel__body--sun">
-            <SunViewer />
+            <div class="panel__aspect-target panel__aspect-target--sun">
+              <SunViewer />
+            </div>
           </div>
         </article>
       </div>
@@ -350,6 +352,32 @@ function fmtUTC(value) {
   align-items: stretch;
 }
 
+.panel__aspect-target--sun {
+  background: #050a18;
+  border-radius: 0.75rem;
+  overflow: hidden;
+}
+
+.panel__aspect-target--sun :deep(.sunviewer) {
+  flex: 1 1 auto;
+  min-height: 0;
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+}
+
+.panel__aspect-target--sun :deep(.sunviewer__frame) {
+  margin: 0;
+  flex: 1 1 auto;
+  min-height: 0;
+  width: 100%;
+  max-width: 100%;
+}
+
+.panel__aspect-target--sun :deep(.sunviewer__img) {
+  max-height: 100%;
+}
+
 .panel__aspect-target {
   width: 100%;
   aspect-ratio: var(--dashboard-aspect, 5 / 4);
@@ -412,7 +440,7 @@ function fmtUTC(value) {
 .home__magneto-card :deep(.magneto) { height:100%; min-height:0; }
 .home__magneto-card :deep(.magneto__card){ height:100%; min-height:0; display:flex; flex-direction:column; }
 .home__magneto-card :deep(.magneto__body){ flex:1; min-height:0; display:flex; flex-direction:column; }
-.home__magneto-card :deep(.magneto__chart-wrapper){ flex:1; min-height:0; }
+.home__magneto-card :deep(.magneto__chart-wrapper){ flex:1; min-height:0; aspect-ratio: var(--dashboard-aspect, 5 / 4); display:flex; flex-direction:column; }
 .home__magneto-card :deep(.magneto__chart){ height:100%; min-height:0; }
 
 @media (min-width: 960px) {

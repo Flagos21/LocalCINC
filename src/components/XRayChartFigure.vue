@@ -116,7 +116,7 @@ watch(() => [props.longBySat, props.shortBySat, props.sats], rebuildSeries, { de
 const options = computed(() => ({
   chart: {
     type: 'line',
-    height: 380,
+    height: '100%',
     animations: { enabled: true, easing: 'linear', dynamicAnimation: { speed: 300 } },
     toolbar: { show: true, tools: { download: true, selection: true, zoom: true, zoomin: true, zoomout: true, pan: true } },
     zoom: { enabled: true, type: 'x' },

@@ -267,20 +267,20 @@ function onSeek(evt) {
   position: relative;
   width: 100%;
   max-width: 100%;
-  aspect-ratio: var(--dashboard-aspect, 1);
+  aspect-ratio: var(--dashboard-aspect, 5 / 4);
   border-radius: 0.75rem;
   background: #0b1020;
   overflow: hidden;
   display: grid;
   place-items: center;
-  flex: 1;
+  flex: 1 1 auto;
   min-height: 0;
-  margin: 0 auto;
+  margin: 0;
 }
 .sunviewer__img {
   width: 100%;
   height: 100%;
-  max-height: min(70vh, 34rem);
+  max-height: 100%;
   object-fit: contain;
   display: block;
 }
