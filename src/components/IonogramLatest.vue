@@ -60,9 +60,12 @@ onBeforeUnmount(() => {
         <h3>Ionograma más reciente</h3>
         <p>Actualización automática cada 60 segundos.</p>
       </div>
-      <button class="ionogram-card__refresh" type="button" @click="loadLatest" :disabled="isLoading">
-        {{ isLoading ? 'Actualizando…' : 'Actualizar' }}
-      </button>
+      <div class="ionogram-card__tools">
+        <button class="ionogram-card__refresh" type="button" @click="loadLatest" :disabled="isLoading">
+          {{ isLoading ? 'Actualizando…' : 'Actualizar' }}
+        </button>
+        <slot name="aspect-control" />
+      </div>
     </header>
 
     <div class="ionogram-card__body">
@@ -95,7 +98,7 @@ onBeforeUnmount(() => {
   padding: 0.75rem 1rem 1rem;
   box-shadow: 0 6px 14px rgba(15, 23, 42, 0.08);
   min-height: 0;
-  height: auto;
+  height: 100%;
 }
 
 .ionogram-card__header {
@@ -103,6 +106,18 @@ onBeforeUnmount(() => {
   justify-content: space-between;
   align-items: flex-start;
   gap: 0.75rem;
+}
+
+.ionogram-card__tools {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  justify-content: flex-end;
+  flex-wrap: wrap;
+}
+
+.ionogram-card__tools :deep(.aspect-control) {
+  flex-shrink: 0;
 }
 
 .ionogram-card__header h3 {
@@ -145,6 +160,7 @@ onBeforeUnmount(() => {
   place-items: center;
   overflow: hidden;
   min-height: 0;
+  aspect-ratio: var(--dashboard-aspect, 5 / 4);
 }
 
 .ionogram-card__image {
