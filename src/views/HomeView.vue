@@ -118,50 +118,41 @@ function fmtUTC(value) {
               <p>Escala logarítmica con umbrales A/B/C/M/X. Fuente: SWPC.</p>
             </div>
 
-            <div class="xray__controls">
-              <div class="xray__clock">
-                <span class="tag">UTC ahora:</span>
-                <span class="mono">{{ fmtUTC(utcNow) }}</span>
+            <div class="panel__body" aria-live="polite">
+              <div v-if="xrError" class="panel__state panel__state--error">
+                <strong>Problema al cargar rayos X.</strong>
+                <p>{{ xrError }}</p>
               </div>
-              <div class="xray__clock">
-                <span class="tag">Última muestra:</span>
-                <span class="mono">{{ fmtUTC(lastPointTime) }}</span>
+              <div v-else-if="xrLoading" class="panel__state panel__state--loading">
+                <span class="loader" aria-hidden="true"></span>
+                <p>Cargando rayos X…</p>
+              </div>
+              <div v-else-if="!xrHasData" class="panel__state">
+                <p>No hay datos disponibles para este intervalo.</p>
               </div>
 
-              <label class="xray__range">
-                <span class="tag">Intervalo:</span>
-                <select v-model="xrRange">
-                  <option value="6h">6 h</option>
-                  <option value="1d">1 día</option>
-                  <option value="3d">3 días</option>
-                  <option value="7d">7 días</option>
-                </select>
-              </label>
-
-              <button
-                class="toggle"
-                :class="{ 'is-on': autoRefresh }"
-                @click="toggleAuto"
-                type="button"
-                :aria-pressed="autoRefresh"
-              >
-                <span class="knob"></span>
-                <span class="label">{{ autoRefresh ? 'Auto-refresh ON' : 'Auto-refresh OFF' }}</span>
-              </button>
-
-              <button class="ghost" type="button" @click="refresh">Refrescar</button>
-              <AspectRatioControl v-model="xrayAspect" :options="aspectOptions" />
-            </div>
-          </div>
-
-          <div class="panel__body" aria-live="polite">
-            <div v-if="xrError" class="panel__state panel__state--error">
-              <strong>Problema al cargar rayos X.</strong>
-              <p>{{ xrError }}</p>
-            </div>
-            <div v-else-if="xrLoading" class="panel__state panel__state--loading">
-              <span class="loader" aria-hidden="true"></span>
-              <p>Cargando rayos X…</p>
+              <template v-else>
+                <div class="panel__aspect-target panel__aspect-target--chart">
+                  <XRayChartFigure
+                    :long-by-sat="longBySat"
+                    :short-by-sat="shortBySat"
+                    :sats="sats"
+                    :height="'100%'"
+                  />
+                </div>
+                <small class="xray__foot">
+                  Sats: {{ sats.join(', ') }}
+                  · Pts totales Long: {{
+                    sats.reduce((acc, s) => acc + (longBySat[s]?.length || 0), 0)
+                  }}
+                  · Pts totales Short: {{
+                    sats.reduce((acc, s) => acc + (shortBySat[s]?.length || 0), 0)
+                  }}
+                  <template v-if="lastPointTime">
+                    · Último ts: {{ new Date(lastPointTime).toISOString() }}
+                  </template>
+                </small>
+              </template>
             </div>
             <div v-else-if="!xrHasData" class="panel__state">
               <p>No hay datos disponibles para este intervalo.</p>
@@ -195,7 +186,9 @@ function fmtUTC(value) {
 
       <!-- Campo eléctrico local -->
       <div class="home__cell home__cell--electric">
-        <ElectricFieldHomeCard />
+        <div class="home__tile" :style="electricAspectVars">
+          <ElectricFieldHomeCard />
+        </div>
       </div>
 
       <!-- Magnetómetro -->
@@ -209,11 +202,13 @@ function fmtUTC(value) {
 
       <!-- Ionograma -->
       <div class="home__cell home__cell--ionogram">
-        <IonogramLatest :style="ionogramAspectVars">
-          <template #aspect-control>
-            <AspectRatioControl v-model="ionogramAspect" :options="aspectOptions" />
-          </template>
-        </IonogramLatest>
+        <div class="home__tile" :style="ionogramAspectVars">
+          <IonogramLatest>
+            <template #aspect-control>
+              <AspectRatioControl v-model="ionogramAspect" :options="aspectOptions" />
+            </template>
+          </IonogramLatest>
+        </div>
       </div>
 
       <!-- Mapa día/noche -->
