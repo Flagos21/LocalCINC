@@ -1,5 +1,5 @@
 <script setup>
-import { ref, computed, watch, onMounted } from 'vue'
+import { ref, computed, watch } from 'vue'
 import VueApexCharts from 'vue3-apexcharts'
 
 import dayjs from '@/utils/dayjs'
@@ -20,6 +20,7 @@ const from = ref('')
 const to = ref('')
 const availableRange = ref(null)
 const shouldApplyFullRange = ref(false)
+const hasInitializedPreset = ref(false)
 
 const {
   labels,
@@ -160,6 +161,31 @@ function toTimestamp(value) {
   return Number.isFinite(ts) ? ts : null
 }
 
+function resolveAnchorEnd(explicitEnd) {
+  const candidates = [
+    explicitEnd,
+    availableRange.value?.end,
+    meta.value?.availableRange?.end,
+    meta.value?.range?.end,
+    meta.value?.to,
+    dataExtent.value?.end,
+    labels.value?.[labels.value.length - 1]
+  ]
+
+  for (const candidate of candidates) {
+    if (!candidate) {
+      continue
+    }
+
+    const parsed = dayjs(candidate)
+    if (parsed.isValid()) {
+      return parsed
+    }
+  }
+
+  return dayjs()
+}
+
 function setWindow({ start, end }) {
   const startDate = dayjs(start)
   const endDate = dayjs(end)
@@ -190,9 +216,10 @@ function setWindow({ start, end }) {
 
   from.value = clampedStart.utc().format('YYYY-MM-DDTHH:mm:ss[Z]')
   to.value = clampedEnd.utc().format('YYYY-MM-DDTHH:mm:ss[Z]')
+  hasInitializedPreset.value = true
 }
 
-function applyPreset(id) {
+function applyPreset(id, { anchorEnd } = {}) {
   const preset = presets.find((item) => item.id === id)
   if (!preset) {
     return
@@ -211,8 +238,8 @@ function applyPreset(id) {
     return
   }
 
-  const now = dayjs()
-  const end = now.endOf('minute')
+  const anchor = resolveAnchorEnd(anchorEnd)
+  const end = anchor.endOf('minute')
   const start = end.subtract(preset.duration.amount, preset.duration.unit).startOf('minute')
 
   setWindow({ start, end })
@@ -308,12 +335,20 @@ watch(meta, (value) => {
     if (shouldApplyFullRange.value) {
       setWindow({ start: value.availableRange.start, end: value.availableRange.end })
       shouldApplyFullRange.value = false
+      return
     }
   }
-})
 
-onMounted(() => {
-  applyPreset(activePreset.value)
+  if (!hasInitializedPreset.value) {
+    const fallbackEnd =
+      value?.availableRange?.end ||
+      value?.range?.end ||
+      value?.to ||
+      dataExtent.value?.end ||
+      labels.value?.[labels.value.length - 1]
+
+    applyPreset(activePreset.value, { anchorEnd: fallbackEnd })
+  }
 })
 </script>
 

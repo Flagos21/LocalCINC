@@ -189,8 +189,7 @@ function fmtUTC(value) {
               </small>
             </template>
           </div>
-          </article>
-        </DashboardAspectWrapper>
+        </article>
       </div>
 
       <!-- Campo eléctrico local -->
