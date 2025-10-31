@@ -5,7 +5,6 @@ import SunViewer from '@/components/SunViewer.vue'
 import IonogramLatest from '@/components/IonogramLatest.vue'
 import MagnetometerChartOverview from '@/components/MagnetometerChartOverview.vue'
 import ElectricFieldHomeCard from '@/components/ElectricFieldHomeCard.vue'
-import AspectRatioControl from '@/components/AspectRatioControl.vue'
 
 import XRayChartFigure from '@/components/XRayChartFigure.vue'
 import { useGoesXrays } from '@/composables/useGoesXrays'
@@ -98,18 +97,13 @@ function fmtUTC(value) {
     <div class="home__grid">
       <!-- Sol -->
       <div class="home__cell home__cell--sun">
-        <article class="panel" :style="sunAspectVars">
-          <header class="panel__head">
-            <div>
-              <h3>El Sol (SUVI)</h3>
-              <p>Vista en tiempo (casi) real del Sol por longitudes de onda EUV.</p>
-            </div>
-            <AspectRatioControl v-model="sunAspect" :options="aspectOptions" />
-          </header>
+        <article class="panel panel--sun">
+          <div class="panel__head">
+            <h3>El Sol (SUVI)</h3>
+            <p>Vista en tiempo (casi) real del Sol por longitudes de onda EUV.</p>
+          </div>
           <div class="panel__body panel__body--sun">
-            <div class="panel__aspect-target panel__aspect-target--sun">
-              <SunViewer />
-            </div>
+            <SunViewer />
           </div>
         </article>
       </div>
@@ -201,11 +195,7 @@ function fmtUTC(value) {
 
       <!-- Campo eléctrico local -->
       <div class="home__cell home__cell--electric">
-        <ElectricFieldHomeCard :style="electricAspectVars">
-          <template #aspect-control>
-            <AspectRatioControl v-model="electricAspect" :options="aspectOptions" />
-          </template>
-        </ElectricFieldHomeCard>
+        <ElectricFieldHomeCard />
       </div>
 
       <!-- Magnetómetro -->
@@ -257,6 +247,33 @@ function fmtUTC(value) {
           </div>
         </article>
       </div>
+
+      <!-- Mapa día/noche -->
+      <div class="home__cell home__cell--map">
+        <article class="panel panel--map">
+          <div class="panel__head">
+            <div>
+              <h3>Mapa día/noche</h3>
+              <p>Observa el terminador solar y penumbras actualizadas cada minuto.</p>
+            </div>
+          </div>
+          <div class="panel__body panel__body--map">
+            <DayNightMap
+              mode="map"
+              height="clamp(360px, 55vh, 640px)"
+              :autoRefreshMs="60000"
+              :showTwilight="true"
+              :showSunMoon="true"
+              nightColor="#050a18"
+              twilightColor="#0b1736"
+              :nightOpacity="0.38"
+              :twilightCivilOpacity="0.26"
+              :twilightNauticalOpacity="0.18"
+              :twilightAstroOpacity="0.12"
+            />
+          </div>
+        </article>
+      </div>
     </div>
   </section>
 </template>
@@ -285,16 +302,25 @@ function fmtUTC(value) {
   align-items: start;
 }
 
-.home__cell {
-  width: 100%;
-  min-height: 0;
+.home__cell { width: 100%; }
+.home__cell > * { width: 100%; }
+
+.home__cell--electric {
+  grid-column: 1 / -1;
   display: flex;
+  justify-content: center;
 }
 
-.home__cell > * {
-  flex: 1 1 auto;
-  min-height: 0;
-  width: 100%;
+.home__cell--electric :deep(.efield-home) {
+  width: min(1120px, 100%);
+}
+
+.home__cell--magneto {
+  grid-column: 1 / -1;
+}
+
+.home__cell--map {
+  grid-column: 1 / -1;
 }
 
 /* ---------- Panels ---------- */
@@ -392,6 +418,29 @@ function fmtUTC(value) {
   width: 100%;
 }
 
+.panel__body--sun {
+  flex: 1 1 auto;
+  min-height: 0;
+  display: flex;
+  justify-content: center;
+}
+
+.panel__body--sun :deep(.sunviewer) {
+  width: min(100%, 34rem);
+  margin: 0 auto;
+}
+
+.panel__body--map {
+  flex: 1 1 auto;
+  min-height: 0;
+}
+
+.panel__body--map :deep(.tad-card) {
+  width: 100%;
+  max-width: 980px;
+  margin: 0 auto;
+}
+
 /* Estados */
 .panel__state {
   margin: auto 0;
@@ -440,8 +489,6 @@ function fmtUTC(value) {
 .home__magneto-card :deep(.magneto) { height:100%; min-height:0; }
 .home__magneto-card :deep(.magneto__card){ height:100%; min-height:0; display:flex; flex-direction:column; }
 .home__magneto-card :deep(.magneto__body){ flex:1; min-height:0; display:flex; flex-direction:column; }
-.home__magneto-card :deep(.magneto__chart-wrapper){ flex:1; min-height:0; aspect-ratio: var(--dashboard-aspect, 5 / 4); display:flex; flex-direction:column; }
-.home__magneto-card :deep(.magneto__chart){ height:100%; min-height:0; }
 
 @media (min-width: 960px) {
   .home__grid { grid-template-columns: repeat(auto-fit, minmax(18rem, 1fr)); }

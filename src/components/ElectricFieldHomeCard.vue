@@ -338,7 +338,6 @@ onMounted(() => {
             {{ preset.label }}
           </button>
         </div>
-        <slot name="aspect-control" />
       </div>
     </header>
 
@@ -402,10 +401,6 @@ onMounted(() => {
   gap: 0.65rem;
   flex-wrap: wrap;
   justify-content: flex-end;
-}
-
-.efield-home__head-actions :deep(.aspect-control) {
-  flex-shrink: 0;
 }
 
 .efield-home__head h3 {
@@ -479,8 +474,7 @@ onMounted(() => {
 .efield-home__chart {
   position: relative;
   flex: 1 1 auto;
-  min-height: 0;
-  aspect-ratio: var(--dashboard-aspect, 5 / 4);
+  min-height: clamp(260px, 45vh, 520px);
   display: flex;
 }
 
