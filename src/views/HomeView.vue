@@ -42,7 +42,6 @@ const defaultAspect = aspectOptions[0].value
 
 const sunAspect = ref(defaultAspect)
 const xrayAspect = ref(defaultAspect)
-const electricAspect = ref(defaultAspect)
 const magnetoAspect = ref(defaultAspect)
 const ionogramAspect = ref(defaultAspect)
 const mapAspect = ref(defaultAspect)
@@ -61,7 +60,6 @@ function toAspectCss(value) {
 
 const sunAspectVars = computed(() => ({ '--dashboard-aspect': toAspectCss(sunAspect.value) }))
 const xrayAspectVars = computed(() => ({ '--dashboard-aspect': toAspectCss(xrayAspect.value) }))
-const electricAspectVars = computed(() => ({ '--dashboard-aspect': toAspectCss(electricAspect.value) }))
 const magnetoAspectVars = computed(() => ({ '--dashboard-aspect': toAspectCss(magnetoAspect.value) }))
 const ionogramAspectVars = computed(() => ({ '--dashboard-aspect': toAspectCss(ionogramAspect.value) }))
 const mapAspectVars = computed(() => ({ '--dashboard-aspect': toAspectCss(mapAspect.value) }))
@@ -98,65 +96,26 @@ function fmtUTC(value) {
     <div class="home__grid">
       <!-- Sol -->
       <div class="home__cell home__cell--sun">
-        <div class="home__tile" :style="sunAspectVars">
-          <article class="panel panel--sun">
-            <div class="panel__head">
-              <h3>El Sol (SUVI)</h3>
-              <p>Vista en tiempo (casi) real del Sol por longitudes de onda EUV.</p>
+        <article class="panel panel--sun">
+          <div class="panel__head">
+            <h3>El Sol (SUVI)</h3>
+            <p>Vista en tiempo (casi) real del Sol por longitudes de onda EUV.</p>
+          </div>
+          <div class="panel__body panel__body--sun">
+            <div class="panel__aspect-target panel__aspect-target--sun" :style="sunAspectVars">
+              <SunViewer />
             </div>
-            <div class="panel__body panel__body--sun">
-              <div class="panel__aspect-target panel__aspect-target--sun">
-                <SunViewer />
-              </div>
-            </div>
-          </article>
-        </div>
+          </div>
+        </article>
       </div>
 
       <!-- Rayos X -->
       <div class="home__cell home__cell--xray">
-        <div class="home__tile" :style="xrayAspectVars">
-          <article class="panel panel--chart">
-            <div class="panel__head xray__head">
-              <div class="xray__title">
-                <h3>GOES X-ray Flux (0.05–0.4 nm y 0.1–0.8 nm)</h3>
-                <p>Escala logarítmica con umbrales A/B/C/M/X. Fuente: SWPC.</p>
-              </div>
-
-              <div class="xray__controls">
-                <div class="xray__clock">
-                  <span class="tag">UTC ahora:</span>
-                  <span class="mono">{{ fmtUTC(utcNow) }}</span>
-                </div>
-                <div class="xray__clock">
-                  <span class="tag">Última muestra:</span>
-                  <span class="mono">{{ fmtUTC(lastPointTime) }}</span>
-                </div>
-
-                <label class="xray__range">
-                  <span class="tag">Intervalo:</span>
-                  <select v-model="xrRange">
-                    <option value="6h">6 h</option>
-                    <option value="1d">1 día</option>
-                    <option value="3d">3 días</option>
-                    <option value="7d">7 días</option>
-                  </select>
-                </label>
-
-                <button
-                  class="toggle"
-                  :class="{ 'is-on': autoRefresh }"
-                  @click="toggleAuto"
-                  type="button"
-                  :aria-pressed="autoRefresh"
-                >
-                  <span class="knob"></span>
-                  <span class="label">{{ autoRefresh ? 'Auto-refresh ON' : 'Auto-refresh OFF' }}</span>
-                </button>
-
-                <button class="ghost" type="button" @click="refresh">Refrescar</button>
-                <AspectRatioControl v-model="xrayAspect" :options="aspectOptions" />
-              </div>
+        <article class="panel panel--chart">
+          <div class="panel__head xray__head">
+            <div class="xray__title">
+              <h3>GOES X-ray Flux (0.05–0.4 nm y 0.1–0.8 nm)</h3>
+              <p>Escala logarítmica con umbrales A/B/C/M/X. Fuente: SWPC.</p>
             </div>
 
             <div class="panel__body" aria-live="polite">
@@ -195,8 +154,34 @@ function fmtUTC(value) {
                 </small>
               </template>
             </div>
-          </article>
-        </div>
+            <div v-else-if="!xrHasData" class="panel__state">
+              <p>No hay datos disponibles para este intervalo.</p>
+            </div>
+
+            <template v-else>
+              <div class="panel__aspect-target panel__aspect-target--chart" :style="xrayAspectVars">
+                <XRayChartFigure
+                  :long-by-sat="longBySat"
+                  :short-by-sat="shortBySat"
+                  :sats="sats"
+                  :height="'100%'"
+                />
+              </div>
+              <small class="xray__foot">
+                Sats: {{ sats.join(', ') }}
+                · Pts totales Long: {{
+                  sats.reduce((acc, s) => acc + (longBySat[s]?.length || 0), 0)
+                }}
+                · Pts totales Short: {{
+                  sats.reduce((acc, s) => acc + (shortBySat[s]?.length || 0), 0)
+                }}
+                <template v-if="lastPointTime">
+                  · Último ts: {{ new Date(lastPointTime).toISOString() }}
+                </template>
+              </small>
+            </template>
+          </div>
+        </article>
       </div>
 
       <!-- Campo eléctrico local -->
@@ -208,15 +193,11 @@ function fmtUTC(value) {
 
       <!-- Magnetómetro -->
       <div class="home__cell home__cell--magneto">
-        <div class="home__tile" :style="magnetoAspectVars">
-          <div class="panel panel--flush home__magneto-card">
-            <MagnetometerChartOverview>
-              <template #aspect-control>
-                <AspectRatioControl v-model="magnetoAspect" :options="aspectOptions" />
-              </template>
-            </MagnetometerChartOverview>
-          </div>
-        </div>
+        <MagnetometerChartOverview :style="magnetoAspectVars">
+          <template #aspect-control>
+            <AspectRatioControl v-model="magnetoAspect" :options="aspectOptions" />
+          </template>
+        </MagnetometerChartOverview>
       </div>
 
       <!-- Ionograma -->
@@ -232,34 +213,32 @@ function fmtUTC(value) {
 
       <!-- Mapa día/noche -->
       <div class="home__cell home__cell--map">
-        <div class="home__tile" :style="mapAspectVars">
-          <article class="panel panel--map">
-            <div class="panel__head">
-              <div>
-                <h3>Mapa día/noche</h3>
-                <p>Observa el terminador solar y penumbras actualizadas cada minuto.</p>
-              </div>
-              <AspectRatioControl v-model="mapAspect" :options="aspectOptions" />
+        <article class="panel panel--map">
+          <div class="panel__head">
+            <div>
+              <h3>Mapa día/noche</h3>
+              <p>Observa el terminador solar y penumbras actualizadas cada minuto.</p>
             </div>
-            <div class="panel__body panel__body--map">
-              <div class="panel__aspect-target panel__aspect-target--map">
-                <DayNightMap
-                  mode="map"
-                  height="100%"
-                  :autoRefreshMs="60000"
-                  :showTwilight="true"
-                  :showSunMoon="true"
-                  nightColor="#050a18"
-                  twilightColor="#0b1736"
-                  :nightOpacity="0.38"
-                  :twilightCivilOpacity="0.26"
-                  :twilightNauticalOpacity="0.18"
-                  :twilightAstroOpacity="0.12"
-                />
-              </div>
+            <AspectRatioControl v-model="mapAspect" :options="aspectOptions" />
+          </div>
+          <div class="panel__body panel__body--map">
+            <div class="panel__aspect-target panel__aspect-target--map" :style="mapAspectVars">
+              <DayNightMap
+                mode="map"
+                height="100%"
+                :autoRefreshMs="60000"
+                :showTwilight="true"
+                :showSunMoon="true"
+                nightColor="#050a18"
+                twilightColor="#0b1736"
+                :nightOpacity="0.38"
+                :twilightCivilOpacity="0.26"
+                :twilightNauticalOpacity="0.18"
+                :twilightAstroOpacity="0.12"
+              />
             </div>
-          </article>
-        </div>
+          </div>
+        </article>
       </div>
     </div>
   </section>
@@ -285,28 +264,13 @@ function fmtUTC(value) {
   display: grid;
   gap: 1rem;
   grid-template-columns: repeat(auto-fit, minmax(min(20rem, 100%), 1fr));
-  grid-auto-rows: 1fr;
-  align-items: stretch;
+  grid-auto-rows: auto;
+  align-items: start;
+  justify-items: stretch;
 }
 
-.home__cell { width: 100%; display: flex; }
+.home__cell { width: 100%; display: flex; align-items: stretch; }
 .home__cell > * { width: 100%; }
-
-.home__tile {
-  width: 100%;
-  aspect-ratio: var(--dashboard-aspect, 5 / 4);
-  display: flex;
-  flex-direction: column;
-  min-height: 0;
-  background: transparent;
-  overflow: hidden;
-}
-
-.home__tile > * {
-  flex: 1 1 auto;
-  min-height: 0;
-  width: 100%;
-}
 
 /* ---------- Panels ---------- */
 .panel {
@@ -316,7 +280,7 @@ function fmtUTC(value) {
   box-shadow: 0 6px 14px rgba(15, 23, 42, 0.08);
   display: flex;
   flex-direction: column;
-  gap: 0.6rem;
+  gap: 0.75rem;
   height: 100%;
   min-height: 0;
 }
@@ -342,7 +306,13 @@ function fmtUTC(value) {
 .panel__head h3 { font-size: 1.05rem; font-weight: 600; color: #1f2933; }
 .panel__head p   { color: #69707d; margin-bottom: 0.25rem; font-size: 0.85rem; }
 
-.panel__body { flex: 1 1 auto; display: flex; flex-direction: column; min-height: 0; }
+.panel__body {
+  flex: 1 1 auto;
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  min-height: 0;
+}
 .panel__body--sun {
   flex: 1 1 auto;
   min-height: 0;
@@ -368,8 +338,11 @@ function fmtUTC(value) {
 .panel__aspect-target {
   width: 100%;
   display: flex;
-  flex: 1 1 auto;
-  min-height: 0;
+  flex-direction: column;
+  justify-content: center;
+  position: relative;
+  aspect-ratio: var(--dashboard-aspect, 5 / 4);
+  flex: none;
 }
 
 .panel__aspect-target > * {
@@ -447,11 +420,6 @@ function fmtUTC(value) {
 .ghost:hover { background:#f1f5f9; }
 
 .xray__foot { margin-top:.5rem; color:#0f0f10; }
-
-.home__magneto-card { height:100%; min-height:0; }
-.home__magneto-card :deep(.magneto) { height:100%; min-height:0; }
-.home__magneto-card :deep(.magneto__card){ height:100%; min-height:0; display:flex; flex-direction:column; }
-.home__magneto-card :deep(.magneto__body){ flex:1; min-height:0; display:flex; flex-direction:column; }
 
 @media (min-width: 960px) {
   .home__grid { grid-template-columns: repeat(auto-fit, minmax(18rem, 1fr)); }
