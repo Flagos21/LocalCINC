@@ -1,5 +1,5 @@
 import { isRef, onBeforeUnmount, onMounted, ref, watch } from 'vue';
-import dayjs from 'dayjs';
+import dayjs from '@/utils/dayjs';
 
 export function useMagnetometerSeries({
   range,
@@ -90,8 +90,11 @@ export function useMagnetometerSeries({
     }
 
     if (parsedFrom && parsedTo) {
-      searchParams.set('from', parsedFrom.format('YYYY-MM-DDTHH:mm'));
-      searchParams.set('to', parsedTo.format('YYYY-MM-DDTHH:mm'));
+      const normalizedFrom = parsedFrom.utc().format('YYYY-MM-DDTHH:mm:ss[Z]');
+      const normalizedTo = parsedTo.utc().format('YYYY-MM-DDTHH:mm:ss[Z]');
+
+      searchParams.set('from', normalizedFrom);
+      searchParams.set('to', normalizedTo);
     } else if (rangeRef.value) {
       searchParams.set('range', rangeRef.value);
     }

@@ -4,7 +4,7 @@ import { ref, onMounted, onBeforeUnmount } from 'vue'
 import SunViewer from '@/components/SunViewer.vue'
 import IonogramLatest from '@/components/IonogramLatest.vue'
 import MagnetometerChartOverview from '@/components/MagnetometerChartOverview.vue'
-import ElectricFieldChart from '@/components/ElectricFieldChart.vue'
+import ElectricFieldHomeCard from '@/components/ElectricFieldHomeCard.vue'
 
 import XRayChartFigure from '@/components/XRayChartFigure.vue'
 import { useGoesXrays } from '@/composables/useGoesXrays'
@@ -58,35 +58,17 @@ function fmtUTC(value) {
       <p>Visualiza aquí los indicadores clave cuando estén disponibles.</p>
     </header>
 
-    <!-- Day/Night: ocupa todo el ancho y centrado -->
-    <div class="home__cell home__cell--daynight">
-      <div class="daynight-wrap">
-        <!-- refresco cada 1 minuto -->
-        <DayNightMap
-          mode="map"
-          height="clamp(520px, 55vh, 720px)"
-          :autoRefreshMs="60000"
-          :showTwilight="true"
-          :showSunMoon="true"
-          nightColor="#050a18"
-          twilightColor="#0b1736"
-          :nightOpacity="0.38"
-          :twilightCivilOpacity="0.26"
-          :twilightNauticalOpacity="0.18"
-          :twilightAstroOpacity="0.12"
-        />
-      </div>
-    </div>
-
     <div class="home__grid">
       <!-- Sol -->
       <div class="home__cell home__cell--sun">
-        <article class="panel">
+        <article class="panel panel--sun">
           <div class="panel__head">
             <h3>El Sol (SUVI)</h3>
             <p>Vista en tiempo (casi) real del Sol por longitudes de onda EUV.</p>
           </div>
-          <SunViewer />
+          <div class="panel__body panel__body--sun">
+            <SunViewer />
+          </div>
         </article>
       </div>
 
@@ -173,7 +155,7 @@ function fmtUTC(value) {
 
       <!-- Campo eléctrico local -->
       <div class="home__cell home__cell--electric">
-        <ElectricFieldChart />
+        <ElectricFieldHomeCard />
       </div>
 
       <!-- Magnetómetro -->
@@ -186,6 +168,33 @@ function fmtUTC(value) {
       <!-- Ionograma -->
       <div class="home__cell home__cell--ionogram">
         <IonogramLatest />
+      </div>
+
+      <!-- Mapa día/noche -->
+      <div class="home__cell home__cell--map">
+        <article class="panel panel--map">
+          <div class="panel__head">
+            <div>
+              <h3>Mapa día/noche</h3>
+              <p>Observa el terminador solar y penumbras actualizadas cada minuto.</p>
+            </div>
+          </div>
+          <div class="panel__body panel__body--map">
+            <DayNightMap
+              mode="map"
+              height="clamp(360px, 55vh, 640px)"
+              :autoRefreshMs="60000"
+              :showTwilight="true"
+              :showSunMoon="true"
+              nightColor="#050a18"
+              twilightColor="#0b1736"
+              :nightOpacity="0.38"
+              :twilightCivilOpacity="0.26"
+              :twilightNauticalOpacity="0.18"
+              :twilightAstroOpacity="0.12"
+            />
+          </div>
+        </article>
       </div>
     </div>
   </section>
@@ -218,36 +227,22 @@ function fmtUTC(value) {
 .home__cell { width: 100%; }
 .home__cell > * { width: 100%; }
 
-/* Day/Night a lo ancho y centrado */
-.home__cell--daynight {
-  grid-column: 1 / -1;
-}
-
 .home__cell--electric {
   grid-column: 1 / -1;
   display: flex;
   justify-content: center;
 }
 
-.home__cell--electric :deep(.efield) {
-  width: 100%;
-  padding: 0;
-  margin: 0;
-}
-
-.home__cell--electric :deep(.efield__card) {
+.home__cell--electric :deep(.efield-home) {
   width: min(1120px, 100%);
 }
 
-.daynight-wrap{
-  display: flex;
-  justify-content: center;
-  padding: 8px 0 2px;
+.home__cell--magneto {
+  grid-column: 1 / -1;
 }
 
-.daynight-wrap :deep(.tad-card){
-  width: min(1280px, 100%);
-  box-shadow: 0 14px 32px rgba(0,0,0,.38);
+.home__cell--map {
+  grid-column: 1 / -1;
 }
 
 /* ---------- Panels ---------- */
@@ -269,6 +264,29 @@ function fmtUTC(value) {
 .panel__head p   { color: #69707d; margin-bottom: 0.25rem; font-size: 0.85rem; }
 
 .panel__body { flex: 0 1 auto; display: flex; flex-direction: column; min-height: 0; }
+
+.panel__body--sun {
+  flex: 1 1 auto;
+  min-height: 0;
+  display: flex;
+  justify-content: center;
+}
+
+.panel__body--sun :deep(.sunviewer) {
+  width: min(100%, 34rem);
+  margin: 0 auto;
+}
+
+.panel__body--map {
+  flex: 1 1 auto;
+  min-height: 0;
+}
+
+.panel__body--map :deep(.tad-card) {
+  width: 100%;
+  max-width: 980px;
+  margin: 0 auto;
+}
 
 /* Estados */
 .panel__state {
@@ -318,8 +336,6 @@ function fmtUTC(value) {
 .home__magneto-card :deep(.magneto) { height:100%; min-height:0; }
 .home__magneto-card :deep(.magneto__card){ height:100%; min-height:0; display:flex; flex-direction:column; }
 .home__magneto-card :deep(.magneto__body){ flex:1; min-height:0; display:flex; flex-direction:column; }
-.home__magneto-card :deep(.magneto__chart-wrapper){ flex:1; min-height:0; }
-.home__magneto-card :deep(.magneto__chart){ height:100%; min-height:0; }
 
 @media (min-width: 960px) {
   .home__grid { grid-template-columns: repeat(auto-fit, minmax(18rem, 1fr)); }
