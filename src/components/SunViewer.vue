@@ -242,8 +242,8 @@ function onSeek(evt) {
   gap: 0.75rem;
   height: 100%;
   min-height: 0;
-  width: min(100%, 34rem);
-  margin: 0 auto;
+  width: 100%;
+  margin: 0;
 }
 
 /* Top bar */
@@ -266,21 +266,21 @@ function onSeek(evt) {
 .sunviewer__frame {
   position: relative;
   width: 100%;
-  max-width: min(100%, 34rem);
-  aspect-ratio: 1;
+  max-width: 100%;
+  aspect-ratio: var(--dashboard-aspect, 5 / 4);
   border-radius: 0.75rem;
   background: #0b1020;
   overflow: hidden;
   display: grid;
   place-items: center;
-  flex: 1;
+  flex: 1 1 auto;
   min-height: 0;
-  margin: 0 auto;
+  margin: 0;
 }
 .sunviewer__img {
   width: 100%;
   height: 100%;
-  max-height: min(70vh, 34rem);
+  max-height: 100%;
   object-fit: contain;
   display: block;
 }
