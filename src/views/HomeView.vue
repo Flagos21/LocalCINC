@@ -5,8 +5,6 @@ import SunViewer from '@/components/SunViewer.vue'
 import IonogramLatest from '@/components/IonogramLatest.vue'
 import MagnetometerChartOverview from '@/components/MagnetometerChartOverview.vue'
 import ElectricFieldHomeCard from '@/components/ElectricFieldHomeCard.vue'
-import AspectRatioControl from '@/components/AspectRatioControl.vue'
-
 import XRayChartFigure from '@/components/XRayChartFigure.vue'
 import { useGoesXrays } from '@/composables/useGoesXrays'
 
@@ -262,22 +260,23 @@ function fmtUTC(value) {
   border-radius: 0.75rem;
   overflow: hidden;
   position: relative;
-  display: flex;
-  align-items: stretch;
-  justify-content: center;
+  display: grid;
+  place-items: center;
   background: #f8fafc;
   border: 1px solid #e2e8f0;
 }
 
 .home__tile-visual > * {
-  flex: 1 1 auto;
-  min-height: 0;
   width: 100%;
+  height: 100%;
+  min-height: 0;
 }
 
 .home__tile-visual--chart {
   background: #ffffff;
   padding: 0.4rem;
+  align-items: stretch;
+  justify-items: stretch;
 }
 
 .home__tile-visual--chart :deep(svg),
@@ -288,23 +287,40 @@ function fmtUTC(value) {
 
 .home__tile-visual--sun {
   background: #ffffff;
+  --dashboard-aspect: 1 / 1;
+  height: auto;
+  min-height: 0;
+  padding: 0.5rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: visible;
+}
+
+.home__tile-visual--sun > * {
+  height: auto;
 }
 
 .home__tile-visual--sun :deep(.sunviewer) {
   display: flex;
   flex-direction: column;
-  flex: 1 1 auto;
+  width: 100%;
+  height: auto;
   min-height: 0;
+  max-width: 28rem;
+  margin: 0 auto;
 }
 
 .home__tile-visual--sun :deep(.sunviewer__frame) {
   margin: 0;
-  flex: 1 1 auto;
-  min-height: 0;
+  width: 100%;
+  align-self: center;
 }
 
 .home__tile-visual--map {
   background: #ffffff;
+  align-items: stretch;
+  justify-items: stretch;
 }
 
 .home__tile-visual--map :deep(.tad-card) {
