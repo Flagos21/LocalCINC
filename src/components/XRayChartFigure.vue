@@ -84,8 +84,8 @@ const thrLog = thresholds.map(t => ({ y: Math.log10(t.y), label: t.label }));
 const chartSeries = ref([]);
 const gridX = ref([]); // guardamos la grilla para tooltip custom
 const TOLERANCE_MS = 120_000;
-const ORANGE = '#f97316';
-const chartColors = computed(() => chartSeries.value.map(() => ORANGE));
+const XRAY_PALETTE = ['#f97316', '#2563eb', '#9333ea', '#facc15', '#10b981', '#ef4444', '#38bdf8', '#ec4899'];
+const chartColors = computed(() => chartSeries.value.map((_, index) => XRAY_PALETTE[index % XRAY_PALETTE.length]));
 
 function rebuildSeries() {
   // 1) log10 de todas las series

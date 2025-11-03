@@ -58,6 +58,8 @@ const { labels, series, isLoading, errorMessage } = useMagnetometerSeries({
 })
 
 const chartSeries = ref([])
+const LINE_PALETTE = ['#2563eb', '#9333ea', '#0ea5e9', '#f97316', '#facc15', '#22c55e', '#ef4444', '#8b5cf6']
+const chartColors = computed(() => chartSeries.value.map((_, index) => LINE_PALETTE[index % LINE_PALETTE.length]))
 const xDomain = ref({ min: null, max: null })
 const visiblePoints = ref(0)
 const dataExtent = ref(null)
@@ -86,7 +88,7 @@ const chartOptions = computed(() => ({
     strokeOpacity: 1,
     hover: { sizeOffset: 3 }
   },
-  colors: ['#f97316'],
+  colors: chartColors.value,
   xaxis: {
     type: 'datetime',
     min: Number.isFinite(xDomain.value.min) ? xDomain.value.min : undefined,
