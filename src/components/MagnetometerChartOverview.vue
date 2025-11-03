@@ -11,6 +11,9 @@ const rangeRef = ref('')
 const from = ref('')
 const to = ref('')
 
+const LINE_PALETTE = ['#2563eb', '#9333ea', '#0ea5e9', '#f97316', '#facc15', '#22c55e', '#ef4444', '#8b5cf6']
+const chartColors = computed(() => chartSeries.value.map((_, index) => LINE_PALETTE[index % LINE_PALETTE.length]))
+
 const { labels, series, isLoading, errorMessage } = useMagnetometerSeries({
   range: rangeRef,
   every: ref(''),
@@ -22,6 +25,11 @@ const { labels, series, isLoading, errorMessage } = useMagnetometerSeries({
 
 const visiblePoints = ref(0)
 const dataExtent = ref(null)
+const visibleSummary = computed(() =>
+  visiblePoints.value
+    ? `${visiblePoints.value.toLocaleString('es-CL')} puntos`
+    : 'Sin puntos visibles'
+)
 
 const chartOptions = computed(() => ({
   chart: {
@@ -42,7 +50,7 @@ const chartOptions = computed(() => ({
     strokeOpacity: 1,
     hover: { sizeOffset: 3 }
   },
-  colors: ['#2563eb'],
+  colors: chartColors.value,
   xaxis: {
     type: 'datetime',
     min: Number.isFinite(xDomain.value.min) ? xDomain.value.min : undefined,
@@ -233,46 +241,45 @@ onMounted(() => {
 <template>
   <section class="magneto">
     <article class="magneto__card">
-      <header class="magneto__header">
-        <div class="magneto__header-top">
-          <div>
-            <h1 class="magneto__title">Magnetómetro – Estación única</h1>
-            <p class="magneto__description">
-              Visualiza la componente H con atajos rápidos para cambiar el periodo observado.
-            </p>
-          </div>
-          <slot name="aspect-control" />
+      <header class="magneto__head">
+        <div class="magneto__intro">
+          <h1 class="magneto__title">Magnetómetro – Estación única</h1>
+          <p class="magneto__description">
+            Visualiza la componente H con atajos rápidos para cambiar el periodo observado.
+          </p>
         </div>
 
-        <div class="magneto__filters">
-          <div class="magneto__field">
-            <span class="magneto__label">Intervalos rápidos</span>
-            <div class="magneto__quick">
-              <button
-                v-for="preset in presets"
-                :key="preset.id"
-                type="button"
-                class="magneto__quick-button"
-                :class="{ 'magneto__quick-button--active': preset.id === activePreset }"
-                @click="applyPreset(preset.id)"
-              >
-                {{ preset.label }}
-              </button>
-            </div>
-          </div>
-
-          <div class="magneto__summary" role="status" aria-live="polite">
-            <div class="magneto__summary-block">
-              <span class="magneto__summary-label">Seleccionado</span>
-              <span class="magneto__summary-value">{{ rangeHint }}</span>
-            </div>
-            <div class="magneto__summary-block">
-              <span class="magneto__summary-label">Datos disponibles</span>
-              <span class="magneto__summary-value">{{ dataWindowHint || 'Sin datos en el último refresco' }}</span>
-            </div>
+        <div class="magneto__head-actions">
+          <slot name="aspect-control" />
+          <div class="magneto__presets" role="group" aria-label="Seleccionar intervalo rápido">
+            <button
+              v-for="preset in presets"
+              :key="preset.id"
+              type="button"
+              class="magneto__preset"
+              :class="{ 'magneto__preset--active': preset.id === activePreset }"
+              @click="applyPreset(preset.id)"
+            >
+              {{ preset.label }}
+            </button>
           </div>
         </div>
       </header>
+
+      <div class="magneto__meta" role="status" aria-live="polite">
+        <div class="magneto__meta-item">
+          <span class="magneto__meta-label">Seleccionado</span>
+          <span class="magneto__meta-value">{{ rangeHint }}</span>
+        </div>
+        <div class="magneto__meta-item">
+          <span class="magneto__meta-label">Datos</span>
+          <span class="magneto__meta-value">{{ dataWindowHint || 'Sin datos disponibles' }}</span>
+        </div>
+        <div class="magneto__meta-item">
+          <span class="magneto__meta-label">Puntos visibles</span>
+          <span class="magneto__meta-value">{{ visibleSummary }}</span>
+        </div>
+      </div>
 
       <div class="magneto__body">
         <div class="magneto__chart-wrapper">
@@ -319,9 +326,66 @@ onMounted(() => {
   height: 100%;
 }
 
-.magneto__header { display: flex; flex-direction: column; gap: 0.75rem; }
-.magneto__header-top { display: flex; justify-content: space-between; align-items: flex-start; gap: 0.75rem; }
-.magneto__header-top :deep(.aspect-control) { flex-shrink: 0; }
+.magneto__head {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 0.9rem;
+}
+
+.magneto__intro {
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+  max-width: min(32rem, 100%);
+}
+
+.magneto__head-actions {
+  display: flex;
+  align-items: flex-end;
+  gap: 0.75rem;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+}
+
+.magneto__head-actions :deep(.aspect-control) {
+  flex-shrink: 0;
+}
+
+.magneto__presets {
+  display: flex;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+}
+
+.magneto__preset {
+  border: 1px solid rgba(249, 115, 22, 0.35);
+  background: rgba(249, 115, 22, 0.08);
+  color: #9a3412;
+  border-radius: 999px;
+  padding: 0.35rem 0.85rem;
+  font-size: 0.8rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 0.2s ease, color 0.2s ease, border-color 0.2s ease, transform 0.15s ease;
+}
+
+.magneto__preset:hover,
+.magneto__preset:focus-visible {
+  background: rgba(249, 115, 22, 0.18);
+  border-color: #f97316;
+  color: #7c2d12;
+  outline: none;
+}
+
+.magneto__preset--active {
+  background: #f97316;
+  color: #ffffff;
+  border-color: #ea580c;
+  box-shadow: 0 12px 22px rgba(249, 115, 22, 0.26);
+}
 
 .magneto__title {
   font-size: 1.1rem;
@@ -339,85 +403,33 @@ onMounted(() => {
   line-height: 1.4;
 }
 
-.magneto__filters {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 0.65rem;
-  align-items: center;
-}
-
-.magneto__field {
-  display: flex;
-  flex-direction: column;
-  gap: 0.35rem;
-  min-width: 160px;
-}
-
-.magneto__label {
-  font-size: 0.65rem;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
-  color: #64748b;
-  font-weight: 600;
-}
-
-.magneto__quick {
-  display: flex;
-  gap: 0.35rem;
-  flex-wrap: wrap;
-}
-
-.magneto__quick-button {
-  border: 1px solid rgba(37, 99, 235, 0.35);
-  background: rgba(37, 99, 235, 0.12);
-  color: #1d4ed8;
-  padding: 0.3rem 0.55rem;
-  border-radius: 999px;
-  font-size: 0.78rem;
-  font-weight: 600;
-  cursor: pointer;
-  transition: background-color 0.2s ease, color 0.2s ease, border-color 0.2s ease;
-}
-
-.magneto__quick-button:hover,
-.magneto__quick-button:focus-visible {
-  background: rgba(37, 99, 235, 0.2);
-  border-color: #2563eb;
-  color: #1e3a8a;
-  outline: none;
-}
-
-.magneto__quick-button--active {
-  background: #2563eb;
-  color: #ffffff;
-  border-color: #1d4ed8;
-}
-
-.magneto__summary {
+.magneto__meta {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
-  gap: 0.5rem;
-  padding: 0.5rem;
-  border-radius: 0.65rem;
-  background: #f1f5f9;
-  color: #1e3a8a;
+  grid-template-columns: repeat(auto-fit, minmax(12rem, 1fr));
+  gap: 0.75rem;
+  padding: 0.25rem 0;
 }
 
-.magneto__summary-block {
+.magneto__meta-item {
   display: flex;
   flex-direction: column;
-  gap: 0.2rem;
+  gap: 0.3rem;
+  padding: 0.6rem 0.8rem;
+  border-radius: 0.75rem;
+  background: rgba(249, 115, 22, 0.08);
+  border: 1px solid rgba(249, 115, 22, 0.18);
+  min-height: 3.25rem;
 }
 
-.magneto__summary-label {
-  font-size: 0.6rem;
+.magneto__meta-label {
+  font-size: 0.65rem;
   text-transform: uppercase;
   letter-spacing: 0.08em;
   font-weight: 600;
-  color: #1d4ed8;
+  color: #ea580c;
 }
 
-.magneto__summary-value {
+.magneto__meta-value {
   font-size: 0.85rem;
   color: #0f172a;
   font-weight: 500;
@@ -469,16 +481,16 @@ onMounted(() => {
   width: 1.4rem;
   height: 1.4rem;
   border-radius: 50%;
-  border: 3px solid rgba(37, 99, 235, 0.25);
-  border-top-color: #2563eb;
+  border: 3px solid rgba(249, 115, 22, 0.25);
+  border-top-color: #f97316;
   animation: magneto-spin 1s linear infinite;
 }
 
 .magneto__empty {
   padding: 0.75rem 1rem;
-  background: rgba(59, 130, 246, 0.12);
+  background: rgba(249, 115, 22, 0.12);
   border-radius: 0.65rem;
-  color: #1d4ed8;
+  color: #b45309;
   font-weight: 500;
   text-align: center;
 }

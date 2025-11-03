@@ -17,6 +17,8 @@ const from = ref('')
 const to = ref('')
 
 const chartSeries = ref([])
+const LINE_PALETTE = ['#2563eb', '#9333ea', '#0ea5e9', '#f97316', '#facc15', '#22c55e', '#ef4444', '#8b5cf6']
+const chartColors = computed(() => chartSeries.value.map((_, index) => LINE_PALETTE[index % LINE_PALETTE.length]))
 const xDomain = ref({ min: null, max: null })
 const latestSample = ref(null)
 const extent = ref(null)
@@ -69,7 +71,7 @@ const chartOptions = computed(() => ({
     strokeOpacity: 1,
     hover: { sizeOffset: 3 }
   },
-  colors: ['#2563eb'],
+  colors: chartColors.value,
   xaxis: {
     type: 'datetime',
     min: Number.isFinite(xDomain.value.min) ? xDomain.value.min : undefined,
@@ -312,8 +314,8 @@ onMounted(() => {
   width: 1.5rem;
   height: 1.5rem;
   border-radius: 50%;
-  border: 3px solid rgba(59, 130, 246, 0.2);
-  border-top-color: #2563eb;
+  border: 3px solid rgba(249, 115, 22, 0.2);
+  border-top-color: #f97316;
   animation: spin 1s linear infinite;
 }
 

@@ -1,6 +1,7 @@
 <script setup>
-import { ref, onMounted, onBeforeUnmount } from 'vue'
+import { ref, onMounted, onBeforeUnmount, computed } from 'vue'
 
+import dayjs from '@/utils/dayjs'
 import XRayChartFigure from '@/components/XRayChartFigure.vue'
 import { useGoesXrays } from '@/composables/useGoesXrays'
 
@@ -20,6 +21,67 @@ const {
 
 const utcNow = ref(new Date())
 let clockTimer = null
+
+const rangePresets = [
+  { id: '6h', label: '6 h', description: 'Últimas 6 horas' },
+  { id: '1d', label: '1 día', description: 'Último día' },
+  { id: '3d', label: '3 días', description: 'Últimos 3 días' },
+  { id: '7d', label: '7 días', description: 'Última semana' },
+]
+
+const selectedPreset = computed(() => rangePresets.find((preset) => preset.id === xrRange.value) ?? rangePresets[0])
+const selectionLabel = computed(() => selectedPreset.value?.description ?? 'Sin selección')
+
+const totalPoints = computed(() =>
+  sats.value.reduce(
+    (acc, sat) =>
+      acc + (longBySat.value?.[sat]?.length || 0) + (shortBySat.value?.[sat]?.length || 0),
+    0,
+  )
+)
+
+const summaryLabel = computed(() => {
+  const satCount = sats.value.length
+  const satText = satCount === 1 ? '1 satélite' : `${satCount} satélites`
+  const points = totalPoints.value
+  const pointsText = points === 1 ? '1 punto total' : `${points.toLocaleString('es-CL')} puntos totales`
+  return `${satText} · ${pointsText}`
+})
+
+const dataExtent = computed(() => {
+  const stamps = []
+  for (const sat of sats.value) {
+    for (const pair of longBySat.value?.[sat] || []) {
+      const ts = Number(pair?.[0])
+      if (Number.isFinite(ts)) stamps.push(ts)
+    }
+    for (const pair of shortBySat.value?.[sat] || []) {
+      const ts = Number(pair?.[0])
+      if (Number.isFinite(ts)) stamps.push(ts)
+    }
+  }
+
+  if (!stamps.length) {
+    return null
+  }
+
+  stamps.sort((a, b) => a - b)
+  return { start: stamps[0], end: stamps[stamps.length - 1] }
+})
+
+const dataWindowLabel = computed(() => {
+  if (!dataExtent.value) {
+    return 'Sin datos disponibles'
+  }
+
+  const start = dayjs(dataExtent.value.start).utc()
+  const end = dayjs(dataExtent.value.end).utc()
+
+  return `${start.format('YYYY-MM-DD HH:mm')} → ${end.format('YYYY-MM-DD HH:mm')} UTC`
+})
+
+const utcNowLabel = computed(() => fmtUTC(utcNow.value))
+const lastSampleLabel = computed(() => fmtUTC(lastPointTime.value))
 
 onMounted(() => {
   clockTimer = window.setInterval(() => {
@@ -50,51 +112,68 @@ function fmtUTC(value) {
 
 <template>
   <section class="xray">
-    <header class="xray__header">
-      <div>
-        <h2>GOES X-ray Flux</h2>
-        <p>Monitorea el flujo de rayos X de los satélites GOES en escalas logarítmicas.</p>
-      </div>
-
-      <div class="xray__meta">
-        <div class="xray__clock">
-          <span class="tag">UTC ahora:</span>
-          <span class="mono">{{ fmtUTC(utcNow) }}</span>
+    <article class="xray__card">
+      <header class="xray__head">
+        <div class="xray__intro">
+          <h2>GOES X-ray Flux</h2>
+          <p>Monitorea el flujo de rayos X de los satélites GOES en escalas logarítmicas.</p>
         </div>
-        <div class="xray__clock">
-          <span class="tag">Última muestra:</span>
-          <span class="mono">{{ fmtUTC(lastPointTime) }}</span>
+
+        <div class="xray__head-actions">
+          <div class="xray__presets" role="group" aria-label="Seleccionar intervalo de rayos X">
+            <button
+              v-for="preset in rangePresets"
+              :key="preset.id"
+              type="button"
+              class="xray__preset"
+              :class="{ 'xray__preset--active': preset.id === xrRange }"
+              @click="xrRange = preset.id"
+            >
+              {{ preset.label }}
+            </button>
+          </div>
+
+          <div class="xray__controls">
+            <button
+              class="toggle"
+              :class="{ 'is-on': autoRefresh }"
+              @click="toggleAuto"
+              type="button"
+              :aria-pressed="autoRefresh"
+            >
+              <span class="knob"></span>
+              <span class="label">{{ autoRefresh ? 'Auto-refresh ON' : 'Auto-refresh OFF' }}</span>
+            </button>
+
+            <button class="ghost" type="button" @click="refresh">Refrescar</button>
+          </div>
+        </div>
+      </header>
+
+      <div class="xray__meta" role="status" aria-live="polite">
+        <div class="xray__meta-item">
+          <span class="xray__meta-label">Seleccionado</span>
+          <span class="xray__meta-value">{{ selectionLabel }}</span>
+        </div>
+        <div class="xray__meta-item">
+          <span class="xray__meta-label">Datos</span>
+          <span class="xray__meta-value">{{ dataWindowLabel }}</span>
+        </div>
+        <div class="xray__meta-item">
+          <span class="xray__meta-label">Última muestra</span>
+          <span class="xray__meta-value">{{ lastSampleLabel }}</span>
+        </div>
+        <div class="xray__meta-item">
+          <span class="xray__meta-label">UTC ahora</span>
+          <span class="xray__meta-value">{{ utcNowLabel }}</span>
+        </div>
+        <div class="xray__meta-item">
+          <span class="xray__meta-label">Resumen</span>
+          <span class="xray__meta-value">{{ summaryLabel }}</span>
         </div>
       </div>
-    </header>
 
-    <div class="xray__panel">
-      <div class="xray__controls">
-        <label class="xray__range">
-          <span class="tag">Intervalo:</span>
-          <select v-model="xrRange">
-            <option value="6h">6 h</option>
-            <option value="1d">1 día</option>
-            <option value="3d">3 días</option>
-            <option value="7d">7 días</option>
-          </select>
-        </label>
-
-        <button
-          class="toggle"
-          :class="{ 'is-on': autoRefresh }"
-          @click="toggleAuto"
-          type="button"
-          :aria-pressed="autoRefresh"
-        >
-          <span class="knob"></span>
-          <span class="label">{{ autoRefresh ? 'Auto-refresh ON' : 'Auto-refresh OFF' }}</span>
-        </button>
-
-        <button class="ghost" type="button" @click="refresh">Refrescar</button>
-      </div>
-
-      <div class="xray__chart" aria-live="polite">
+      <div class="xray__chart-area" aria-live="polite">
         <div v-if="xrError" class="xray__state xray__state--error">
           <strong>Problema al cargar rayos X.</strong>
           <p>{{ xrError }}</p>
@@ -108,27 +187,23 @@ function fmtUTC(value) {
         </div>
 
         <template v-else>
-          <XRayChartFigure
-            :long-by-sat="longBySat"
-            :short-by-sat="shortBySat"
-            :sats="sats"
-            :height="320"
-          />
+          <div class="xray__chart-shell">
+            <XRayChartFigure
+              :long-by-sat="longBySat"
+              :short-by-sat="shortBySat"
+              :sats="sats"
+              :height="320"
+            />
+          </div>
           <small class="xray__foot">
-            Sats: {{ sats.join(', ') }}
-            · Pts totales Long: {{
-              sats.reduce((acc, s) => acc + (longBySat[s]?.length || 0), 0)
-            }}
-            · Pts totales Short: {{
-              sats.reduce((acc, s) => acc + (shortBySat[s]?.length || 0), 0)
-            }}
-            <template v-if="lastPointTime">
-              · Último ts: {{ new Date(lastPointTime).toISOString() }}
+            {{ summaryLabel }}
+            <template v-if="sats.length">
+              · Satélites: {{ sats.join(', ') }}
             </template>
           </small>
         </template>
       </div>
-    </div>
+    </article>
   </section>
 </template>
 
@@ -139,179 +214,250 @@ function fmtUTC(value) {
   gap: 1.5rem;
   flex: 1;
   min-height: 0;
-  width: min(100%, 68rem);
+  width: min(100%, 70rem);
   margin: 0 auto;
 }
 
-.xray__header {
+.xray__card {
+  display: flex;
+  flex-direction: column;
+  gap: 1.1rem;
+  background: #ffffff;
+  border-radius: 0.9rem;
+  border: 1px solid #e2e8f0;
+  box-shadow: 0 8px 22px rgba(15, 23, 42, 0.06);
+  padding: 1.25rem 1.5rem 1.5rem;
+}
+
+.xray__head {
   display: flex;
   flex-wrap: wrap;
   justify-content: space-between;
-  align-items: flex-end;
+  align-items: flex-start;
   gap: 1rem;
 }
 
-.xray__header h2 {
-  font-size: 1.75rem;
-  font-weight: 600;
-  color: #1f2933;
-}
-
-.xray__header p {
-  color: #52606d;
-  margin-top: 0.25rem;
-}
-
-.xray__meta {
-  display: flex;
-  gap: 1.25rem;
-  align-items: center;
-  flex-wrap: wrap;
-}
-
-.xray__clock {
+.xray__intro {
   display: flex;
   flex-direction: column;
   gap: 0.35rem;
-  font-size: 0.9rem;
-  color: #1f2933;
+  max-width: min(32rem, 100%);
 }
 
-.xray__panel {
-  flex: 1;
+.xray__intro h2 {
+  font-size: 1.65rem;
+  font-weight: 600;
+  color: #1f2937;
+  margin: 0;
+}
+
+.xray__intro p {
+  margin: 0;
+  color: #475569;
+  font-size: 0.95rem;
+}
+
+.xray__head-actions {
   display: flex;
   flex-direction: column;
-  gap: 1.25rem;
-  padding: 1.5rem;
-  background: #ffffff;
-  border-radius: 0.75rem;
-  box-shadow: 0 1px 2px rgba(15, 23, 42, 0.08), 0 4px 12px rgba(15, 23, 42, 0.06);
+  gap: 0.75rem;
+  align-items: flex-end;
+}
+
+.xray__presets {
+  display: flex;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+}
+
+.xray__preset {
+  border: 1px solid rgba(249, 115, 22, 0.35);
+  background: rgba(249, 115, 22, 0.08);
+  color: #9a3412;
+  border-radius: 999px;
+  padding: 0.35rem 0.85rem;
+  font-size: 0.82rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 0.2s ease, color 0.2s ease, border-color 0.2s ease, transform 0.15s ease;
+}
+
+.xray__preset:hover,
+.xray__preset:focus-visible {
+  background: rgba(249, 115, 22, 0.18);
+  border-color: #f97316;
+  color: #7c2d12;
+  outline: none;
+}
+
+.xray__preset--active {
+  background: #f97316;
+  color: #ffffff;
+  border-color: #ea580c;
+  box-shadow: 0 12px 22px rgba(249, 115, 22, 0.24);
 }
 
 .xray__controls {
   display: flex;
   align-items: center;
-  gap: 1rem;
+  gap: 0.75rem;
   flex-wrap: wrap;
+  justify-content: flex-end;
 }
 
-.xray__range {
-  display: inline-flex;
-  align-items: center;
-  gap: 0.5rem;
-  font-size: 0.95rem;
-  color: #1f2933;
+.xray__meta {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(12rem, 1fr));
+  gap: 0.75rem;
 }
 
-.xray__range select {
-  border: 1px solid #d1d5db;
-  border-radius: 0.5rem;
-  padding: 0.35rem 0.5rem;
+.xray__meta-item {
+  display: flex;
+  flex-direction: column;
+  gap: 0.3rem;
+  padding: 0.6rem 0.85rem;
+  border-radius: 0.75rem;
+  background: rgba(249, 115, 22, 0.08);
+  border: 1px solid rgba(249, 115, 22, 0.18);
+}
+
+.xray__meta-label {
+  font-size: 0.65rem;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  font-weight: 600;
+  color: #ea580c;
+}
+
+.xray__meta-value {
+  font-size: 0.85rem;
+  color: #0f172a;
+  font-weight: 500;
+  word-break: break-word;
+}
+
+.xray__chart-area {
+  border: 1px solid #e2e8f0;
+  border-radius: 0.85rem;
+  background: #f8fafc;
+  padding: 1rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  min-height: 0;
+}
+
+.xray__chart-shell {
   background: #ffffff;
+  border-radius: 0.75rem;
+  border: 1px solid rgba(15, 23, 42, 0.08);
+  overflow: hidden;
 }
 
 .toggle {
+  position: relative;
   display: inline-flex;
   align-items: center;
-  gap: 0.5rem;
-  border: 1px solid #d1d5db;
-  border-radius: 9999px;
-  padding: 0.25rem 0.75rem 0.25rem 0.35rem;
-  background: #f8fafc;
+  gap: 0.6rem;
+  padding: 0.35rem 0.85rem 0.35rem 0.45rem;
+  border-radius: 999px;
+  border: 1px solid rgba(148, 163, 184, 0.5);
+  background: rgba(248, 250, 252, 0.92);
   cursor: pointer;
-  transition: background 0.2s ease, border-color 0.2s ease;
+  transition: border-color 0.2s ease, background 0.2s ease, box-shadow 0.2s ease;
+}
+
+.toggle:hover,
+.toggle:focus-visible {
+  border-color: #f97316;
+  box-shadow: 0 0 0 3px rgba(249, 115, 22, 0.18);
+  outline: none;
 }
 
 .toggle .knob {
-  width: 1.4rem;
-  height: 1.4rem;
-  border-radius: 50%;
-  background: #cbd5f5;
-  transition: background 0.2s ease;
-}
-
-.toggle.is-on {
-  border-color: #38bdf8;
-  background: #e0f2fe;
-}
-
-.toggle.is-on .knob {
-  background: #0ea5e9;
+  width: 1.45rem;
+  height: 1.45rem;
+  border-radius: 999px;
+  background: #f97316;
+  box-shadow: 0 8px 16px rgba(249, 115, 22, 0.25);
 }
 
 .toggle .label {
-  font-size: 0.85rem;
-  font-weight: 500;
-  color: #0f172a;
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: #475569;
+}
+
+.toggle.is-on {
+  border-color: rgba(5, 150, 105, 0.5);
+  background: rgba(16, 185, 129, 0.12);
+}
+
+.toggle.is-on .knob {
+  background: #0f766e;
+  box-shadow: 0 8px 16px rgba(15, 118, 110, 0.25);
+}
+
+.toggle.is-on .label {
+  color: #047857;
 }
 
 .ghost {
-  border: 1px solid transparent;
-  border-radius: 0.5rem;
-  padding: 0.35rem 0.6rem;
-  background: #e2e8f0;
+  border: 1px solid rgba(249, 115, 22, 0.45);
+  background: rgba(249, 115, 22, 0.08);
+  color: #9a3412;
+  border-radius: 0.75rem;
+  padding: 0.45rem 0.9rem;
+  font-weight: 600;
+  font-size: 0.85rem;
   cursor: pointer;
-  font-weight: 500;
-  color: #0f172a;
+  transition: background 0.2s ease, color 0.2s ease, border-color 0.2s ease;
 }
 
-.ghost:hover {
-  background: #cbd5f5;
-}
-
-.xray__chart {
-  flex: 1;
-  min-height: 0;
-  display: flex;
-  flex-direction: column;
-  gap: 1rem;
+.ghost:hover,
+.ghost:focus-visible {
+  background: rgba(249, 115, 22, 0.18);
+  color: #7c2d12;
+  border-color: #f97316;
+  outline: none;
 }
 
 .xray__state {
   display: grid;
   place-items: center;
-  padding: 2rem 1rem;
+  gap: 0.75rem;
   text-align: center;
+  min-height: 240px;
   color: #1f2933;
-  background: #f8fafc;
-  border-radius: 0.75rem;
+}
+
+.xray__state--loading .loader {
+  width: 1.75rem;
+  height: 1.75rem;
+  border-radius: 50%;
+  border: 3px solid rgba(249, 115, 22, 0.2);
+  border-top-color: #f97316;
+  animation: spin 0.9s linear infinite;
 }
 
 .xray__state--error {
   color: #b91c1c;
-  background: #fee2e2;
-}
-
-.loader {
-  width: 2.5rem;
-  height: 2.5rem;
-  border-radius: 50%;
-  border: 3px solid rgba(14, 165, 233, 0.25);
-  border-top-color: #0ea5e9;
-  animation: spin 1s linear infinite;
-}
-
-@keyframes spin {
-  to {
-    transform: rotate(360deg);
-  }
 }
 
 .xray__foot {
-  color: #475569;
   display: block;
-  font-size: 0.85rem;
-}
-
-.mono {
-  font-family: ui-monospace, Menlo, Consolas, 'Liberation Mono', monospace;
-}
-
-.tag {
-  font-size: 0.75rem;
-  font-weight: 600;
+  font-size: 0.8rem;
   color: #475569;
-  text-transform: uppercase;
-  letter-spacing: 0.04em;
+}
+
+@media (max-width: 768px) {
+  .xray__head-actions {
+    align-items: stretch;
+  }
+
+  .xray__controls {
+    justify-content: flex-start;
+  }
 }
 </style>
