@@ -10,6 +10,15 @@ const props = defineProps({
   startPaused: { type: Boolean, default: false },
   // 'satellite' | 'map'  (empezamos con el que quieras)
   mode: { type: String, default: 'satellite' },
+  showAnimationControl: { type: Boolean, default: true },
+  focusBounds: {
+    type: Array,
+    default: () => [
+      [-60, -110], // sudoeste
+      [18, -25], // noreste
+    ],
+  },
+  focusMaxZoom: { type: Number, default: 5 },
 
   // Sombras
   nightOpacity: { type: Number, default: 0.38 },
@@ -36,15 +45,21 @@ let animFrameId=null
 let animButtonEl=null
 
 /* === Bounds Sudamérica + helper para encajar una sola vez === */
-const LATAM_BOUNDS = L.latLngBounds(
-  [-60, -110], // sudoeste
-  [ 18, -25]   // noreste
-)
 let didInitialFit = false
+function getFocusBounds() {
+  try {
+    const bounds = L.latLngBounds(props.focusBounds)
+    return bounds.isValid() ? bounds : null
+  } catch (err) {
+    return null
+  }
+}
 function fitLatamOnce() {
   if (didInitialFit || !map) return
+  const bounds = getFocusBounds()
+  if (!bounds) return
   didInitialFit = true
-  map.fitBounds(LATAM_BOUNDS, { padding:[20,20], maxZoom:5 })
+  map.fitBounds(bounds, { padding:[20,20], maxZoom: props.focusMaxZoom ?? 5 })
 }
 
 /* ---------- helpers astronómicos (igual que antes) ---------- */
@@ -218,29 +233,40 @@ function addExtrasControls(){
     options:{ position:'topleft' },
     onAdd(){
       const el = L.DomUtil.create('div','map-tools')
-      el.innerHTML = `
+      const buttons = [`
         <button class="btn reset" type="button" title="Restablecer vista" aria-label="Restablecer vista">
           ⟲
         </button>
-        <button class="btn anim" type="button" title="Animar sombra diaria" aria-label="Animar sombra diaria">
-          Animar día
-        </button>
-      `
+      `]
+      if (props.showAnimationControl) {
+        buttons.push(`
+          <button class="btn anim" type="button" title="Animar sombra diaria" aria-label="Animar sombra diaria">
+            Animar día
+          </button>
+        `)
+      }
+      el.innerHTML = buttons.join('')
+
       const [resetBtn, animBtn] = el.querySelectorAll('button')
-      animButtonEl = animBtn
+      animButtonEl = props.showAnimationControl ? animBtn : null
 
       L.DomEvent.disableClickPropagation(el)
       L.DomEvent.disableScrollPropagation(el)
 
       resetBtn.addEventListener('click', () => {
-        // volver a Sudamérica
-        map.fitBounds(LATAM_BOUNDS, { padding:[20,20], maxZoom:4 })
+        // volver al enfoque principal (por defecto Sudamérica)
+        const bounds = getFocusBounds()
+        if (bounds?.isValid()) {
+          map.fitBounds(bounds, { padding:[20,20], maxZoom: props.focusMaxZoom ?? 5 })
+        }
       })
 
-      animBtn.addEventListener('click', () => {
-        if (isAnimating.value) stopAnimation()
-        else startAnimation()
-      })
+      if (props.showAnimationControl && animBtn) {
+        animBtn.addEventListener('click', () => {
+          if (isAnimating.value) stopAnimation()
+          else startAnimation()
+        })
+      }
 
       updateAnimButton()
 
@@ -252,13 +278,14 @@ function addExtrasControls(){
 }
 
 function updateAnimButton(){
-  if (!animButtonEl) return
+  if (!props.showAnimationControl || !animButtonEl) return
   animButtonEl.textContent = isAnimating.value ? 'Detener animación' : 'Animar día'
   animButtonEl.classList.toggle('active', isAnimating.value)
   animButtonEl.setAttribute('aria-pressed', String(isAnimating.value))
 }
 
 function startAnimation(){
+  if (!props.showAnimationControl) return
   if (isAnimating.value) return
   stopTimer()
   isAnimating.value = true
@@ -287,6 +314,7 @@ function startAnimation(){
 }
 
 function stopAnimation(){
+  if (!props.showAnimationControl) return
   if (!isAnimating.value) return
   isAnimating.value = false
   if (animFrameId){ cancelAnimationFrame(animFrameId); animFrameId=null }
@@ -328,10 +356,17 @@ onMounted(() => {
     maxBoundsViscosity:1.0,
   })
 
-  // ✅ vista inicial provisional para que se pinten tiles altiro
-  map.setView([-15, -60], 3)
+  // ✅ vista inicial provisional enfocada en el área principal (Sudamérica por defecto)
+  const focusBounds = getFocusBounds()
+  if (focusBounds) {
+    const center = focusBounds.getCenter()
+    map.setView(center, Math.min(props.focusMaxZoom ?? 5, 4))
+  } else {
+    map.setView([-15, -60], 3)
+  }
 
   makeBaseAndLabels(mode.value)
+  fitLatamOnce()
 
   // arreglos de tamaño
   requestAnimationFrame(()=> map.invalidateSize())

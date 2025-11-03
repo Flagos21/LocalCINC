@@ -40,6 +40,11 @@ const router = createRouter({
       component: () => import('../views/ElectricFieldView.vue'),
     },
     {
+      path: '/mapa-dia-noche',
+      name: 'day-night-map',
+      component: () => import('../views/DayNightMapView.vue'),
+    },
+    {
       path: '/graphs',
       redirect: { name: 'magnetometers-influxdb' },
     },

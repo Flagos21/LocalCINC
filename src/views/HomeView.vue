@@ -183,6 +183,8 @@ function fmtUTC(value) {
             :autoRefreshMs="60000"
             :showTwilight="true"
             :showSunMoon="true"
+            :showAnimationControl="false"
+            :focusMaxZoom="4"
           />
         </div>
       </article>
