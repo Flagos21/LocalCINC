@@ -20,7 +20,8 @@ const { labels, series, isLoading, errorMessage } = useMagnetometerSeries({
   unit: ref('nT'),
   station: ref('CHI'),
   from,
-  to
+  to,
+  endpoint: ref('/api/local-magnetometer/series')
 })
 
 const visiblePoints = ref(0)
@@ -145,17 +146,14 @@ function applyPreset(id) {
 
   activePreset.value = id
 
-  if (preset.rangeToken) {
-    rangeRef.value = preset.rangeToken
-    from.value = ''
-    to.value = ''
-    draw()
-    return
-  }
-
   rangeRef.value = ''
+
   const end = dayjs()
-  const start = end.subtract(preset.duration.amount, preset.duration.unit)
+  const duration = preset.duration
+  const start = duration
+    ? end.subtract(duration.amount, duration.unit)
+    : end
+
   from.value = start.format('YYYY-MM-DDTHH:mm')
   to.value = end.format('YYYY-MM-DDTHH:mm')
   draw()
