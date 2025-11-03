@@ -84,6 +84,8 @@ const thrLog = thresholds.map(t => ({ y: Math.log10(t.y), label: t.label }));
 const chartSeries = ref([]);
 const gridX = ref([]); // guardamos la grilla para tooltip custom
 const TOLERANCE_MS = 120_000;
+const ORANGE = '#f97316';
+const chartColors = computed(() => chartSeries.value.map(() => ORANGE));
 
 function rebuildSeries() {
   // 1) log10 de todas las series
@@ -150,7 +152,7 @@ const options = computed(() => ({
       label: { text: t.label, style: { background: '#f8fafc', color: '#0f172a' } }
     })),
   },
-  colors: ['#ea580c', '#6b21a8', '#f59e0b', '#4c1d95'],
+  colors: chartColors.value,
 
   /* === Tooltip SIEMPRE con todas las series visibles (por índice común) === */
   tooltip: {

@@ -69,7 +69,7 @@ const chartOptions = computed(() => ({
     strokeOpacity: 1,
     hover: { sizeOffset: 3 }
   },
-  colors: ['#2563eb'],
+  colors: ['#f97316'],
   xaxis: {
     type: 'datetime',
     min: Number.isFinite(xDomain.value.min) ? xDomain.value.min : undefined,
@@ -312,8 +312,8 @@ onMounted(() => {
   width: 1.5rem;
   height: 1.5rem;
   border-radius: 50%;
-  border: 3px solid rgba(59, 130, 246, 0.2);
-  border-top-color: #2563eb;
+  border: 3px solid rgba(249, 115, 22, 0.2);
+  border-top-color: #f97316;
   animation: spin 1s linear infinite;
 }
 

@@ -42,7 +42,7 @@ const chartOptions = computed(() => ({
     strokeOpacity: 1,
     hover: { sizeOffset: 3 }
   },
-  colors: ['#2563eb'],
+  colors: ['#f97316'],
   xaxis: {
     type: 'datetime',
     min: Number.isFinite(xDomain.value.min) ? xDomain.value.min : undefined,
@@ -368,9 +368,9 @@ onMounted(() => {
 }
 
 .magneto__quick-button {
-  border: 1px solid rgba(37, 99, 235, 0.35);
-  background: rgba(37, 99, 235, 0.12);
-  color: #1d4ed8;
+  border: 1px solid rgba(249, 115, 22, 0.35);
+  background: rgba(249, 115, 22, 0.12);
+  color: #b45309;
   padding: 0.3rem 0.55rem;
   border-radius: 999px;
   font-size: 0.78rem;
@@ -381,16 +381,16 @@ onMounted(() => {
 
 .magneto__quick-button:hover,
 .magneto__quick-button:focus-visible {
-  background: rgba(37, 99, 235, 0.2);
-  border-color: #2563eb;
-  color: #1e3a8a;
+  background: rgba(249, 115, 22, 0.2);
+  border-color: #f97316;
+  color: #9a3412;
   outline: none;
 }
 
 .magneto__quick-button--active {
-  background: #2563eb;
+  background: #f97316;
   color: #ffffff;
-  border-color: #1d4ed8;
+  border-color: #ea580c;
 }
 
 .magneto__summary {
@@ -399,8 +399,8 @@ onMounted(() => {
   gap: 0.5rem;
   padding: 0.5rem;
   border-radius: 0.65rem;
-  background: #f1f5f9;
-  color: #1e3a8a;
+  background: #fff7ed;
+  color: #9a3412;
 }
 
 .magneto__summary-block {
@@ -414,7 +414,7 @@ onMounted(() => {
   text-transform: uppercase;
   letter-spacing: 0.08em;
   font-weight: 600;
-  color: #1d4ed8;
+  color: #ea580c;
 }
 
 .magneto__summary-value {
@@ -469,16 +469,16 @@ onMounted(() => {
   width: 1.4rem;
   height: 1.4rem;
   border-radius: 50%;
-  border: 3px solid rgba(37, 99, 235, 0.25);
-  border-top-color: #2563eb;
+  border: 3px solid rgba(249, 115, 22, 0.25);
+  border-top-color: #f97316;
   animation: magneto-spin 1s linear infinite;
 }
 
 .magneto__empty {
   padding: 0.75rem 1rem;
-  background: rgba(59, 130, 246, 0.12);
+  background: rgba(249, 115, 22, 0.12);
   border-radius: 0.65rem;
-  color: #1d4ed8;
+  color: #b45309;
   font-weight: 500;
   text-align: center;
 }
