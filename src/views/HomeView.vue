@@ -184,8 +184,8 @@ function fmtUTC(value) {
             :showTwilight="true"
             :showSunMoon="true"
             :showAnimationControl="false"
-            :focusBounds="[[ -60, -95 ], [ 18, -30 ]]"
-            :focusMaxZoom="4"
+            :focusBounds="[[ -55, -82 ], [ 15, -35 ]]"
+            :focusMaxZoom="5"
           />
         </div>
       </article>
@@ -388,8 +388,6 @@ function fmtUTC(value) {
 
 .home__tile--electric {
   padding: 0;
-  background: transparent;
-  box-shadow: none;
 }
 
 .home__tile--electric :deep(.efield-home) {
