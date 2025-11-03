@@ -184,6 +184,7 @@ function fmtUTC(value) {
             :showTwilight="true"
             :showSunMoon="true"
             :showAnimationControl="false"
+            :focusBounds="[[ -60, -95 ], [ 18, -30 ]]"
             :focusMaxZoom="4"
           />
         </div>
