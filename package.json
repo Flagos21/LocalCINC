@@ -23,6 +23,8 @@
     "leaflet": "^1.9.4",
     "leaflet-terminator": "^0.1.0",
     "litepicker": "^2.0.12",
+    "node-cron": "^4.2.1",
+    "node-fetch": "^3.3.2",
     "pinia": "^3.0.3",
     "suncalc": "^1.9.0",
     "vue": "^3.5.22",
