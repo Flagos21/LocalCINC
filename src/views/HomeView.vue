@@ -236,8 +236,6 @@ function fmtUTC(value) {
   display: grid;
   gap: 1rem;
   grid-template-columns: minmax(0, 1fr);
-  grid-template-rows: minmax(0, 1fr);
-  height: 100%;
   align-items: stretch;
 }
 
@@ -245,9 +243,7 @@ function fmtUTC(value) {
   display: grid;
   gap: 1rem;
   grid-template-columns: minmax(0, 1fr);
-  grid-auto-rows: minmax(0, 1fr);
-  height: 100%;
-  min-height: 0;
+  grid-auto-rows: auto;
 }
 
 .home__tile {
@@ -287,7 +283,7 @@ function fmtUTC(value) {
   flex: 1 1 auto;
   display: flex;
   flex-direction: column;
-  gap: 0.75rem;
+  gap: 0.9rem;
   min-height: 0;
   overflow: hidden;
 }
@@ -297,7 +293,7 @@ function fmtUTC(value) {
   width: 100%;
   background: #e2e8f0;
   border-radius: 999px;
-  margin: 0.25rem 0 0.5rem;
+  margin: 0.5rem 0 0.75rem;
 }
 
 .home__tile-subsection {
@@ -338,6 +334,14 @@ function fmtUTC(value) {
 
 .home__tile-subsection--kp :deep(.kp-card) {
   width: 100%;
+}
+
+.home__tile--xray .home__tile-divider {
+  margin: 0.75rem 0 1rem;
+}
+
+.home__tile--xray .home__tile-subsection {
+  gap: 1rem;
 }
 
 
@@ -408,7 +412,7 @@ function fmtUTC(value) {
   background: #ffffff;
   align-items: stretch;
   justify-items: stretch;
-  height: clamp(16rem, 32vh, 22rem);
+  height: clamp(15rem, 28vw, 21rem);
 }
 
 .home__tile-visual--map :deep(.tad-card) {
@@ -560,21 +564,6 @@ function fmtUTC(value) {
 
 @media (min-width: 1280px) {
   .home__grid { grid-template-columns: minmax(25rem, 1.05fr) minmax(32rem, 1.25fr); }
-}
-
-@media (max-width: 959px) {
-  .home {
-    height: auto;
-    max-height: none;
-    overflow: visible;
-  }
-  .home__grid {
-    height: auto;
-  }
-  .home__aside-grid {
-    grid-auto-rows: auto;
-    height: auto;
-  }
 }
 
 @media (max-width: 600px) {
