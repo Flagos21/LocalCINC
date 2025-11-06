@@ -5,7 +5,7 @@ import VueApexCharts from 'vue3-apexcharts'
 import dayjs from '@/utils/dayjs'
 import { useMagnetometerSeries } from '@/composables/useMagnetometerSeries'
 
-const DEFAULT_AXIS_SPAN = 5
+const DEFAULT_AXIS_SPAN = 2.5
 const AXIS_PADDING_RATIO = 0.1
 
 const presets = [

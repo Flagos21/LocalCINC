@@ -379,40 +379,54 @@ function fmtUTC(value) {
 .home__tile-visual--sun {
   background: #ffffff;
   --dashboard-aspect: 1 / 1;
-  height: clamp(14rem, 24vh, 20rem);
+  height: auto;
   min-height: 0;
-  padding: 0.5rem;
+  padding: 0.75rem 0.9rem 1rem;
   display: flex;
-  align-items: center;
-  justify-content: center;
+  align-items: stretch;
+  justify-content: stretch;
   overflow: visible;
+  border: 1px solid #e2e8f0;
+  border-radius: 0.75rem;
 }
 
 .home__tile-visual--sun > * {
-  height: auto;
+  width: 100%;
+  min-height: 0;
 }
 
 .home__tile-visual--sun :deep(.sunviewer) {
   display: flex;
   flex-direction: column;
+  gap: 0.75rem;
   width: 100%;
-  height: auto;
+  height: 100%;
   min-height: 0;
   max-width: 28rem;
   margin: 0 auto;
 }
 
+.home__tile-visual--sun :deep(.sunviewer__toolbar) {
+  flex-wrap: wrap;
+  justify-content: space-between;
+}
+
 .home__tile-visual--sun :deep(.sunviewer__frame) {
-  margin: 0;
-  width: 100%;
-  align-self: center;
+  flex: 1 1 auto;
+  width: min(100%, 28rem);
+  margin: 0 auto;
+}
+
+.home__tile-visual--sun :deep(.sunviewer__footer) {
+  flex-wrap: wrap;
+  justify-content: space-between;
 }
 
 .home__tile-visual--map {
   background: #ffffff;
   align-items: stretch;
   justify-items: stretch;
-  height: clamp(15rem, 28vw, 21rem);
+  height: clamp(18rem, 36vh, 24rem);
 }
 
 .home__tile-visual--map :deep(.tad-card) {
@@ -421,6 +435,7 @@ function fmtUTC(value) {
   flex-direction: column;
   min-height: 0;
   width: 100%;
+  margin-inline: 0;
 }
 
 .home__tile-visual--map :deep(.tad-map) {

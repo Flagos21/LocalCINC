@@ -265,7 +265,7 @@ function onSeek(evt) {
 /* Frame contenedor (evita desbordes) */
 .sunviewer__frame {
   position: relative;
-  width: 100%;
+  width: min(100%, 28rem);
   max-width: 100%;
   aspect-ratio: var(--dashboard-aspect, 1 / 1);
   border-radius: 0.75rem;
@@ -273,9 +273,9 @@ function onSeek(evt) {
   overflow: hidden;
   display: grid;
   place-items: center;
-  flex: 0 0 auto;
+  flex: 1 1 auto;
   min-height: 0;
-  margin: 0;
+  margin: 0 auto;
 }
 .sunviewer__img {
   width: 100%;
