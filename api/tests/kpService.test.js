@@ -80,7 +80,7 @@ test('refreshKp conserva caché cuando hay errores', async () => {
     throw new Error('GFZ caído')
   }
 
-  const { refreshKp, getKpCache } = await import('../services/kpService.js')
+  const { refreshKp, getKpCache, stopKpService } = await import('../services/kpService.js')
 
   await refreshKp()
   const firstCache = getKpCache()
@@ -93,4 +93,27 @@ test('refreshKp conserva caché cuando hay errores', async () => {
   assert.deepEqual(secondCache.series, firstCache.series)
 
   global.fetch = originalFetch
+  stopKpService()
+})
+
+test('refreshKp usa fallback local cuando GFZ falla en warm-up', async () => {
+  const originalFetch = global.fetch
+  global.fetch = async () => {
+    throw new Error('GFZ no disponible')
+  }
+
+  const { refreshKp, getKpCache, stopKpService } = await import(
+    `../services/kpService.js?fallback=${Date.now()}`
+  )
+
+  await refreshKp()
+  const cache = getKpCache()
+
+  assert.ok(cache.updatedAt)
+  assert.ok(Array.isArray(cache.series))
+  assert.ok(cache.series.length > 0)
+  assert.equal(cache.series[0].time, '2024-05-01T00:00:00.000Z')
+
+  global.fetch = originalFetch
+  stopKpService()
 })

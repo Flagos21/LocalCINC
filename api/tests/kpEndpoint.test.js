@@ -65,6 +65,43 @@ test('GET /api/kp entrega serie desde caché', async () => {
   stopKpService()
 })
 
+test('GET /api/kp usa fallback local cuando GFZ falla', async () => {
+  process.env.NODE_ENV = 'test'
+  process.env.INFLUX_URL = 'http://localhost'
+  process.env.INFLUX_TOKEN = 'dummy'
+  process.env.INFLUX_ORG = 'dummy'
+  process.env.INFLUX_BUCKET = 'dummy'
+  process.env.KP_ENABLED = 'true'
+
+  const originalFetch = global.fetch
+  global.fetch = async (input, init) => {
+    const url = typeof input === 'string' ? input : input?.url ?? ''
+    if (url.includes('kp.gfz.de')) {
+      throw new Error('GFZ caído')
+    }
+    return originalFetch(input, init)
+  }
+
+  const { default: app, kpReady } = await import(`../server.js?fallback=${Date.now()}`)
+  await kpReady
+
+  const server = app.listen(0)
+  const { port } = server.address()
+
+  const response = await fetch(`http://127.0.0.1:${port}/api/kp`)
+  assert.equal(response.status, 200)
+  const body = await response.json()
+
+  assert.ok(body.series.length > 0)
+  assert.equal(body.series[0].time, '2024-05-01T00:00:00.000Z')
+
+  server.close()
+  global.fetch = originalFetch
+
+  const { stopKpService } = await import('../services/kpService.js')
+  stopKpService()
+})
+
 test('GET /api/kp devuelve 503 cuando está deshabilitado', async () => {
   process.env.NODE_ENV = 'test'
   process.env.INFLUX_URL = 'http://localhost'
@@ -72,6 +109,15 @@ test('GET /api/kp devuelve 503 cuando está deshabilitado', async () => {
   process.env.INFLUX_ORG = 'dummy'
   process.env.INFLUX_BUCKET = 'dummy'
   process.env.KP_ENABLED = 'false'
+
+  const originalFetch = global.fetch
+  global.fetch = async (input, init) => {
+    const url = typeof input === 'string' ? input : input?.url ?? ''
+    if (url.includes('kp.gfz.de')) {
+      throw new Error('GFZ caído')
+    }
+    return originalFetch(input, init)
+  }
 
   const { default: app, kpReady } = await import(`../server.js?disabled=${Date.now()}`)
   await kpReady
@@ -82,6 +128,7 @@ test('GET /api/kp devuelve 503 cuando está deshabilitado', async () => {
   assert.equal(response.status, 503)
 
   server.close()
+  global.fetch = originalFetch
   const { stopKpService } = await import('../services/kpService.js')
   stopKpService()
 })

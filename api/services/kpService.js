@@ -1,5 +1,23 @@
-import cron from 'node-cron';
 import process from 'node:process';
+import fallbackRaw from '../data/kpFallback.json' with { type: 'json' };
+
+async function resolveCron() {
+  try {
+    const mod = await import('node-cron');
+    return mod.default ?? mod;
+  } catch (err) {
+    try {
+      const mod = await import('../vendor/node-cron/index.js');
+      console.warn('[Kp] Usando implementación local de node-cron.');
+      return mod.default ?? mod;
+    } catch (fallbackErr) {
+      err.cause = fallbackErr;
+      throw err;
+    }
+  }
+}
+
+const cron = await resolveCron();
 
 const GFZ_BASE_URL = 'https://kp.gfz.de/app/json/';
 const FETCH_TIMEOUT_MS = 30_000;
@@ -8,6 +26,11 @@ let kpCache = { updatedAt: null, series: [] };
 let refreshPromise = null;
 let cronTask = null;
 let initialized = false;
+let fallbackSeries = [];
+
+function cloneSeries(series) {
+  return series.map((point) => ({ ...point }));
+}
 
 function parsePositiveInt(value, fallback) {
   const parsed = Number.parseInt(value, 10);
@@ -171,6 +194,20 @@ function normalizeSeries(raw) {
   return deduped;
 }
 
+function loadFallbackSeries() {
+  try {
+    const series = normalizeSeries(fallbackRaw);
+    if (series.length) {
+      return series;
+    }
+  } catch (err) {
+    console.error('[Kp] No se pudo normalizar el fallback local:', err);
+  }
+  return [];
+}
+
+fallbackSeries = loadFallbackSeries();
+
 export async function fetchKp() {
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), FETCH_TIMEOUT_MS);
@@ -203,7 +240,7 @@ export async function fetchKp() {
 export function getKpCache() {
   return {
     updatedAt: kpCache.updatedAt,
-    series: kpCache.series.map((point) => ({ ...point }))
+    series: cloneSeries(kpCache.series)
   };
 }
 
@@ -225,6 +262,15 @@ export async function refreshKp() {
       console.info(`[Kp] cache actualizado con ${series.length} puntos.`);
     } catch (err) {
       console.error('[Kp] Error al refrescar datos:', err);
+      if (!kpCache.series.length && fallbackSeries.length) {
+        kpCache = {
+          updatedAt: new Date().toISOString(),
+          series: cloneSeries(fallbackSeries)
+        };
+        console.info(
+          `[Kp] cache inicializado con datos de respaldo (${kpCache.series.length} puntos).`
+        );
+      }
     } finally {
       refreshPromise = null;
     }
@@ -271,6 +317,7 @@ export function stopKpService() {
   }
   initialized = false;
   refreshPromise = null;
+  kpCache = { updatedAt: null, series: [] };
 }
 
 export const __internals = {

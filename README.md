@@ -57,6 +57,7 @@ El backend expone `GET /api/kp`, que retorna la última serie almacenada en cach
 ```
 
 La caché se refresca automáticamente según `KP_CRON`. Si el servicio se encuentra deshabilitado (`KP_ENABLED=false`) el endpoint responde `503`.
+Cuando la API de GFZ no está disponible, el backend conserva el último dato válido y, si aún no existe caché, inicializa una serie de respaldo incluida en el repositorio para mantener operativo el dashboard.
 
 ### Frontend
 
