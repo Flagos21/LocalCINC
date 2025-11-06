@@ -221,8 +221,7 @@ function fmtUTC(value) {
   gap: 1.1rem;
   flex: 1;
   min-height: 0;
-  height: 100%;
-  max-height: calc(100vh - var(--masthead-h, 120px) - 3rem);
+  height: auto;
   overflow: hidden;
 }
 
