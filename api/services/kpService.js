@@ -1,381 +1,197 @@
 /* eslint-env node */
+// Kp service (GFZ primario, NOAA fallback) SIN promedios.
+// Solo conserva muestras exactas a 3 h (UTC) en 00,03,06,... y descarta el resto.
+
 import 'dotenv/config';
 import process from 'node:process';
-import localFallbackSource from '../data/kpFallback.json' with { type: 'json' };
+import fs from 'node:fs/promises';
 
-// --- util: cron dinámico (soporta vendor/local si falta node-cron) ---
-async function resolveCron() {
-  try {
-    const mod = await import('node-cron');
-    return mod.default ?? mod;
-  } catch {
-    const mod = await import('../vendor/node-cron/index.js');
-    console.warn('[Kp] Usando implementación local de node-cron.');
-    return mod.default ?? mod;
-  }
-}
-const cron = await resolveCron();
+// ---------- Helpers ----------
+const sleep = (ms) => new Promise(r => setTimeout(r, ms));
+const FETCH_TIMEOUT_MS = 25_000;
 
-// --- endpoints conocidos ---
-const GFZ_APP_JSON = 'https://kp.gfz.de/app/json/'; // intento 1 (a veces 500)
-const NOAA_JSON_3H = 'https://services.swpc.noaa.gov/json/planetary_k_index.json';
-const NOAA_JSON_1M = 'https://services.swpc.noaa.gov/json/planetary_k_index_1m.json';
-
-const FETCH_TIMEOUT_MS = 30_000;
-
-const clone = (value) => (
-  typeof structuredClone === 'function'
-    ? structuredClone(value)
-    : JSON.parse(JSON.stringify(value))
-);
-
-let localFallbackData = clone(localFallbackSource);
-
-// -------------------- Config --------------------
-function parsePositiveInt(v, fb) {
-  const n = Number.parseInt(v, 10);
-  return Number.isFinite(n) && n > 0 ? n : fb;
-}
-function parseBoolean(v, fb = true) {
-  if (v === undefined || v === null) return fb;
-  const s = String(v).trim().toLowerCase();
-  if (['1','true','yes','y','on'].includes(s)) return true;
-  if (['0','false','no','n','off'].includes(s)) return false;
-  return fb;
-}
-function getCfg() {
-  const {
-    KP_LOOKBACK_DAYS = '10',
-    KP_STATUS = 'now',              // 'now' (nowcast) o 'def' (definitivos)
-    KP_CRON = '*/15 * * * *',
-    KP_ENABLED = 'true'
-  } = process.env;
-
-  return {
-    lookbackDays: parsePositiveInt(KP_LOOKBACK_DAYS, 10),
-    status: String(KP_STATUS).toLowerCase() === 'def' ? 'def' : 'now',
-    cronExpr: KP_CRON && KP_CRON.trim() ? KP_CRON.trim() : '*/15 * * * *',
-    enabled: parseBoolean(KP_ENABLED, true)
-  };
-}
-
-// -------------------- Normalizadores --------------------
-function toIso(x) {
-  if (x === undefined || x === null) return null;
-
-  if (x instanceof Date) {
-    const t = x.getTime();
-    return Number.isNaN(t) ? null : x.toISOString();
-  }
-
-  if (typeof x === 'number') {
-    const d = new Date(x);
-    return Number.isNaN(d.getTime()) ? null : d.toISOString();
-  }
-
-  let s = String(x).trim();
-  if (!s) return null;
-
-  if (/^\d{4}-\d{2}-\d{2} \d{2}:\d{2}/.test(s)) {
-    s = s.replace(' ', 'T');
-  }
-
-  if (/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}/.test(s) && !/[zZ]|[+-]\d{2}:\d{2}$/.test(s)) {
-    s = `${s}Z`;
-  }
-
-  const d = new Date(s);
-  return Number.isNaN(d.getTime()) ? null : d.toISOString();
-}
-function normStatus(s) {
-  const k = (s ?? '').toString().trim().toLowerCase();
-  return k.startsWith('def') ? 'def' : 'now';
-}
-
-/** Forma A: GFZ “matriz” como tu kp.json -> { datetime:[], Kp:[], status:[] } */
-function normalizeGfzMatrix(obj) {
-  if (!obj || !Array.isArray(obj.datetime) || !Array.isArray(obj.Kp)) return [];
-  const n = Math.min(obj.datetime.length, obj.Kp.length, (obj.status || []).length || Infinity);
-  const out = [];
-  for (let i = 0; i < n; i += 1) {
-    const t = toIso(obj.datetime[i]);
-    const v = Number.parseFloat(obj.Kp[i]);
-    if (!t || !Number.isFinite(v)) continue;
-    out.push({ time: t, value: v, status: normStatus(obj.status?.[i]) });
-  }
-  return out;
-}
-
-/** Forma B: colecciones varias [{time,value,status}] o [[time,value,status], ...] */
-function normalizeFlexible(body) {
-  const pools = [];
-  if (Array.isArray(body)) pools.push(body);
-  if (Array.isArray(body?.data)) pools.push(body.data);
-  if (Array.isArray(body?.series)) pools.push(body.series);
-  if (Array.isArray(body?.items)) pools.push(body.items);
-
-  const out = [];
-  for (const col of pools) {
-    for (const item of col) {
-      if (Array.isArray(item)) {
-        const [tr, vr, sr] = item;
-        const t = toIso(tr);
-        const v = Number.parseFloat(vr);
-        if (t && Number.isFinite(v)) out.push({ time: t, value: v, status: normStatus(sr) });
-      } else if (item && typeof item === 'object') {
-        const t = toIso(
-          item.time ?? item.timestamp ?? item.time_tag ?? item.timeTag ?? item.datetime ?? item.date,
-        );
-        const v = Number.parseFloat(
-          item.value ?? item.kp ?? item.Kp ?? item.kp_index ?? item.index ?? item.KP ?? item.kpIndex,
-        );
-        if (t && Number.isFinite(v)) out.push({ time: t, value: v, status: normStatus(item.status ?? item.flag) });
-      }
-    }
-  }
-  return out;
-}
-
-function sortDedup(series) {
-  const s = [...series].sort((a, b) => new Date(a.time) - new Date(b.time));
-  const out = [];
-  let last = null;
-  for (const p of s) {
-    if (p.time === last) out[out.length - 1] = p; else { out.push(p); last = p.time; }
-  }
-  return out;
-}
-
-// -------------------- Fetchers --------------------
-function buildGfzUrlIso(now = new Date()) {
-  const { lookbackDays, status } = getCfg();
-  const end = new Date(now);
-  const start = new Date(end.getTime() - lookbackDays * 86400_000);
-  const u = new URL(GFZ_APP_JSON);
-  u.searchParams.set('index', 'Kp');
-  u.searchParams.set('start', start.toISOString());
-  u.searchParams.set('end', end.toISOString());
-  if (status === 'def') u.searchParams.set('status', 'def');
-  return u.toString();
-}
-function buildGfzUrlYmd(now = new Date()) {
-  // Variante “YYYY-MM-DD” (algunos despliegues aceptan este formato)
-  const { lookbackDays, status } = getCfg();
-  const end = new Date(now);
-  const start = new Date(end.getTime() - lookbackDays * 86400_000);
-  const pad = (n) => String(n).padStart(2, '0');
-  const s = `${start.getUTCFullYear()}-${pad(start.getUTCMonth() + 1)}-${pad(start.getUTCDate())}`;
-  const e = `${end.getUTCFullYear()}-${pad(end.getUTCMonth() + 1)}-${pad(end.getUTCDate())}`;
-  const u = new URL(GFZ_APP_JSON);
-  u.searchParams.set('index', 'Kp');
-  u.searchParams.set('start', s);
-  u.searchParams.set('end', e);
-  if (status === 'def') u.searchParams.set('status', 'def');
-  return u.toString();
-}
-
-async function fetchJson(url, { timeoutMs = FETCH_TIMEOUT_MS, headers = {} } = {}) {
-  const ctl = new AbortController();
-  const t = setTimeout(() => ctl.abort(), timeoutMs);
+async function fetchWithTimeout(url, opts = {}) {
+  const { signal, timeout = FETCH_TIMEOUT_MS, ...rest } = opts;
+  const ctrl = new AbortController();
+  const t = setTimeout(() => ctrl.abort(new Error('timeout')), timeout);
   try {
     const res = await fetch(url, {
-      method: 'GET',
-      headers: {
-        'User-Agent': 'LocalCINC/1.0 (+https://kp.gfz.de)',
-        Accept: 'application/json',
-        ...headers,
-      },
-      signal: ctl.signal,
+      ...rest,
+      signal: signal ?? ctrl.signal,
+      headers: { 'accept': '*/*', ...(rest.headers || {}) }
     });
-    if (!res.ok) throw new Error(`HTTP ${res.status}`);
-    return await res.json();
+    return res;
   } finally {
     clearTimeout(t);
   }
 }
 
-// GFZ (ISO)
-async function tryGfzIso() {
-  try {
-    const body = await fetchJson(buildGfzUrlIso());
-    // si llega tipo matriz { datetime, Kp, status }
-    if (body && body.datetime && body.Kp) {
-      const s = normalizeGfzMatrix(body);
-      if (!s.length) throw new Error('GFZ serie vacía/no reconocida');
-      return sortDedup(s);
-    }
-    const s = normalizeFlexible(body);
-    if (!s.length) throw new Error('GFZ serie vacía/no reconocida');
-    return sortDedup(s);
-  } catch (e) {
-    console.warn('[Kp] GFZ (ISO) falló:', e.message || e);
-    throw e;
-  }
+function clamp(n, lo, hi) { return Math.max(lo, Math.min(hi, n)); }
+
+function dedupeKeepLast(list, by='ts') {
+  const m = new Map();
+  for (const it of list) m.set(it[by], it);
+  return [...m.values()].sort((a,b)=>a.ts.localeCompare(b.ts));
 }
 
-// GFZ (YYYY-MM-DD)
-async function tryGfzYmd() {
-  try {
-    const body = await fetchJson(buildGfzUrlYmd());
-    if (body && body.datetime && body.Kp) {
-      const s = normalizeGfzMatrix(body);
-      if (!s.length) throw new Error('GFZ serie vacía/no reconocida');
-      return sortDedup(s);
-    }
-    const s = normalizeFlexible(body);
-    if (!s.length) throw new Error('GFZ serie vacía/no reconocida');
-    return sortDedup(s);
-  } catch (e) {
-    console.warn('[Kp] GFZ (YMD) falló:', e.message || e);
-    throw e;
+// ---------- Normalización SIN promedio ----------
+// Quedarse SOLO con marcas exactas cada 3h (UTC) y normalizar a :00:00Z.
+// Si viene algo a 1h u horas “desalineadas”, se ignora.
+// Si hay más de un punto en la misma marca de 3h, se deja el último.
+function normalizeTo3h(points) {
+  if (!Array.isArray(points) || points.length === 0) return [];
+  const kept = [];
+  for (const p of points) {
+    const d = new Date(p.ts);
+    if (Number.isNaN(+d)) continue;
+    const h = d.getUTCHours();
+    const m = d.getUTCMinutes();
+    const s = d.getUTCSeconds();
+    // Solo horas múltiplo de 3 y sin minutos/segundos
+    if (h % 3 !== 0 || m !== 0 || s !== 0) continue;
+    const ts = new Date(Date.UTC(
+      d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate(), h, 0, 0
+    )).toISOString().replace('.000Z', 'Z');
+    const v = Number(p.kp);
+    if (Number.isFinite(v)) kept.push({ ts, kp: v, source: p.source || 'norm' });
   }
+  return dedupeKeepLast(kept);
 }
 
-// NOAA fallback. Primero intenta la serie oficial de 3 horas y luego complementa con 1 minuto.
-async function tryNoaa() {
-  const collected = [];
-
-  try {
-    const body3h = await fetchJson(NOAA_JSON_3H);
-    const normalized3h = normalizeFlexible(body3h);
-    for (const p of normalized3h) {
-      if (p?.time && Number.isFinite(p?.value)) {
-        collected.push({ ...p, status: 'now' });
-      }
-    }
-  } catch (err) {
-    console.warn('[Kp] NOAA (3h) falló:', err.message || err);
+// ---------- Proveedores ----------
+// NOAA SWPC (Kp planetario 3h)
+async function fetchNoaa3h() {
+  const url = 'https://services.swpc.noaa.gov/products/noaa-planetary-k-index.json';
+  const res = await fetchWithTimeout(url);
+  if (!res.ok) throw new Error(`NOAA HTTP ${res.status}`);
+  const json = await res.json();
+  // formato: [ ["time_tag","kp_index"], ["2025-01-01 00:00:00","3.33"], ... ]
+  const rows = Array.isArray(json) ? json.slice(1) : [];
+  const pts = [];
+  for (const r of rows) {
+    const ts = (r[0] || '').replace(' ', 'T') + 'Z';
+    const v = Number(r[1]);
+    if (Number.isFinite(v)) pts.push({ ts, kp: v, source: 'NOAA' });
   }
-
-  try {
-    const body1m = await fetchJson(NOAA_JSON_1M);
-    for (const it of body1m) {
-      const rawTime = it.time_tag ?? it.timeTag ?? it.time ?? it.timestamp ?? it.observed_time;
-      const t = toIso(rawTime);
-      const v = Number.parseFloat(it.kp_index ?? it.kp ?? it.value);
-      if (t && Number.isFinite(v)) {
-        collected.push({ time: t, value: v, status: 'now' });
-      }
-    }
-  } catch (err) {
-    console.warn('[Kp] NOAA (1m) falló:', err.message || err);
-  }
-
-  const sorted = sortDedup(collected);
-  if (!sorted.length) {
-    throw new Error('NOAA serie vacía/no reconocida');
-  }
-  return sorted;
+  return dedupeKeepLast(pts);
 }
 
-function tryLocalFallback() {
-  const pools = normalizeFlexible(
-    localFallbackData?.data ?? localFallbackData?.series ?? localFallbackData
-  );
-  const sorted = sortDedup(pools);
-  if (!sorted.length) throw new Error('Fallback local vacío');
-  return sorted;
-}
-
-// -------------------- Cache & API --------------------
-let kpCache = { updatedAt: null, series: [] };
-let cronTask = null;
-let refreshing = null;
-let initialized = false;
-
-export function isKpEnabled() { return getCfg().enabled; }
-export function getKpCache() {
-  return { updatedAt: kpCache.updatedAt, series: kpCache.series.map(p => ({ ...p })) };
-}
-
-export async function refreshKp() {
-  if (!isKpEnabled()) return getKpCache();
-  if (refreshing) return refreshing;
-
-  refreshing = (async () => {
+// GFZ "User specified download" JSON (Kp)
+async function fetchGfzRangeUTC(startISO, endISO) {
+  const start = startISO.slice(0,10);
+  const end = endISO.slice(0,10);
+  const candidates = [
+    `https://kp.gfz.de/data?format=json&index=Kp&start=${start}&end=${end}`,
+    `https://kp.gfz.de/en/data?format=json&index=Kp&start=${start}&end=${end}`
+  ];
+  let lastErr;
+  for (const url of candidates) {
     try {
-      let series = [];
-      const attempts = [
-        async () => await tryGfzIso(),
-        async () => await tryGfzYmd(),
-        async () => {
-          console.warn('[Kp] Usando NOAA como fallback…');
-          return await tryNoaa();
-        },
-        async () => {
-          console.warn('[Kp] Usando datos locales de respaldo…');
-          return tryLocalFallback();
-        }
-      ];
-
-      for (const attempt of attempts) {
-        try {
-          series = await attempt();
-          if (series?.length) break;
-        } catch (err) {
-          console.warn('[Kp] Intento fallido al obtener datos:', err.message || err);
-        }
+      const res = await fetchWithTimeout(url);
+      if (!res.ok) throw new Error(`GFZ HTTP ${res.status}`);
+      const json = await res.json();
+      // Esperado: { meta, datetime:[], Kp:[] }
+      if (!json || !Array.isArray(json.datetime) || !Array.isArray(json.Kp)) {
+        throw new Error('GFZ shape unexpected');
       }
-
-      if (!series?.length) {
-        throw new Error('No se pudo obtener la serie Kp desde las fuentes disponibles.');
-      }
-
-      kpCache = { updatedAt: new Date().toISOString(), series };
-      console.info(`[Kp] cache actualizado con ${series.length} puntos.`);
-    } catch (err) {
-      console.error('[Kp] Error al refrescar datos:', err);
-    } finally {
-      refreshing = null;
+      const pts = json.datetime
+        .map((ts, i) => ({ ts, kp: Number(json.Kp[i]), source: 'GFZ' }))
+        .filter(p => Number.isFinite(p.kp));
+      return dedupeKeepLast(pts);
+    } catch (e) {
+      lastErr = e;
+      await sleep(200);
     }
-    return getKpCache();
-  })();
-
-  return refreshing;
-}
-
-export async function initKpService() {
-  const { cronExpr, enabled } = getCfg();
-  if (!enabled) {
-    console.info('[Kp] Servicio deshabilitado por configuración.');
-    return getKpCache();
   }
-  if (initialized) return getKpCache();
-  initialized = true;
-
-  await refreshKp();
-
-  try {
-    if (cronTask) cronTask.stop();
-    cronTask = cron.schedule(cronExpr, () => { refreshKp(); });
-    console.info(`[Kp] Cron inicializado (${cronExpr}).`);
-  } catch (err) {
-    console.error('[Kp] No se pudo programar el cron:', err);
-  }
-  return getKpCache();
+  throw lastErr ?? new Error('GFZ unreachable');
 }
 
-export function stopKpService() {
-  if (cronTask) {
-    try { cronTask.stop(); } catch { /* ignore */ }
-    cronTask = null;
-  }
-  refreshing = null;
-  initialized = false;
-}
-
-function setLocalFallbackData(data) {
-  localFallbackData = data;
-}
-
-function resetLocalFallbackData() {
-  localFallbackData = clone(localFallbackSource);
-}
-
-// Exporte “internals” solo para tests si los usas
-export const __internals = {
-  normalizeGfzMatrix,
-  normalizeFlexible,
-  setLocalFallbackData,
-  resetLocalFallbackData,
+// ---------- Cache & API ----------
+const state = {
+  points: [],
+  lastUpdated: 0,
+  provider: 'none'
 };
+
+function cutoffDays(days) {
+  const ms = Math.max(1, Number(days) || 3) * 24*3600*1000;
+  return Date.now() - ms;
+}
+
+function filterSince(points, sinceMs) {
+  return points.filter(p => (new Date(p.ts)).getTime() >= sinceMs);
+}
+
+export async function refreshNow() {
+  const end = new Date();
+  const start = new Date(end.getTime() - 7*24*3600*1000); // último 7 días
+
+  // GFZ primero
+  try {
+    const gfz = await fetchGfzRangeUTC(start.toISOString(), end.toISOString());
+    const pts = normalizeTo3h(gfz); // sin promedios
+    state.points = pts;
+    state.lastUpdated = Date.now();
+    state.provider = 'GFZ';
+    console.log(`[Kp] Actualizado desde GFZ con ${pts.length} puntos.`);
+    return;
+  } catch (e) {
+    console.warn('[Kp] GFZ falló:', e.message);
+  }
+
+  // NOAA fallback
+  try {
+    const noaa = await fetchNoaa3h();
+    const pts = normalizeTo3h(noaa); // por si viniera algo desalineado
+    state.points = pts;
+    state.lastUpdated = Date.now();
+    state.provider = 'NOAA';
+    console.log(`[Kp] Actualizado desde NOAA con ${pts.length} puntos.`);
+    return;
+  } catch (e) {
+    console.warn('[Kp] NOAA fallback falló:', e.message);
+  }
+
+  // Fallback local opcional: ../data/kp.json
+  try {
+    const raw = await fs.readFile(new URL('../data/kp.json', import.meta.url), 'utf8');
+    const j = JSON.parse(raw);
+    const ptsRaw = (j.datetime||[]).map((ts,i)=>({ ts, kp: Number(j.Kp[i]), source: 'LOCAL' }))
+      .filter(p=>Number.isFinite(p.kp));
+    state.points = normalizeTo3h(ptsRaw);
+    state.provider = 'LOCAL';
+    state.lastUpdated = Date.now();
+    console.log(`[Kp] Actualizado desde archivo local con ${state.points.length} puntos.`);
+  } catch {
+    console.error('[Kp] Sin proveedores disponibles ni fallback local.');
+  }
+}
+
+let cronHandle = null;
+export async function startCron() {
+  const { default: Cron } = await import('node-cron');
+  cronHandle = Cron.schedule('*/15 * * * *', () => refreshNow().catch(()=>{}));
+}
+
+export function mountKpApi(app, basePath = '/api/kp') {
+  app.get(basePath, async (req, res) => {
+    try {
+      const days = clamp(Number(req.query.days ?? 3), 1, 30);
+      const since = cutoffDays(days);
+      if ((Date.now() - state.lastUpdated) > 10*60*1000 || state.points.length === 0) {
+        await refreshNow();
+      }
+      const pts = filterSince(state.points, since);
+      res.json({
+        meta: {
+          provider: state.provider,
+          lastUpdated: new Date(state.lastUpdated).toISOString(),
+          cadence: '3h'
+        },
+        points: pts
+      });
+    } catch (e) {
+      res.status(500).json({ error: e.message });
+    }
+  });
+}

@@ -7,11 +7,8 @@ import path from 'path';
 import fs from 'fs/promises';
 import { fileURLToPath } from 'url';
 import process from 'node:process';
-import {
-  initKpService,
-  getKpCache,
-  isKpEnabled
-} from './services/kpService.js';
+import { mountKpApi, startCron, refreshNow } from './services/kpService.js';
+
 
 import {
   getDstRealtime,
@@ -30,6 +27,8 @@ import {
 const app = express();
 app.use(cors());
 app.use(express.json());
+// Monta el endpoint del Kp ya listo: GET /api/kp?days=3
+mountKpApi(app, '/api/kp');
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -559,14 +558,7 @@ app.get('/api/dst/realtime/latest', async (req, res) => {
 });
 
 
-app.get('/api/kp', (req, res) => {
-  if (!isKpEnabled()) {
-    return res.status(503).json({ error: 'Kp disabled' });
-  }
 
-  const cache = getKpCache();
-  res.json(cache);
-});
 
 app.get('/api/ionograms/latest', async (req, res) => {
   try {
@@ -995,13 +987,11 @@ from(bucket: "${INFLUX_BUCKET}")
     res.status(500).json({ error: 'No se pudieron calcular ΔH.' });
   }
 });
-
-
-const kpReadyPromise = initKpService();
-
 if (process.env.NODE_ENV !== 'test') {
   try {
-    await kpReadyPromise;
+    // primer fetch de datos Kp y arranque del cron
+    await refreshNow();
+    await startCron();
   } catch (err) {
     console.error('[Kp] Error en warm-up inicial:', err);
   }
@@ -1011,5 +1001,4 @@ if (process.env.NODE_ENV !== 'test') {
   });
 }
 
-export const kpReady = kpReadyPromise;
 export default app;
