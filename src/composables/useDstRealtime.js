@@ -1,6 +1,6 @@
 import { ref, computed, onMounted, onBeforeUnmount } from 'vue'
 
-const DEFAULT_ENDPOINT = import.meta.env.VITE_DST_API || 'http://localhost:3001/api/dst/realtime'
+const DEFAULT_ENDPOINT = import.meta.env.VITE_DST_API || 'http://localhost:3001/api/dst/chart'
 const DEFAULT_LATEST_ENDPOINT =
   import.meta.env.VITE_DST_LATEST_API || 'http://localhost:3001/api/dst/realtime/latest'
 
@@ -190,7 +190,7 @@ export function useDstRealtime({ pollMs = 60000, endpoint = DEFAULT_ENDPOINT } =
       let payload
       try {
         payload = JSON.parse(rawBody)
-      } catch (error) {
+      } catch {
         throw new Error('La respuesta del servicio Dst no es JSON válido.')
       }
 
@@ -300,7 +300,7 @@ export function useDstLatest({ pollMs = 60000, endpoint = DEFAULT_LATEST_ENDPOIN
       let payload
       try {
         payload = JSON.parse(rawBody)
-      } catch (error) {
+      } catch {
         throw new Error('La respuesta del servicio Dst no es JSON válido.')
       }
 

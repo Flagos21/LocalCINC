@@ -174,9 +174,6 @@ function sanitizeDstSeries(series) {
     if (!byDay.has(dayKey)) byDay.set(dayKey, []);
     const bucket = byDay.get(dayKey);
     bucket.push(entry);
-    if (bucket.length > 24) {
-      bucket.shift();
-    }
   }
 
   const limited = Array.from(byDay.values()).flat();
@@ -219,19 +216,15 @@ function parseDstText(txt, debug = false) {
     if (head) {
       if (!firstDSTLine) firstDSTLine = line;
 
-      let tail = deglueSigns(head.tail)
+      const tail = deglueSigns(head.tail)
         .replace(/[^0-9+\-\s].*$/, '') // corta basura no numérica fuerte al final
         .trim();
 
-      // tokenización primaria
-      let toks = tail.split(/\s+/).map(Number).filter(Number.isFinite);
+      const nums = (tail.match(/-?\d+/g) || []).map(Number);
+      const hasBaseline = nums.length >= 26;
+      let hours = hasBaseline ? nums.slice(1, 25) : nums.slice(0, 24);
 
-      // horas (baseline + 24 + avg) → me quedo con las 24
-      let hours;
-      if (toks.length >= 26) hours = toks.slice(1, 25);
-      else if (toks.length === 25) hours = toks.slice(0, 24);
-      else if (toks.length >= 24) hours = toks.slice(0, 24);
-      else {
+      if (!hours.length) {
         // plan C: tomar últimos 24 enteros visibles
         hours = last24IntegersFromTail(head.tail);
       }
