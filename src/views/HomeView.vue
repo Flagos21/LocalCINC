@@ -204,7 +204,8 @@ function fmtUTC(value) {
           <div class="home__tile-visual home__tile-visual--map">
             <DayNightMap
               mode="map"
-              height="100%"
+              height="auto"
+              aspect-ratio="1 / 1"
               :autoRefreshMs="60000"
               :showTwilight="true"
               :showSunMoon="true"
@@ -440,23 +441,24 @@ function fmtUTC(value) {
 
 .home__tile-visual--map {
   background: #ffffff;
-  align-items: stretch;
-  justify-items: stretch;
+  align-items: center;
+  justify-items: center;
   height: auto;
   aspect-ratio: 1 / 1;
 }
 
 .home__tile-visual--map :deep(.tad-card) {
-  flex: 1 1 auto;
+  flex: 0 0 auto;
   display: flex;
   flex-direction: column;
   min-height: 0;
   width: 100%;
+  height: auto;
   margin-inline: 0;
 }
 
 .home__tile-visual--map :deep(.tad-map) {
-  flex: 1 1 auto;
+  flex: 0 0 auto;
   min-height: 0;
 }
 
@@ -570,7 +572,10 @@ function fmtUTC(value) {
 }
 
 .home__tile--ionogram :deep(.ionogram-card__body) {
-  height: clamp(15rem, 26vh, 21rem);
+  flex: 0 0 auto;
+  width: min(100%, 28rem);
+  aspect-ratio: var(--dashboard-aspect, 5 / 4);
+  margin: 0 auto;
   border-radius: 0.75rem;
   overflow: hidden;
   border: 1px solid #e2e8f0;
@@ -578,6 +583,15 @@ function fmtUTC(value) {
   display: flex;
   align-items: center;
   justify-content: center;
+  min-height: 0;
+}
+
+.home__tile--ionogram :deep(.ionogram-card__image) {
+  width: 100%;
+  height: 100%;
+  max-width: 100%;
+  max-height: 100%;
+  object-fit: contain;
 }
 
 .home__tile--map {
