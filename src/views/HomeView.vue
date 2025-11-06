@@ -154,33 +154,19 @@ function fmtUTC(value) {
                 <p>Serie de barras de 3 h con colores por severidad. Fuente: GFZ.</p>
               </div>
             </header>
-            <KpChart embedded :height="240" />
+            <KpChart embedded :height="200" />
           </div>
         </div>
       </article>
       <div class="home__aside-grid">
-        <!-- Sol -->
-        <article class="home__tile home__tile--sun">
-          <header class="home__tile-head">
-            <div>
-              <h3>El Sol (SUVI)</h3>
-              <p>Vista en tiempo (casi) real del Sol por longitudes de onda EUV.</p>
-            </div>
-          </header>
-
-          <div class="home__tile-visual home__tile-visual--sun">
-            <SunViewer />
-          </div>
+        <!-- Magnetómetro -->
+        <article class="home__tile home__tile--magneto">
+          <MagnetometerChartOverview />
         </article>
 
         <!-- Campo eléctrico local -->
         <article class="home__tile home__tile--electric">
           <ElectricFieldHomeCard />
-        </article>
-
-        <!-- Magnetómetro -->
-        <article class="home__tile home__tile--magneto">
-          <MagnetometerChartOverview />
         </article>
 
         <!-- Ionograma -->
@@ -209,6 +195,20 @@ function fmtUTC(value) {
             />
           </div>
         </article>
+
+        <!-- Sol -->
+        <article class="home__tile home__tile--sun">
+          <header class="home__tile-head">
+            <div>
+              <h3>El Sol (SUVI)</h3>
+              <p>Vista en tiempo (casi) real del Sol por longitudes de onda EUV.</p>
+            </div>
+          </header>
+
+          <div class="home__tile-visual home__tile-visual--sun">
+            <SunViewer />
+          </div>
+        </article>
       </div>
     </div>
   </section>
@@ -218,10 +218,12 @@ function fmtUTC(value) {
 .home {
   display: flex;
   flex-direction: column;
-  gap: 1.25rem;
+  gap: 1.1rem;
   flex: 1;
   min-height: 0;
   height: 100%;
+  max-height: calc(100vh - var(--masthead-h, 120px) - 3rem);
+  overflow: hidden;
 }
 
 /* Titulares en negro sobre fondo oscuro del main */
@@ -234,6 +236,8 @@ function fmtUTC(value) {
   display: grid;
   gap: 1rem;
   grid-template-columns: minmax(0, 1fr);
+  grid-template-rows: minmax(0, 1fr);
+  height: 100%;
   align-items: stretch;
 }
 
@@ -241,6 +245,9 @@ function fmtUTC(value) {
   display: grid;
   gap: 1rem;
   grid-template-columns: minmax(0, 1fr);
+  grid-auto-rows: minmax(0, 1fr);
+  height: 100%;
+  min-height: 0;
 }
 
 .home__tile {
@@ -250,9 +257,10 @@ function fmtUTC(value) {
   box-shadow: 0 6px 14px rgba(15, 23, 42, 0.08);
   display: flex;
   flex-direction: column;
-  gap: 0.75rem;
+  gap: 0.65rem;
   height: 100%;
   min-height: 0;
+  overflow: hidden;
 }
 
 .home__tile-head {
@@ -281,6 +289,7 @@ function fmtUTC(value) {
   flex-direction: column;
   gap: 0.75rem;
   min-height: 0;
+  overflow: hidden;
 }
 
 .home__tile-divider {
@@ -334,7 +343,7 @@ function fmtUTC(value) {
 
 .home__tile-visual {
   width: 100%;
-  height: clamp(15rem, 28vw, 21rem);
+  height: clamp(14rem, 24vh, 19rem);
   border-radius: 0.75rem;
   overflow: hidden;
   position: relative;
@@ -366,7 +375,7 @@ function fmtUTC(value) {
 .home__tile-visual--sun {
   background: #ffffff;
   --dashboard-aspect: 1 / 1;
-  height: auto;
+  height: clamp(14rem, 24vh, 20rem);
   min-height: 0;
   padding: 0.5rem;
   display: flex;
@@ -399,6 +408,7 @@ function fmtUTC(value) {
   background: #ffffff;
   align-items: stretch;
   justify-items: stretch;
+  height: clamp(16rem, 32vh, 22rem);
 }
 
 .home__tile-visual--map :deep(.tad-card) {
@@ -495,7 +505,7 @@ function fmtUTC(value) {
 
 .home__tile--magneto :deep(.magneto__chart-wrapper) {
   width: 100%;
-  height: clamp(15rem, 28vw, 21rem);
+  height: clamp(15rem, 28vh, 21rem);
   border-radius: 0.75rem;
   overflow: hidden;
   background: #ffffff;
@@ -518,7 +528,7 @@ function fmtUTC(value) {
 }
 
 .home__tile--ionogram :deep(.ionogram-card__body) {
-  height: clamp(15rem, 28vw, 21rem);
+  height: clamp(15rem, 26vh, 21rem);
   border-radius: 0.75rem;
   overflow: hidden;
   border: 1px solid #e2e8f0;
@@ -533,9 +543,9 @@ function fmtUTC(value) {
   .home__aside-grid {
     grid-template-columns: repeat(2, minmax(0, 1fr));
     grid-template-areas:
-      'sun electric'
-      'magneto magneto'
-      'ionogram map';
+      'magneto electric'
+      'map map'
+      'ionogram sun';
   }
   .home__tile--sun { grid-area: sun; }
   .home__tile--electric { grid-area: electric; }
@@ -550,6 +560,21 @@ function fmtUTC(value) {
 
 @media (min-width: 1280px) {
   .home__grid { grid-template-columns: minmax(25rem, 1.05fr) minmax(32rem, 1.25fr); }
+}
+
+@media (max-width: 959px) {
+  .home {
+    height: auto;
+    max-height: none;
+    overflow: visible;
+  }
+  .home__grid {
+    height: auto;
+  }
+  .home__aside-grid {
+    grid-auto-rows: auto;
+    height: auto;
+  }
 }
 
 @media (max-width: 600px) {
