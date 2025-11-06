@@ -70,11 +70,27 @@ const dataWindowLabel = computed(() => {
   return ''
 })
 
-const visibleSummary = computed(() =>
-  visiblePoints.value ? `${visiblePoints.value.toLocaleString('es-CL')} puntos` : 'Sin puntos visibles'
-)
-
 const hasVisibleData = computed(() => visiblePoints.value > 0)
+
+const metaSummary = computed(() => {
+  const value = meta.value
+
+  if (!value) {
+    return visiblePoints.value
+      ? `${visiblePoints.value.toLocaleString('es-CL')} puntos visibles`
+      : ''
+  }
+
+  const points = Number.isFinite(Number(value.points)) ? Number(value.points) : 0
+  const filesCount = Array.isArray(value.files) ? value.files.length : 0
+  const resolution = typeof value.bucket?.size === 'string' ? value.bucket.size : ''
+
+  const filesLabel = filesCount === 1 ? '1 archivo' : `${filesCount} archivos`
+  const pointsLabel = points === 1 ? '1 punto' : `${points.toLocaleString('es-CL')} puntos`
+  const resolutionLabel = resolution ? `Resolución: ${resolution}` : ''
+
+  return [filesLabel, pointsLabel, resolutionLabel].filter(Boolean).join(' · ')
+})
 
 const chartOptions = computed(() => ({
   chart: {
@@ -339,9 +355,9 @@ onMounted(() => {
         <span class="magneto-home__label">Datos</span>
         <span class="magneto-home__value">{{ dataWindowLabel }}</span>
       </div>
-      <div class="magneto-home__meta-item">
-        <span class="magneto-home__label">Puntos visibles</span>
-        <span class="magneto-home__value">{{ visibleSummary }}</span>
+      <div class="magneto-home__meta-item" v-if="metaSummary">
+        <span class="magneto-home__label">Resumen</span>
+        <span class="magneto-home__value">{{ metaSummary }}</span>
       </div>
     </div>
 
@@ -392,6 +408,19 @@ onMounted(() => {
   justify-content: flex-end;
 }
 
+.magneto-home__head h3 {
+  margin: 0;
+  font-size: 1.25rem;
+  font-weight: 600;
+  color: #0f172a;
+}
+
+.magneto-home__head p {
+  margin: 0.25rem 0 0;
+  color: #475569;
+  font-size: 0.9rem;
+}
+
 .magneto-home__presets {
   display: flex;
   gap: 0.5rem;
@@ -400,72 +429,63 @@ onMounted(() => {
 }
 
 .magneto-home__preset {
-  border: 1px solid rgba(37, 99, 235, 0.35);
-  background: rgba(37, 99, 235, 0.08);
-  color: #1d4ed8;
+  border: 1px solid rgba(15, 23, 42, 0.12);
+  background: rgba(248, 250, 252, 0.85);
+  color: #0f172a;
   border-radius: 999px;
-  padding: 0.35rem 0.85rem;
-  font-size: 0.8rem;
+  padding: 0.4rem 0.9rem;
   font-weight: 600;
+  font-size: 0.85rem;
   cursor: pointer;
-  transition: background 0.2s ease, color 0.2s ease, border-color 0.2s ease;
+  transition: background 0.2s ease, color 0.2s ease, transform 0.15s ease;
 }
 
 .magneto-home__preset:hover,
 .magneto-home__preset:focus-visible {
-  background: rgba(37, 99, 235, 0.18);
-  border-color: #2563eb;
-  color: #1e3a8a;
+  background: #f97316;
+  color: #ffffff;
   outline: none;
 }
 
 .magneto-home__preset.is-active {
-  background: #2563eb;
+  background: #f97316;
   color: #ffffff;
-  border-color: #1d4ed8;
-  box-shadow: 0 12px 22px rgba(37, 99, 235, 0.25);
+  box-shadow: 0 10px 25px rgba(249, 115, 22, 0.25);
 }
 
 .magneto-home__meta {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(12rem, 1fr));
   gap: 0.75rem;
-  padding: 0.75rem;
-  background: rgba(37, 99, 235, 0.05);
-  border-radius: 0.75rem;
-  border: 1px solid rgba(37, 99, 235, 0.12);
+  font-size: 0.85rem;
 }
 
 .magneto-home__meta-item {
   display: flex;
   flex-direction: column;
-  gap: 0.3rem;
+  gap: 0.25rem;
 }
 
 .magneto-home__label {
+  font-size: 0.75rem;
   text-transform: uppercase;
-  font-size: 0.7rem;
   letter-spacing: 0.05em;
-  color: #1e40af;
+  color: #b45309;
 }
 
 .magneto-home__value {
-  font-size: 0.9rem;
-  font-weight: 600;
   color: #0f172a;
 }
 
 .magneto-home__chart {
   position: relative;
-  min-height: 16rem;
-  flex: 1;
-  border-radius: 0.75rem;
-  border: 1px solid #e2e8f0;
-  background: #f8fafc;
-  overflow: hidden;
+  flex: 1 1 auto;
+  min-height: clamp(260px, 45vh, 520px);
+  display: flex;
 }
 
-.magneto-home__chart-canvas {
+.magneto-home__chart-canvas,
+.magneto-home__chart-canvas :deep(svg) {
   width: 100%;
   height: 100%;
 }
@@ -473,34 +493,36 @@ onMounted(() => {
 .magneto-home__loading {
   position: absolute;
   inset: 0;
-  display: grid;
-  place-items: center;
-  gap: 0.65rem;
-  background: rgba(248, 250, 252, 0.85);
+  background: rgba(255, 255, 255, 0.8);
+  backdrop-filter: blur(4px);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 0.75rem;
+  font-size: 0.9rem;
   color: #0f172a;
-  font-weight: 600;
 }
 
 .magneto-home__spinner {
-  width: 1.75rem;
-  height: 1.75rem;
-  border-radius: 999px;
-  border: 3px solid rgba(37, 99, 235, 0.2);
-  border-top-color: #2563eb;
-  animation: spin 1s linear infinite;
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  border: 3px solid rgba(249, 115, 22, 0.2);
+  border-top-color: #f97316;
+  animation: spin 0.8s linear infinite;
 }
 
 .magneto-home__empty {
   margin: 0;
-  font-size: 0.85rem;
+  font-size: 0.9rem;
   color: #475569;
 }
 
 .magneto-home__error {
   margin: 0;
-  font-size: 0.85rem;
+  font-size: 0.9rem;
   color: #b91c1c;
-  font-weight: 600;
 }
 
 @keyframes spin {
@@ -509,6 +531,21 @@ onMounted(() => {
   }
   to {
     transform: rotate(360deg);
+  }
+}
+
+@media (max-width: 960px) {
+  .magneto-home__head {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .magneto-home__head-actions {
+    justify-content: flex-start;
+  }
+
+  .magneto-home__presets {
+    justify-content: flex-start;
   }
 }
 </style>
