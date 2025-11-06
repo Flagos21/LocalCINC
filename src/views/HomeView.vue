@@ -6,6 +6,7 @@ import IonogramLatest from '@/components/IonogramLatest.vue'
 import MagnetometerChartOverview from '@/components/MagnetometerChartOverview.vue'
 import ElectricFieldHomeCard from '@/components/ElectricFieldHomeCard.vue'
 import XRayChartFigure from '@/components/XRayChartFigure.vue'
+import DstCard from '@/components/DstCard.vue'
 import { useGoesXrays } from '@/composables/useGoesXrays'
 
 // Mapa Día/Noche
@@ -151,6 +152,11 @@ function fmtUTC(value) {
             </small>
           </template>
         </div>
+      </article>
+
+      <!-- Dst -->
+      <article class="home__tile home__tile--dst">
+        <DstCard />
       </article>
 
       <!-- Campo eléctrico local -->
