@@ -409,7 +409,6 @@ watch(isAnimating, updateAnimButton)
   background:#0a0e14;
   border-radius:12px;
   overflow:hidden;
-  margin-inline:auto; /* centrado */
   box-shadow:0 12px 28px rgba(0,0,0,.35);
   border:1px solid rgba(255,255,255,.06);
   display:flex;
