@@ -246,21 +246,138 @@ export async function loadLocalSeries({
     };
   }
 
+  const availableStart = clampToUtcStart(new Date(files[0].timestamp));
+  const availableEnd = clampToUtcEnd(new Date(files[files.length - 1].timestamp));
   const availableRange = {
-    start: new Date(files[0].timestamp).toISOString(),
-    end: new Date(files[files.length - 1].timestamp + DAY_MS - 1).toISOString()
+    start: availableStart.toISOString(),
+    end: availableEnd.toISOString()
   };
 
-  const start = clampToUtcStart(rangeStart);
-  const end = clampToUtcEnd(rangeEnd);
+  const toDate = (value) => {
+    if (!value) {
+      return null;
+    }
 
-  const selectedFiles = files.filter((file) => {
-    const dayStart = clampToUtcStart(new Date(file.timestamp));
-    const dayEnd = clampToUtcEnd(new Date(file.timestamp));
-    return dayEnd.getTime() >= start.getTime() && dayStart.getTime() <= end.getTime();
-  });
+    const date = value instanceof Date ? new Date(value) : new Date(value);
+    return Number.isFinite(date.getTime()) ? date : null;
+  };
 
-  if (!selectedFiles.length) {
+  const requestedStart = toDate(rangeStart);
+  const requestedEnd = toDate(rangeEnd);
+  const requestedSpanMs =
+    requestedStart && requestedEnd
+      ? Math.max(requestedEnd.getTime() - requestedStart.getTime(), MINUTE_MS)
+      : null;
+
+  const buildSeriesForWindow = async ({ startDate, endDate }) => {
+    const startUtc = clampToUtcStart(startDate);
+    const endUtc = clampToUtcEnd(endDate);
+
+    if (endUtc.getTime() < startUtc.getTime()) {
+      return {
+        points: [],
+        files: [],
+        totalPoints: 0,
+        downsampled: false,
+        bucketMs: MINUTE_MS,
+        start: startUtc,
+        end: endUtc
+      };
+    }
+
+    let start = startUtc;
+    let end = endUtc;
+
+    if (start.getTime() < availableStart.getTime()) {
+      start = new Date(availableStart.getTime());
+    }
+
+    if (end.getTime() > availableEnd.getTime()) {
+      end = new Date(availableEnd.getTime());
+    }
+
+    if (end.getTime() < start.getTime()) {
+      start = clampToUtcStart(end);
+    }
+
+    const selectedFiles = files.filter((file) => {
+      const dayStart = clampToUtcStart(new Date(file.timestamp));
+      const dayEnd = clampToUtcEnd(new Date(file.timestamp));
+      return dayEnd.getTime() >= start.getTime() && dayStart.getTime() <= end.getTime();
+    });
+
+    if (!selectedFiles.length) {
+      return {
+        points: [],
+        files: [],
+        totalPoints: 0,
+        downsampled: false,
+        bucketMs: MINUTE_MS,
+        start,
+        end
+      };
+    }
+
+    const combinedPoints = [];
+
+    for (const file of selectedFiles) {
+      const { points } = await readDataMinFile(file);
+
+      for (const point of points) {
+        const time = new Date(point.t).getTime();
+        if (!Number.isFinite(time) || time < start.getTime() || time > end.getTime()) {
+          continue;
+        }
+        combinedPoints.push(point);
+      }
+    }
+
+    combinedPoints.sort((a, b) => new Date(a.t) - new Date(b.t));
+
+    const totalPoints = combinedPoints.length;
+    const bucketMs = pickBucketSize({
+      rangeStartMs: start.getTime(),
+      rangeEndMs: end.getTime(),
+      totalPoints,
+      targetPoints
+    });
+
+    let visiblePoints = combinedPoints;
+    let downsampled = false;
+
+    if (bucketMs > MINUTE_MS && totalPoints > targetPoints) {
+      const aggregated = aggregatePoints(combinedPoints, bucketMs);
+      if (aggregated.length) {
+        visiblePoints = aggregated;
+        downsampled = aggregated.length !== totalPoints;
+      }
+    }
+
+    return {
+      points: visiblePoints,
+      files: selectedFiles.map((file) => ({ date: file.isoDate, filename: file.filename })),
+      totalPoints,
+      downsampled,
+      bucketMs,
+      start,
+      end
+    };
+  };
+
+  const initialStart = requestedStart ?? availableStart;
+  const initialEnd = requestedEnd ?? availableEnd;
+
+  let seriesWindow = await buildSeriesForWindow({ startDate: initialStart, endDate: initialEnd });
+
+  if (!seriesWindow.points.length && requestedSpanMs !== null) {
+    const fallbackEnd = new Date(availableEnd.getTime());
+    const fallbackStartMs = Math.max(fallbackEnd.getTime() - requestedSpanMs, availableStart.getTime());
+    const fallbackStart = new Date(fallbackStartMs);
+
+    seriesWindow = await buildSeriesForWindow({ startDate: fallbackStart, endDate: fallbackEnd });
+  }
+
+  if (!seriesWindow.points.length) {
     return {
       points: [],
       files: [],
@@ -268,49 +385,17 @@ export async function loadLocalSeries({
     };
   }
 
-  const combinedPoints = [];
-
-  for (const file of selectedFiles) {
-    const { points } = await readDataMinFile(file);
-
-    for (const point of points) {
-      const time = new Date(point.t).getTime();
-      if (!Number.isFinite(time) || time < start.getTime() || time > end.getTime()) {
-        continue;
-      }
-      combinedPoints.push(point);
-    }
-  }
-
-  combinedPoints.sort((a, b) => new Date(a.t) - new Date(b.t));
-
-  const totalPoints = combinedPoints.length;
-  const bucketMs = pickBucketSize({
-    rangeStartMs: start.getTime(),
-    rangeEndMs: end.getTime(),
-    totalPoints,
-    targetPoints
-  });
-
-  let visiblePoints = combinedPoints;
-  let downsampled = false;
-
-  if (bucketMs > MINUTE_MS && totalPoints > targetPoints) {
-    const aggregated = aggregatePoints(combinedPoints, bucketMs);
-    if (aggregated.length) {
-      visiblePoints = aggregated;
-      downsampled = aggregated.length !== totalPoints;
-    }
-  }
-
   return {
-    points: visiblePoints,
-    files: selectedFiles.map((file) => ({ date: file.isoDate, filename: file.filename })),
-    totalPoints,
-    downsampled,
-    bucketMs,
+    points: seriesWindow.points,
+    files: seriesWindow.files,
+    totalPoints: seriesWindow.totalPoints,
+    downsampled: seriesWindow.downsampled,
+    bucketMs: seriesWindow.bucketMs,
     availableRange,
-    requestedRange: { start: start.toISOString(), end: end.toISOString() }
+    requestedRange: {
+      start: seriesWindow.start.toISOString(),
+      end: seriesWindow.end.toISOString()
+    }
   };
 }
 
