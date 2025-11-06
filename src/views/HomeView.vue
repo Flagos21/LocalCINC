@@ -60,21 +60,7 @@ function fmtUTC(value) {
     </header>
 
     <div class="home__grid">
-      <!-- Sol -->
-      <article class="home__tile home__tile--sun">
-        <header class="home__tile-head">
-          <div>
-            <h3>El Sol (SUVI)</h3>
-            <p>Vista en tiempo (casi) real del Sol por longitudes de onda EUV.</p>
-          </div>
-        </header>
-
-        <div class="home__tile-visual home__tile-visual--sun">
-          <SunViewer />
-        </div>
-      </article>
-
-      <!-- Rayos X -->
+      <!-- Rayos X / Dst / Kp -->
       <article class="home__tile home__tile--xray">
         <header class="home__tile-head xray__head">
           <div class="xray__title">
@@ -172,43 +158,58 @@ function fmtUTC(value) {
           </div>
         </div>
       </article>
+      <div class="home__aside-grid">
+        <!-- Sol -->
+        <article class="home__tile home__tile--sun">
+          <header class="home__tile-head">
+            <div>
+              <h3>El Sol (SUVI)</h3>
+              <p>Vista en tiempo (casi) real del Sol por longitudes de onda EUV.</p>
+            </div>
+          </header>
 
-      <!-- Campo eléctrico local -->
-      <article class="home__tile home__tile--electric">
-        <ElectricFieldHomeCard />
-      </article>
-
-      <!-- Magnetómetro -->
-      <article class="home__tile home__tile--magneto">
-        <MagnetometerChartOverview />
-      </article>
-
-      <!-- Ionograma -->
-      <article class="home__tile home__tile--ionogram">
-        <IonogramLatest />
-      </article>
-
-      <!-- Mapa día/noche -->
-      <article class="home__tile home__tile--map">
-        <header class="home__tile-head">
-          <div>
-            <h3>Mapa día/noche</h3>
-            <p>Observa el terminador solar y penumbras actualizadas cada minuto.</p>
+          <div class="home__tile-visual home__tile-visual--sun">
+            <SunViewer />
           </div>
-        </header>
-        <div class="home__tile-visual home__tile-visual--map">
-          <DayNightMap
-            mode="map"
-            height="100%"
-            :autoRefreshMs="60000"
-            :showTwilight="true"
-            :showSunMoon="true"
-            :showAnimationControl="false"
-            :focusBounds="[[ -55, -82 ], [ 15, -35 ]]"
-            :focusMaxZoom="5"
-          />
-        </div>
-      </article>
+        </article>
+
+        <!-- Campo eléctrico local -->
+        <article class="home__tile home__tile--electric">
+          <ElectricFieldHomeCard />
+        </article>
+
+        <!-- Magnetómetro -->
+        <article class="home__tile home__tile--magneto">
+          <MagnetometerChartOverview />
+        </article>
+
+        <!-- Ionograma -->
+        <article class="home__tile home__tile--ionogram">
+          <IonogramLatest />
+        </article>
+
+        <!-- Mapa día/noche -->
+        <article class="home__tile home__tile--map">
+          <header class="home__tile-head">
+            <div>
+              <h3>Mapa día/noche</h3>
+              <p>Observa el terminador solar y penumbras actualizadas cada minuto.</p>
+            </div>
+          </header>
+          <div class="home__tile-visual home__tile-visual--map">
+            <DayNightMap
+              mode="map"
+              height="100%"
+              :autoRefreshMs="60000"
+              :showTwilight="true"
+              :showSunMoon="true"
+              :showAnimationControl="false"
+              :focusBounds="[[ -55, -82 ], [ 15, -35 ]]"
+              :focusMaxZoom="5"
+            />
+          </div>
+        </article>
+      </div>
     </div>
   </section>
 </template>
@@ -232,8 +233,14 @@ function fmtUTC(value) {
   min-height: 0;
   display: grid;
   gap: 1rem;
-  grid-template-columns: repeat(auto-fit, minmax(22rem, 1fr));
+  grid-template-columns: minmax(0, 1fr);
   align-items: stretch;
+}
+
+.home__aside-grid {
+  display: grid;
+  gap: 1rem;
+  grid-template-columns: minmax(0, 1fr);
 }
 
 .home__tile {
@@ -522,11 +529,27 @@ function fmtUTC(value) {
 }
 
 @media (min-width: 960px) {
-  .home__grid { grid-template-columns: repeat(auto-fit, minmax(20rem, 1fr)); }
+  .home__grid { grid-template-columns: minmax(22rem, 1fr) minmax(0, 1.1fr); align-items: start; }
+  .home__aside-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    grid-template-areas:
+      'sun electric'
+      'magneto magneto'
+      'ionogram map';
+  }
+  .home__tile--sun { grid-area: sun; }
+  .home__tile--electric { grid-area: electric; }
+  .home__tile--magneto { grid-area: magneto; }
+  .home__tile--ionogram { grid-area: ionogram; }
+  .home__tile--map { grid-area: map; }
+}
+
+@media (min-width: 1200px) {
+  .home__grid { grid-template-columns: minmax(24rem, 1.05fr) minmax(28rem, 1.2fr); }
 }
 
 @media (min-width: 1280px) {
-  .home__grid { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+  .home__grid { grid-template-columns: minmax(25rem, 1.05fr) minmax(32rem, 1.25fr); }
 }
 
 @media (max-width: 600px) {
