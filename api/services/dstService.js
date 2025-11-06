@@ -427,7 +427,7 @@ export async function refreshDst() {
   if (!enabled) return getDstCache();
   if (refreshing) return refreshing;
 
-  refreshing = (async () => {
+  const runPromise = (async () => {
     const now = new Date();
     const prev = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth() - 1, 1));
 
@@ -468,9 +468,16 @@ export async function refreshDst() {
     }
 
     throw new Error(lastErr?.message || 'No se pudieron obtener puntos Dst válidos.');
-  })();
+  })()
+    .finally(() => {
+      if (refreshing === runPromise) {
+        refreshing = null;
+      }
+    });
 
-  return refreshing;
+  refreshing = runPromise;
+
+  return runPromise;
 }
 
 export async function getDstRealtime() {
