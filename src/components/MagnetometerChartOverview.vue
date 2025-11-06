@@ -6,7 +6,7 @@ import { useMagnetometerSeries } from '@/composables/useMagnetometerSeries'
 
 const chartSeries = ref([])
 const xDomain = ref({ min: null, max: null })
-const activePreset = ref('1m')
+const activePreset = ref('1d')
 const rangeRef = ref('')
 const from = ref('')
 const to = ref('')
@@ -87,10 +87,9 @@ const chartOptions = computed(() => ({
 }))
 
 const presets = [
-  { id: '1m', label: '1 m', description: 'Último mes', duration: { amount: 1, unit: 'month' } },
-  { id: '6m', label: '6 m', description: 'Últimos 6 meses', duration: { amount: 6, unit: 'month' } },
-  { id: '1y', label: '1 y', description: 'Último año', duration: { amount: 1, unit: 'year' } },
-  { id: 'all', label: 'Todo', description: 'Últimos 5 años', duration: { amount: 5, unit: 'year' }, rangeToken: '5y' }
+  { id: '1d', label: '1 día', description: 'Último día', duration: { amount: 1, unit: 'day' } },
+  { id: '3d', label: '3 días', description: 'Últimos 3 días', duration: { amount: 3, unit: 'day' } },
+  { id: '7d', label: '7 días', description: 'Últimos 7 días', duration: { amount: 7, unit: 'day' } }
 ]
 
 const selectedPreset = computed(() => presets.find((preset) => preset.id === activePreset.value) ?? presets[0])
@@ -98,12 +97,6 @@ const selectedPreset = computed(() => presets.find((preset) => preset.id === act
 const requestedWindow = computed(() => {
   const preset = selectedPreset.value
   if (!preset) return null
-
-  if (preset.rangeToken) {
-    const end = dayjs()
-    const start = end.subtract(preset.duration.amount, preset.duration.unit)
-    return { start, end }
-  }
 
   const start = dayjs(from.value)
   const end = dayjs(to.value)
