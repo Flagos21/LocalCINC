@@ -7,6 +7,7 @@ import MagnetometerChartOverview from '@/components/MagnetometerChartOverview.vu
 import ElectricFieldHomeCard from '@/components/ElectricFieldHomeCard.vue'
 import XRayChartFigure from '@/components/XRayChartFigure.vue'
 import DstCard from '@/components/DstCard.vue'
+import KpChart from '@/components/KpChart.vue'
 import { useGoesXrays } from '@/composables/useGoesXrays'
 
 // Mapa Día/Noche
@@ -168,6 +169,19 @@ function fmtUTC(value) {
       <!-- Magnetómetro -->
       <article class="home__tile home__tile--magneto">
         <MagnetometerChartOverview />
+      </article>
+
+      <!-- Índice Kp -->
+      <article class="home__tile home__tile--kp">
+        <header class="home__tile-head">
+          <div>
+            <h3>Índice geomagnético Kp (GFZ)</h3>
+            <p>Serie de barras de 3 h con colores por severidad. Fuente: GFZ.</p>
+          </div>
+        </header>
+        <div class="home__tile-visual home__tile-visual--chart">
+          <KpChart />
+        </div>
       </article>
 
       <!-- Ionograma -->
