@@ -180,6 +180,10 @@ function formatLocalDateTime(value) {
   flex: 1 1 auto;
 }
 
+.dst-card--embedded {
+  flex: 0 0 auto;
+}
+
 .dst-card__head {
   display: flex;
   justify-content: space-between;
@@ -257,6 +261,11 @@ function formatLocalDateTime(value) {
   border-radius: 0.75rem;
   border: 1px solid #e2e8f0;
   padding: 0.4rem;
+  min-height: clamp(12rem, 32vw, 16rem);
+}
+
+.dst-card--embedded .dst-card__chart {
+  min-height: clamp(12rem, 40vw, 18rem);
 }
 
 .dst-card__chart :deep(svg),

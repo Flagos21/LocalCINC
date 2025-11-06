@@ -33,8 +33,17 @@ const {
   MEASUREMENT = 'magnetometer',
   FIELD = 'H',
   DEFAULT_STATION = 'CHI',
-  PORT = 3001
+  PORT = 3001,
+  KYOTO_DST_URL,
+  DST_CACHE_SEC: DST_CACHE_SEC_RAW = '60'
 } = process.env;
+
+const DEFAULT_DST_URL = 'https://wdc.kugi.kyoto-u.ac.jp/dst_realtime/presentmonth/index.html';
+const DST_ENDPOINT = KYOTO_DST_URL || DEFAULT_DST_URL;
+const DST_CACHE_TTL_MS = (() => {
+  const parsed = Number.parseInt(DST_CACHE_SEC_RAW, 10);
+  return Number.isFinite(parsed) && parsed > 0 ? parsed * 1000 : 0;
+})();
 
 if (!INFLUX_URL || !INFLUX_TOKEN || !INFLUX_ORG || !INFLUX_BUCKET) {
   console.error('❌ Falta configuración de Influx (URL/TOKEN/ORG/BUCKET) en .env');
@@ -62,6 +71,141 @@ function isConnectionRefusedError(err) {
 function isImageFile(name) {
   const ext = path.extname(name).toLowerCase();
   return imageExtensions.has(ext);
+}
+
+function sanitizeDstBody(body) {
+  if (!body) {
+    return '';
+  }
+
+  let text = body;
+  if (/<[a-z][\s\S]*>/i.test(text)) {
+    text = text.replace(/<br\s*\/?\s*>/gi, '\n');
+    text = text.replace(/<[^>]*>/g, ' ');
+  }
+
+  return text
+    .replace(/&nbsp;/gi, ' ')
+    .replace(/&amp;/gi, '&')
+    .replace(/\r?\n/g, '\n');
+}
+
+function parseDstQuicklook(body) {
+  const sanitized = sanitizeDstBody(body);
+  const lines = sanitized.split('\n');
+  const points = [];
+
+  const primaryPattern = /^(\d{4})\s+(\d{1,2})\s+(\d{1,2})\s+(\d{1,2})\s+(-?\d+(?:\.\d+)?)/;
+  const fallbackPattern = /^(\d{4})[-\/]?(\d{1,2})[-\/]?(\d{1,2})\s+(\d{1,2})\s+(-?\d+(?:\.\d+)?)/;
+
+  for (const rawLine of lines) {
+    const line = rawLine.trim();
+    if (!line || !/\d/.test(line)) {
+      continue;
+    }
+
+    let match = line.match(primaryPattern);
+    if (!match) {
+      match = line.match(fallbackPattern);
+    }
+
+    if (!match) {
+      continue;
+    }
+
+    const year = Number.parseInt(match[1], 10);
+    const month = Number.parseInt(match[2], 10);
+    const day = Number.parseInt(match[3], 10);
+    const hour = Number.parseInt(match[4], 10);
+    const value = Number.parseFloat(match[5]);
+
+    if (
+      !Number.isFinite(year) ||
+      !Number.isFinite(month) ||
+      !Number.isFinite(day) ||
+      !Number.isFinite(hour) ||
+      !Number.isFinite(value)
+    ) {
+      continue;
+    }
+
+    if (Math.abs(value) >= 9999) {
+      continue;
+    }
+
+    if (month < 1 || month > 12 || day < 1 || day > 31) {
+      continue;
+    }
+
+    let timestamp;
+    if (hour === 24) {
+      timestamp = Date.UTC(year, month - 1, day, 0) + 24 * 60 * 60 * 1000;
+    } else if (hour >= 0 && hour <= 23) {
+      timestamp = Date.UTC(year, month - 1, day, hour);
+    } else {
+      continue;
+    }
+
+    if (!Number.isFinite(timestamp)) {
+      continue;
+    }
+
+    points.push({ timestamp, value });
+  }
+
+  points.sort((a, b) => a.timestamp - b.timestamp);
+
+  return points;
+}
+
+let dstCache = { expiresAt: 0, payload: null };
+
+async function fetchDstRealtime() {
+  if (!DST_ENDPOINT) {
+    throw new Error('No se configuró la URL de origen para el índice Dst.');
+  }
+
+  const now = Date.now();
+  if (dstCache.payload && DST_CACHE_TTL_MS > 0 && dstCache.expiresAt > now) {
+    return dstCache.payload;
+  }
+
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), 15000);
+
+  try {
+    const response = await fetch(DST_ENDPOINT, {
+      method: 'GET',
+      headers: { 'Cache-Control': 'no-cache' },
+      signal: controller.signal
+    });
+
+    if (!response.ok) {
+      throw new Error(`Respuesta inválida desde Kyoto Dst (${response.status})`);
+    }
+
+    const body = await response.text();
+    const points = parseDstQuicklook(body);
+
+    const payload = {
+      points,
+      meta: {
+        source: 'WDC Kyoto quicklook',
+        url: DST_ENDPOINT,
+        fetchedAt: new Date().toISOString(),
+        cacheTtlSec: Math.round(DST_CACHE_TTL_MS / 1000)
+      }
+    };
+
+    dstCache = {
+      expiresAt: DST_CACHE_TTL_MS > 0 ? now + DST_CACHE_TTL_MS : 0,
+      payload
+    };
+
+    return payload;
+  } finally {
+    clearTimeout(timeout);
+  }
 }
 
 function buildImagePayload({ year, month, day, filename }) {
@@ -177,6 +321,22 @@ async function findLatestIonogram() {
     throw err;
   }
 }
+
+app.get('/api/dst/realtime', async (req, res) => {
+  try {
+    const payload = await fetchDstRealtime();
+    res.json(payload);
+  } catch (err) {
+    console.error('API /api/dst/realtime error:', err);
+
+    if (err?.name === 'AbortError') {
+      return res.status(504).json({ error: 'Tiempo de espera excedido al consultar el índice Dst.' });
+    }
+
+    const status = isConnectionRefusedError(err) ? 502 : 500;
+    res.status(status).json({ error: 'No se pudo obtener el índice Dst.' });
+  }
+});
 
 app.get('/api/ionograms/latest', async (req, res) => {
   try {
