@@ -8,6 +8,11 @@ import fs from 'fs/promises';
 import { fileURLToPath } from 'url';
 import process from 'node:process';
 import {
+  initKpService,
+  getKpCache,
+  isKpEnabled
+} from './services/kpService.js';
+import {
   listDataMinFiles,
   loadLocalSeries
 } from './localMagnetometer.js';
@@ -336,6 +341,15 @@ app.get('/api/dst/realtime', async (req, res) => {
     const status = isConnectionRefusedError(err) ? 502 : 500;
     res.status(status).json({ error: 'No se pudo obtener el índice Dst.' });
   }
+});
+
+app.get('/api/kp', (req, res) => {
+  if (!isKpEnabled()) {
+    return res.status(503).json({ error: 'Kp disabled' });
+  }
+
+  const cache = getKpCache();
+  res.json(cache);
 });
 
 app.get('/api/ionograms/latest', async (req, res) => {
@@ -767,6 +781,19 @@ from(bucket: "${INFLUX_BUCKET}")
 });
 
 
-app.listen(Number(PORT), () => {
-  console.log(`✅ API escuchando en http://localhost:${PORT}`);
-});
+const kpReadyPromise = initKpService();
+
+if (process.env.NODE_ENV !== 'test') {
+  try {
+    await kpReadyPromise;
+  } catch (err) {
+    console.error('[Kp] Error en warm-up inicial:', err);
+  }
+
+  app.listen(Number(PORT), () => {
+    console.log(`✅ API escuchando en http://localhost:${PORT}`);
+  });
+}
+
+export const kpReady = kpReadyPromise;
+export default app;
