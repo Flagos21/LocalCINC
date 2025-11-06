@@ -1,319 +1,194 @@
 <script setup>
-import { ref, computed, onMounted, onBeforeUnmount } from 'vue'
-import Chart from 'chart.js/auto'
-import 'chartjs-adapter-date-fns'
+import { ref, onMounted, onBeforeUnmount } from 'vue'
+import ApexChart from 'vue3-apexcharts'
 
-import {
-  buildKpDataset,
-  mergeKpSeries,
-  formatUpdatedAt
-} from '@/utils/kpChartUtils.js'
+// ===== Parámetros =====
+const DAYS_WINDOW = 4                  // cuántos días mostrar (deslizante)
+const AUTO_REFRESH_MS = 10 * 60 * 1000 // 10 minutos
+const AGGREGATION = 'max'              // 'max' | 'mean' dentro de cada 3h
 
-const REFRESH_INTERVAL_MS = 10 * 60 * 1000
-
-const canvasRef = ref(null)
-const isLoading = ref(false)
-const hasLoadedOnce = ref(false)
-const errorMessage = ref('')
-const series = ref([])
+// ===== Estado UI =====
+const loading   = ref(false)
 const updatedAt = ref(null)
-const tooltip = ref({ visible: false, x: 0, y: 0, value: 0, label: '' })
-
-let refreshTimer = null
-let chart = null
-let bars = []
-
-const updatedLabel = computed(() => formatUpdatedAt(updatedAt.value))
-const hasData = computed(() => series.value.length > 0)
-
-function resetTooltip() {
-  tooltip.value = { visible: false, x: 0, y: 0, value: 0, label: '' }
-}
-
-function updateTooltip(event) {
-  if (!canvasRef.value || !bars.length) {
-    resetTooltip()
-    return
-  }
-
-  const rect = canvasRef.value.getBoundingClientRect()
-  const x = event.clientX - rect.left
-  const y = event.clientY - rect.top
-
-  const hovered = bars.find((bar) => (
-    x >= bar.x &&
-    x <= bar.x + bar.width &&
-    y >= bar.y &&
-    y <= bar.y + bar.height
-  ))
-
-  if (!hovered) {
-    resetTooltip()
-    return
-  }
-
-  tooltip.value = {
-    visible: true,
-    x: hovered.x + hovered.width / 2,
-    y: hovered.y + 12,
-    value: hovered.value,
-    label: formatUpdatedAt(hovered.label)
-  }
-}
-
-function attachCanvasEvents() {
-  if (!canvasRef.value) return
-  canvasRef.value.addEventListener('mousemove', updateTooltip)
-  canvasRef.value.addEventListener('mouseleave', resetTooltip)
-}
-
-function detachCanvasEvents() {
-  if (!canvasRef.value) return
-  canvasRef.value.removeEventListener('mousemove', updateTooltip)
-  canvasRef.value.removeEventListener('mouseleave', resetTooltip)
-}
-
-function updateChart() {
-  if (!canvasRef.value) {
-    return
-  }
-
-  const dataset = buildKpDataset(series.value)
-
-  if (!chart) {
-    const ctx = canvasRef.value.getContext('2d')
-    chart = new Chart(ctx, {
-      type: 'bar',
-      data: { datasets: [dataset] },
-      options: {
-        padding: { left: 44, right: 16, top: 16, bottom: 40 },
-        axisColor: '#cbd5f5',
-        axisLabelColor: '#475569'
+const series    = ref([{ name: 'Kp (3h)', data: [] }])
+const options   = ref({
+  chart: {
+    type: 'bar',
+    height: 280,
+    animations: { enabled: true, speed: 250 },
+    toolbar: { show: false },
+    foreColor: '#444'
+  },
+  plotOptions: {
+    bar: {
+      columnWidth: '68%',
+      distributed: true,    // color por barra
+      borderRadius: 2
+    }
+  },
+  grid: { borderColor: '#eaecef', strokeDashArray: 3 },
+  xaxis: {
+    type: 'datetime',
+    // Etiquetas en el eje: solo medianoche UTC
+    labels: {
+      datetimeUTC: true,
+      formatter: (value) => {
+        const d = new Date(Number(value))
+        return d.getUTCHours() === 0
+          ? d.toLocaleDateString('en-GB', {
+              day: '2-digit', month: 'short', year: 'numeric',
+              timeZone: 'UTC'
+            })
+          : ''
       }
-    })
-    attachCanvasEvents()
-  } else {
-    chart.config.data.datasets = [dataset]
-    chart.update()
-  }
+    },
+    tickAmount: 12
+  },
+  yaxis: {
+    min: 0,
+    max: 9,
+    tickAmount: 9,
+    decimalsInFloat: 0,
+    title: { text: 'Kp index' }
+  },
+  tooltip: {
+    shared: false,
+    x: { formatter: (v) =>
+      new Date(v).toLocaleString('en-GB', {
+        year: 'numeric', month: 'short', day: '2-digit',
+        hour: '2-digit', minute: '2-digit', hour12: false,
+        timeZone: 'UTC'
+      }) + ' UTC'
+    },
+    y: { formatter: (v) => (Math.round(v * 10) / 10).toString() }
+  },
+  legend: { show: false },
+  colors: [] // la llenamos con un color por punto
+})
 
-  bars = chart.getBars?.() || []
-  resetTooltip()
+// ===== Utilidades =====
+function kpColor(v) {
+  if (v < 4) return '#2e7d32'  // verde (quiet)
+  if (v < 6) return '#fbc02d'  // amarillo (active)
+  if (v < 8) return '#fb8c00'  // naranja (G1-G2)
+  return '#c62828'             // rojo (G3+)
 }
 
-async function loadData({ silent = false } = {}) {
-  if (!silent) {
-    isLoading.value = true
+/** Redondea al inicio de su ventana 3h (UTC) */
+function binStart3h(iso) {
+  const d = new Date(iso)
+  const h = d.getUTCHours()
+  const startH = Math.floor(h / 3) * 3
+  d.setUTCHours(startH, 0, 0, 0)
+  return d.getTime() // trabajamos con epoch para Apex
+}
+
+/** Agrupa valores arbitrarios a 3h con AGGREGATION */
+function groupTo3h(points) {
+  const bins = new Map()
+  for (const p of points) {
+    if (!p?.x || !Number.isFinite(p?.y)) continue
+    const b = binStart3h(p.x)
+    const arr = bins.get(b) ?? []
+    arr.push(p.y)
+    bins.set(b, arr)
   }
 
+  const out = []
+  for (const [b, arr] of bins) {
+    if (!arr.length) continue
+    let y
+    if (AGGREGATION === 'mean') {
+      y = arr.reduce((a, c) => a + c, 0) / arr.length
+    } else {
+      y = Math.max(...arr)
+    }
+    out.push({ x: b, y })
+  }
+  out.sort((a, b) => a.x - b.x)
+  return out
+}
+
+let timer = null
+
+async function loadData() {
   try {
-    const response = await fetch('/api/kp', { cache: 'no-cache' })
-    if (!response.ok) {
-      if (response.status === 503) {
-        throw new Error('Servicio deshabilitado temporalmente (503).')
-      }
-      throw new Error(`Error al consultar índice Kp (HTTP ${response.status}).`)
-    }
+    loading.value = true
 
-    const payload = await response.json()
-    const merged = mergeKpSeries(series.value, payload.series)
-    series.value = merged
-    updatedAt.value = payload.updatedAt || null
-    errorMessage.value = ''
-    updateChart()
-  } catch (err) {
-    errorMessage.value = err instanceof Error ? err.message : 'Error inesperado al cargar Kp.'
-    resetTooltip()
+    // Pedimos muchos puntos; el backend devolverá lo que tenga.
+    const res = await fetch('/api/kp?last=2000', { cache: 'no-cache' })
+    if (!res.ok) throw new Error(`HTTP ${res.status}`)
+    const json = await res.json()
+
+    updatedAt.value = json.updatedAt ?? null
+
+    // Normaliza a {x: ISO, y: kp}
+    const raw = (json.series ?? [])
+      .map(p => ({ x: p.time, y: Number(p.value) }))
+      .filter(p => Number.isFinite(p.y))
+
+    // Bin 3h
+    let binned = groupTo3h(raw)
+
+    // Ventana deslizante últimos N días
+    const now = Date.now()
+    const startWin = now - DAYS_WINDOW * 24 * 60 * 60 * 1000
+    binned = binned.filter(p => p.x >= startWin)
+
+    // Asigna datos y colores
+    series.value = [{ name: 'Kp (3h)', data: binned }]
+    options.value.colors = binned.map(p => kpColor(p.y))
+
+    // Opcional: fija min/max del eje X al rango solicitado
+    options.value.xaxis.min = startWin
+    options.value.xaxis.max = now
+  } catch (e) {
+    console.error('[KpChart] loadData error:', e)
   } finally {
-    if (!silent) {
-      isLoading.value = false
-    }
-    hasLoadedOnce.value = true
+    loading.value = false
   }
 }
 
-function scheduleRefresh() {
-  clearInterval(refreshTimer)
-  refreshTimer = window.setInterval(() => {
-    loadData({ silent: true })
-  }, REFRESH_INTERVAL_MS)
-}
-
-function cancelRefresh() {
-  if (refreshTimer) {
-    clearInterval(refreshTimer)
-    refreshTimer = null
-  }
-}
-
-async function manualRefresh() {
-  await loadData({ silent: false })
-}
-
-onMounted(async () => {
-  await loadData({ silent: false })
-  scheduleRefresh()
+onMounted(() => {
+  loadData()
+  timer = setInterval(loadData, AUTO_REFRESH_MS)
 })
-
-onBeforeUnmount(() => {
-  cancelRefresh()
-  detachCanvasEvents()
-  if (chart) {
-    chart.destroy()
-    chart = null
-  }
-  bars = []
-})
+onBeforeUnmount(() => { if (timer) clearInterval(timer) })
 </script>
 
 <template>
-  <div class="kp-chart">
-    <div class="kp-chart__body">
-      <canvas ref="canvasRef" class="kp-chart__canvas" role="img" aria-label="Gráfico del índice geomagnético Kp"></canvas>
-
-      <div v-if="!hasData && !isLoading && hasLoadedOnce" class="kp-chart__overlay">
-        <p>Sin datos disponibles.</p>
+  <div class="kp-card">
+    <div class="kp-header">
+      <strong>Índice geomagnético Kp (GFZ) — 3 h</strong>
+      <div class="kp-actions">
+        <span class="kp-updated">
+          {{ updatedAt ? new Date(updatedAt).toUTCString() : '—' }}
+        </span>
+        <button class="kp-btn" :disabled="loading" @click="loadData">
+          {{ loading ? 'Cargando…' : 'Refrescar' }}
+        </button>
       </div>
-
-      <div v-if="isLoading && !hasLoadedOnce" class="kp-chart__overlay kp-chart__overlay--loading">
-        <span class="kp-chart__spinner" aria-hidden="true"></span>
-        <p>Cargando índice Kp…</p>
-      </div>
-
-      <div v-if="errorMessage" class="kp-chart__overlay kp-chart__overlay--error">
-        <strong>Problema al cargar Kp</strong>
-        <p>{{ errorMessage }}</p>
-      </div>
-
-      <transition name="kp-tooltip">
-        <div
-          v-if="tooltip.visible"
-          class="kp-chart__tooltip"
-          :style="{ left: `${tooltip.x}px`, top: `${tooltip.y}px` }"
-          role="presentation"
-        >
-          <p>Kp: {{ tooltip.value.toFixed(1) }}</p>
-          <small>{{ tooltip.label }}</small>
-        </div>
-      </transition>
     </div>
 
-    <footer class="kp-chart__footer">
-      <span>Actualizado: {{ updatedLabel }}</span>
-      <button type="button" class="kp-chart__refresh" @click="manualRefresh" :disabled="isLoading">
-        Refrescar
-      </button>
-    </footer>
+    <div class="kp-body">
+      <ApexChart type="bar" height="280" :options="options" :series="series" />
+      <div class="kp-legend">
+        <span><i class="dot" style="background:#2e7d32"></i> Kp &lt; 4</span>
+        <span><i class="dot" style="background:#fbc02d"></i> 4 ≤ Kp &lt; 6</span>
+        <span><i class="dot" style="background:#fb8c00"></i> 6 ≤ Kp &lt; 8</span>
+        <span><i class="dot" style="background:#c62828"></i> Kp ≥ 8</span>
+      </div>
+    </div>
   </div>
 </template>
 
 <style scoped>
-.kp-chart {
-  display: flex;
-  flex-direction: column;
-  gap: 0.5rem;
-  width: 100%;
-  height: 100%;
-}
-
-.kp-chart__body {
-  position: relative;
-  flex: 1 1 auto;
-  min-height: 0;
-}
-
-.kp-chart__canvas {
-  width: 100%;
-  height: 100%;
-  display: block;
-  border-radius: 0.5rem;
-  background: linear-gradient(180deg, #f8fafc 0%, #ffffff 100%);
-  border: 1px solid #e2e8f0;
-}
-
-.kp-chart__overlay {
-  position: absolute;
-  inset: 0;
-  display: grid;
-  place-items: center;
-  text-align: center;
-  padding: 1rem;
-  border-radius: 0.5rem;
-  background: rgba(248, 250, 252, 0.9);
-  color: #1f2937;
-}
-
-.kp-chart__overlay--loading {
-  color: #0f172a;
-}
-
-.kp-chart__overlay--error {
-  color: #b91c1c;
-}
-
-.kp-chart__spinner {
-  width: 2rem;
-  height: 2rem;
-  border-radius: 50%;
-  border: 3px solid rgba(59, 130, 246, 0.2);
-  border-top-color: rgba(59, 130, 246, 0.9);
-  animation: kp-chart-spin 1s linear infinite;
-  margin-bottom: 0.5rem;
-}
-
-@keyframes kp-chart-spin {
-  to {
-    transform: rotate(360deg);
-  }
-}
-
-.kp-chart__tooltip {
-  position: absolute;
-  transform: translate(-50%, -100%);
-  background: rgba(15, 23, 42, 0.92);
-  color: #f8fafc;
-  padding: 0.4rem 0.6rem;
-  border-radius: 0.4rem;
-  font-size: 0.75rem;
-  pointer-events: none;
-  box-shadow: 0 6px 16px rgba(15, 23, 42, 0.2);
-}
-
-.kp-tooltip-enter-active,
-.kp-tooltip-leave-active {
-  transition: opacity 0.12s ease-in-out;
-}
-
-.kp-tooltip-enter-from,
-.kp-tooltip-leave-to {
-  opacity: 0;
-}
-
-.kp-chart__footer {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  font-size: 0.85rem;
-  color: #334155;
-}
-
-.kp-chart__refresh {
-  border: 1px solid #3b82f6;
-  background: transparent;
-  color: #1d4ed8;
-  border-radius: 0.375rem;
-  padding: 0.25rem 0.75rem;
-  font-weight: 600;
-  cursor: pointer;
-  transition: background 0.2s ease;
-}
-
-.kp-chart__refresh:disabled {
-  opacity: 0.6;
-  cursor: wait;
-}
-
-.kp-chart__refresh:not(:disabled):hover {
-  background: rgba(59, 130, 246, 0.08);
-}
+.kp-card { border: 1px solid #e9ecef; border-radius: 10px; overflow: hidden; background: #fff; }
+.kp-header { display: flex; justify-content: space-between; align-items: center; padding: 10px 12px; background: #fafafa; border-bottom: 1px solid #eee; }
+.kp-actions { display: flex; gap: 10px; align-items: center; font-size: 12px; color: #666; }
+.kp-btn { font-size: 12px; padding: 4px 8px; border: 1px solid #1976d2; background: #1976d2; color: #fff; border-radius: 6px; cursor: pointer; }
+.kp-btn:disabled { opacity: .6; cursor: default; }
+.kp-body { padding: 8px 10px 12px; }
+.kp-legend { display: flex; gap: 12px; font-size: 12px; color: #666; margin-top: 6px; flex-wrap: wrap; }
+.dot { display:inline-block; width:10px; height:10px; border-radius:50%; margin-right:6px; vertical-align:middle; }
 </style>

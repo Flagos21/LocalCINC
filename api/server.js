@@ -12,6 +12,13 @@ import {
   getKpCache,
   isKpEnabled
 } from './services/kpService.js';
+
+import {
+  getDstRealtime,
+  refreshDst,
+  isDstEnabled
+} from './services/dstService.js';
+
 import {
   listDataMinFiles,
   loadLocalSeries
@@ -506,24 +513,20 @@ async function findLatestIonogram() {
   }
 }
 
+// GET /api/dst/realtime
 app.get('/api/dst/realtime', async (req, res) => {
   try {
-    const payload = await getDstData(true);
-    res.json(payload);
+    if (!isDstEnabled()) {
+      return res.status(503).json({ error: 'Dst disabled' });
+    }
+    const data = await getDstRealtime();
+    res.json(data);
   } catch (err) {
     console.error('API /api/dst/realtime error:', err);
-
-    if (err?.name === 'AbortError') {
-      return res.status(504).json({ error: 'Tiempo de espera excedido al consultar el índice Dst.' });
-    }
-
-    const status = isConnectionRefusedError(err) ? 502 : 500;
-    const message = err?.message && err.message.includes('No hay datos')
-      ? err.message
-      : 'No se pudo obtener el índice Dst.';
-    res.status(status).json({ error: message });
+    res.status(502).json({ error: String(err.message || err) });
   }
 });
+
 
 app.get('/api/kp', (req, res) => {
   if (!isKpEnabled()) {
