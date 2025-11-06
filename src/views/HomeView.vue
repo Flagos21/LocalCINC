@@ -154,7 +154,7 @@ function fmtUTC(value) {
                 <p>Serie de barras de 3 h con colores por severidad. Fuente: GFZ.</p>
               </div>
             </header>
-            <KpChart embedded :height="240" />
+            <KpChart embedded :height="200" />
           </div>
         </div>
       </article>
@@ -218,10 +218,12 @@ function fmtUTC(value) {
 .home {
   display: flex;
   flex-direction: column;
-  gap: 1.25rem;
+  gap: 1.1rem;
   flex: 1;
   min-height: 0;
   height: 100%;
+  max-height: calc(100vh - var(--masthead-h, 120px) - 3rem);
+  overflow: hidden;
 }
 
 /* Titulares en negro sobre fondo oscuro del main */
@@ -251,9 +253,10 @@ function fmtUTC(value) {
   box-shadow: 0 6px 14px rgba(15, 23, 42, 0.08);
   display: flex;
   flex-direction: column;
-  gap: 0.75rem;
+  gap: 0.65rem;
   height: 100%;
   min-height: 0;
+  overflow: hidden;
 }
 
 .home__tile-head {
@@ -282,6 +285,7 @@ function fmtUTC(value) {
   flex-direction: column;
   gap: 0.9rem;
   min-height: 0;
+  overflow: hidden;
 }
 
 .home__tile-divider {
@@ -343,7 +347,7 @@ function fmtUTC(value) {
 
 .home__tile-visual {
   width: 100%;
-  height: clamp(15rem, 28vw, 21rem);
+  height: clamp(14rem, 24vh, 19rem);
   border-radius: 0.75rem;
   overflow: hidden;
   position: relative;
@@ -375,7 +379,7 @@ function fmtUTC(value) {
 .home__tile-visual--sun {
   background: #ffffff;
   --dashboard-aspect: 1 / 1;
-  height: auto;
+  height: clamp(14rem, 24vh, 20rem);
   min-height: 0;
   padding: 0.5rem;
   display: flex;
@@ -505,7 +509,7 @@ function fmtUTC(value) {
 
 .home__tile--magneto :deep(.magneto__chart-wrapper) {
   width: 100%;
-  height: clamp(15rem, 28vw, 21rem);
+  height: clamp(15rem, 28vh, 21rem);
   border-radius: 0.75rem;
   overflow: hidden;
   background: #ffffff;
@@ -528,7 +532,7 @@ function fmtUTC(value) {
 }
 
 .home__tile--ionogram :deep(.ionogram-card__body) {
-  height: clamp(15rem, 28vw, 21rem);
+  height: clamp(15rem, 26vh, 21rem);
   border-radius: 0.75rem;
   overflow: hidden;
   border: 1px solid #e2e8f0;
