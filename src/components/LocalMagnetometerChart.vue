@@ -1,12 +1,12 @@
 <script setup>
 import { ref, onMounted, watch, computed, onBeforeUnmount } from 'vue'
-import dayjs from 'dayjs'
+import dayjs from '@/utils/dayjs'
 import Litepicker from 'litepicker'
 import 'litepicker/dist/css/litepicker.css'
 import VueApexCharts from 'vue3-apexcharts'
 import { useMagnetometerSeries } from '@/composables/useMagnetometerSeries'
 
-const DEFAULT_RANGE_YEARS = 2
+const DEFAULT_RANGE_DAYS = 7
 
 const rangeInputRef = ref(null)
 const pickerRef = ref(null)
@@ -14,6 +14,7 @@ const pendingRange = ref(null)
 
 const from = ref('')
 const to = ref('')
+const hasBootstrappedRange = ref(false)
 
 const {
   labels,
@@ -32,8 +33,6 @@ const {
 })
 
 const chartSeries = ref([])
-const LINE_PALETTE = ['#2563eb', '#9333ea', '#0ea5e9', '#f97316', '#facc15', '#22c55e', '#ef4444', '#8b5cf6']
-const chartColors = computed(() => chartSeries.value.map((_, index) => LINE_PALETTE[index % LINE_PALETTE.length]))
 const xDomain = ref({ min: null, max: null })
 const visiblePoints = ref(0)
 const dataExtent = ref(null)
@@ -63,7 +62,7 @@ const chartOptions = computed(() => ({
     strokeOpacity: 1,
     hover: { sizeOffset: 3 }
   },
-  colors: chartColors.value,
+  colors: ['#2563eb'],
   xaxis: {
     type: 'datetime',
     min: Number.isFinite(xDomain.value.min) ? xDomain.value.min : undefined,
@@ -98,7 +97,7 @@ const chartOptions = computed(() => ({
   },
   legend: { show: false },
   noData: {
-    text: isLoading.value ? 'Cargando datos locales…' : 'Sin datos para mostrar',
+    text: isLoading.value ? 'Cargando serie del magnetómetro…' : 'Sin datos para mostrar',
     style: { color: '#64748b', fontSize: '14px' }
   }
 }))
@@ -160,8 +159,8 @@ function normalizeRange(start, end, { clampToFullDays = false } = {}) {
   }
 
   return {
-    start: normalizedStart.format('YYYY-MM-DDTHH:mm'),
-    end: normalizedEnd.format('YYYY-MM-DDTHH:mm')
+    start: normalizedStart.utc().format('YYYY-MM-DDTHH:mm:ss[Z]'),
+    end: normalizedEnd.utc().format('YYYY-MM-DDTHH:mm:ss[Z]')
   }
 }
 
@@ -197,28 +196,71 @@ function formatEveryLabel(every) {
   return `${amount.toLocaleString('es-CL')} ${label}`
 }
 
-function setDefaultRange() {
-  const end = dayjs()
-  const start = end.subtract(DEFAULT_RANGE_YEARS, 'year')
-  const normalized = normalizeRange(start, end, { clampToFullDays: true })
-  from.value = normalized.start
-  to.value = normalized.end
-  pendingRange.value = null
-}
-
 const defaultRangeDisplay = computed(() => {
-  if (DEFAULT_RANGE_YEARS === 1) {
+  if (DEFAULT_RANGE_DAYS === 1) {
     return {
-      button: 'Último año',
-      description: 'el último año'
+      button: 'Último día',
+      description: 'las últimas 24 horas'
     }
   }
 
   return {
-    button: `Últimos ${DEFAULT_RANGE_YEARS} años`,
-    description: `los últimos ${DEFAULT_RANGE_YEARS} años`
+    button: `Últimos ${DEFAULT_RANGE_DAYS} días`,
+    description: `los últimos ${DEFAULT_RANGE_DAYS} días`
   }
 })
+
+const defaultRangeValue = computed(() => {
+  const availableEndRaw = meta.value?.availableRange?.end ?? meta.value?.to ?? null
+  const availableStartRaw = meta.value?.availableRange?.start ?? null
+
+  const endCandidate = availableEndRaw ? dayjs(availableEndRaw) : null
+  const availableStart = availableStartRaw ? dayjs(availableStartRaw) : null
+
+  if (endCandidate?.isValid?.()) {
+    let startCandidate = endCandidate.subtract(DEFAULT_RANGE_DAYS - 1, 'day')
+
+    if (availableStart?.isValid?.() && startCandidate.isBefore(availableStart)) {
+      startCandidate = availableStart
+    }
+
+    return normalizeRange(startCandidate.startOf('day'), endCandidate.endOf('day'), {
+      clampToFullDays: true
+    })
+  }
+
+  if (meta.value?.range?.start && meta.value?.range?.end) {
+    return normalizeRange(meta.value.range.start, meta.value.range.end)
+  }
+
+  return { start: '', end: '' }
+})
+
+function setDefaultRange({ allowFallback = true } = {}) {
+  const normalized = defaultRangeValue.value
+
+  if (normalized.start && normalized.end) {
+    hasBootstrappedRange.value = true
+    from.value = normalized.start
+    to.value = normalized.end
+    pendingRange.value = null
+    return
+  }
+
+  if (!allowFallback) {
+    return
+  }
+
+  const fallbackEnd = dayjs()
+  const fallbackStart = fallbackEnd.subtract(DEFAULT_RANGE_DAYS - 1, 'day')
+  const fallback = normalizeRange(fallbackStart.startOf('day'), fallbackEnd.endOf('day'), {
+    clampToFullDays: true
+  })
+
+  from.value = fallback.start
+  to.value = fallback.end
+  pendingRange.value = null
+}
 
 function applyPendingRange() {
   if (!pendingRange.value) {
@@ -295,7 +337,18 @@ function draw() {
       })
     : rawPoints
 
-  visiblePoints.value = filteredPoints.length
+  const chartPoints = filteredPoints
+    .map((point) => {
+      const ts = toTimestamp(point.t)
+      const numericValue = Number(point.v)
+      if (ts === null || !Number.isFinite(numericValue)) {
+        return null
+      }
+      return [ts, numericValue]
+    })
+    .filter((entry) => entry !== null)
+
+  visiblePoints.value = chartPoints.length
 
   let xRange = null
 
@@ -319,8 +372,10 @@ function draw() {
     xRange = [now.subtract(1, 'day'), now.add(1, 'day')]
   }
 
-  const titleStart = filteredPoints.length ? dayjs(filteredPoints[0].t) : selectionStart || dayjs()
-  const titleEnd = filteredPoints.length ? dayjs(filteredPoints[filteredPoints.length - 1].t) : selectionEnd || titleStart
+  const titleStart = chartPoints.length ? dayjs(chartPoints[0][0]) : selectionStart || dayjs()
+  const titleEnd = chartPoints.length
+    ? dayjs(chartPoints[chartPoints.length - 1][0])
+    : selectionEnd || titleStart
 
   const domain = {
     min: Number.isFinite(xRange[0]?.valueOf?.()) ? xRange[0].valueOf() : null,
@@ -329,13 +384,10 @@ function draw() {
 
   xDomain.value = domain
 
-  chartSeries.value = filteredPoints.length
+  chartSeries.value = chartPoints.length
     ? [{
         name: `H – ${titleStart.format('YYYY-MM-DD')} a ${titleEnd.format('YYYY-MM-DD')}`,
-        data: filteredPoints.map((point) => {
-          const ts = toTimestamp(point.t)
-          return [ts, point.v]
-        }).filter(([ts]) => ts !== null)
+        data: chartPoints
       }]
     : []
 }
@@ -431,6 +483,35 @@ const metaSummary = computed(() => {
   }
 })
 
+const stationSummary = computed(() => {
+  const value = meta.value
+  if (!value) {
+    return ''
+  }
+
+  const matched = Array.isArray(value.stationsMatched)
+    ? value.stationsMatched.filter((station) => typeof station === 'string' && station.trim() !== '')
+    : []
+
+  if (matched.length) {
+    return matched.length === 1
+      ? `Estación ${matched[0]}`
+      : `Estaciones ${matched.join(', ')}`
+  }
+
+  const available = Array.isArray(value.stationsAvailable)
+    ? value.stationsAvailable.filter((station) => typeof station === 'string' && station.trim() !== '')
+    : []
+
+  if (available.length) {
+    return available.length === 1
+      ? `Estación disponible: ${available[0]}`
+      : `Estaciones disponibles: ${available.join(', ')}`
+  }
+
+  return ''
+})
+
 onMounted(() => {
   const picker = new Litepicker({
     element: rangeInputRef.value,
@@ -469,6 +550,17 @@ onMounted(() => {
   pickerRef.value = picker
 
   draw()
+})
+
+watch(meta, () => {
+  if (hasBootstrappedRange.value) {
+    return
+  }
+
+  const normalized = defaultRangeValue.value
+  if (normalized.start && normalized.end) {
+    setDefaultRange({ allowFallback: false })
+  }
 })
 
 watch([labels, series], draw, { immediate: true })
@@ -566,6 +658,10 @@ onBeforeUnmount(() => {
                 </template>
               </span>
             </div>
+            <div class="magneto__summary-block" v-if="stationSummary">
+              <span class="magneto__summary-label">Estaciones</span>
+              <span class="magneto__summary-value">{{ stationSummary }}</span>
+            </div>
           </div>
         </div>
       </header>
@@ -582,12 +678,12 @@ onBeforeUnmount(() => {
 
           <div v-if="isLoading" class="magneto__loading" role="status" aria-live="polite">
             <span class="magneto__spinner" aria-hidden="true"></span>
-            <p>Cargando serie local…</p>
+            <p>Cargando serie del magnetómetro…</p>
           </div>
         </div>
 
         <p v-if="!isLoading && !hasVisibleData && !errorMessage" class="magneto__empty">
-          No hay datos locales disponibles para el intervalo seleccionado.
+          No hay datos del magnetómetro disponibles para el intervalo seleccionado.
         </p>
 
         <p v-if="errorMessage" class="magneto__error">⚠️ {{ errorMessage }}</p>
@@ -604,7 +700,7 @@ onBeforeUnmount(() => {
 .magneto__card {
   margin: 0 auto;
   max-width: 1120px;
-  background: linear-gradient(150deg, #ffffff 0%, #fff7ed 50%, #ffedd5 100%);
+  background: linear-gradient(150deg, #ffffff 0%, #f6f8ff 45%, #e0f2ff 100%);
   border-radius: 24px;
   border: 1px solid rgba(15, 23, 42, 0.08);
   box-shadow: 0 24px 50px rgba(15, 23, 42, 0.12);
@@ -654,7 +750,7 @@ onBeforeUnmount(() => {
   font-size: 0.85rem;
   font-weight: 600;
   text-transform: uppercase;
-  color: #b45309;
+  color: #1d4ed8;
 }
 
 .magneto__controls {
@@ -668,7 +764,7 @@ onBeforeUnmount(() => {
   flex: 1;
   min-width: 220px;
   border-radius: 12px;
-  border: 1px solid rgba(249, 115, 22, 0.35);
+  border: 1px solid rgba(37, 99, 235, 0.35);
   background: rgba(255, 255, 255, 0.9);
   padding: 0.65rem 0.85rem;
   font-size: 0.95rem;
@@ -679,8 +775,8 @@ onBeforeUnmount(() => {
 
 .magneto__picker:focus-visible {
   outline: none;
-  border-color: #f97316;
-  box-shadow: 0 0 0 3px rgba(249, 115, 22, 0.25);
+  border-color: #2563eb;
+  box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.25);
 }
 
 .magneto__apply,
@@ -694,37 +790,37 @@ onBeforeUnmount(() => {
 }
 
 .magneto__apply {
-  background: #f97316;
+  background: #2563eb;
   color: #ffffff;
-  box-shadow: 0 10px 20px rgba(249, 115, 22, 0.25);
+  box-shadow: 0 10px 20px rgba(37, 99, 235, 0.25);
 }
 
 .magneto__apply:disabled {
-  background: #fed7aa;
-  color: rgba(255, 255, 255, 0.8);
+  background: #bfdbfe;
+  color: rgba(255, 255, 255, 0.85);
   cursor: not-allowed;
   box-shadow: none;
 }
 
 .magneto__apply:not(:disabled):hover {
   transform: translateY(-1px);
-  box-shadow: 0 14px 24px rgba(249, 115, 22, 0.32);
+  box-shadow: 0 14px 24px rgba(37, 99, 235, 0.32);
 }
 
 .magneto__reset {
-  background: rgba(249, 115, 22, 0.1);
-  color: #b45309;
+  background: rgba(37, 99, 235, 0.12);
+  color: #1d4ed8;
 }
 
 .magneto__reset:hover {
   transform: translateY(-1px);
-  box-shadow: 0 12px 22px rgba(249, 115, 22, 0.2);
+  box-shadow: 0 12px 22px rgba(37, 99, 235, 0.2);
 }
 
 .magneto__pending {
   margin: 0;
   font-size: 0.85rem;
-  color: #b45309;
+  color: #1d4ed8;
 }
 
 .magneto__summary {
@@ -736,10 +832,10 @@ onBeforeUnmount(() => {
 
 .magneto__summary-block {
   flex: 1 1 220px;
-  background: #fff7ed;
+  background: rgba(255, 255, 255, 0.85);
   border-radius: 16px;
   padding: 0.85rem 1rem;
-  border: 1px solid rgba(249, 115, 22, 0.15);
+  border: 1px solid rgba(15, 23, 42, 0.06);
   display: flex;
   flex-direction: column;
   gap: 0.25rem;
@@ -749,7 +845,7 @@ onBeforeUnmount(() => {
   font-size: 0.75rem;
   letter-spacing: 0.08em;
   text-transform: uppercase;
-  color: #ea580c;
+  color: #1d4ed8;
   font-weight: 600;
 }
 
@@ -797,17 +893,17 @@ onBeforeUnmount(() => {
   width: 1.75rem;
   height: 1.75rem;
   border-radius: 50%;
-  border: 3px solid rgba(249, 115, 22, 0.25);
-  border-top-color: #f97316;
+  border: 3px solid rgba(59, 130, 246, 0.25);
+  border-top-color: #2563eb;
   animation: magneto-spin 1s linear infinite;
 }
 
 .magneto__empty {
   margin-top: 1rem;
   padding: 1rem 1.25rem;
-  background: rgba(249, 115, 22, 0.12);
+  background: rgba(37, 99, 235, 0.12);
   border-radius: 14px;
-  color: #b45309;
+  color: #1d4ed8;
   font-weight: 500;
   text-align: center;
 }
