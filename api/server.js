@@ -36,6 +36,7 @@ const __dirname = path.dirname(__filename);
 const ionogramRoot = path.join(__dirname, 'ionograms');
 const magnetometerLocalRoot = path.join(__dirname, 'magnetometro', 'DataMin');
 const electricFieldRoot = path.join(__dirname, 'campoelectrico', 'cinc_efm');
+const DEFAULT_LOCAL_MAGNETOMETER_DAYS = 7;
 
 const {
   INFLUX_URL,
@@ -677,12 +678,23 @@ app.get('/api/local-magnetometer/series', async (req, res) => {
       rangeStart = toUtcStart(parsedDate);
       rangeEnd = toUtcEnd(parsedDate);
     } else {
-      const now = new Date();
-      const defaultEnd = toUtcEnd(now);
-      const defaultStart = toUtcStart(new Date(now));
-      defaultStart.setUTCFullYear(defaultStart.getUTCFullYear() - 2);
+      const latestFile = files[files.length - 1];
+      const earliestFile = files[0];
 
-      rangeStart = defaultStart;
+      const latestDate = latestFile ? new Date(latestFile.timestamp) : new Date();
+      const earliestDate = earliestFile ? new Date(earliestFile.timestamp) : latestDate;
+
+      const defaultEnd = toUtcEnd(latestDate);
+      const defaultStart = toUtcStart(new Date(latestDate));
+      defaultStart.setUTCDate(defaultStart.getUTCDate() - (DEFAULT_LOCAL_MAGNETOMETER_DAYS - 1));
+
+      const earliestAllowed = toUtcStart(earliestDate);
+      if (defaultStart.getTime() < earliestAllowed.getTime()) {
+        rangeStart = earliestAllowed;
+      } else {
+        rangeStart = defaultStart;
+      }
+
       rangeEnd = defaultEnd;
     }
     const seriesPayload = await loadLocalSeries({
