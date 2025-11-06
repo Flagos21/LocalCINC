@@ -1,0 +1,6 @@
+{
+  "name": "chartjs-adapter-date-fns",
+  "version": "3.0.0-local",
+  "type": "module",
+  "main": "./index.js"
+}

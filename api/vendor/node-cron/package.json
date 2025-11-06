@@ -1,0 +1,6 @@
+{
+  "name": "node-cron",
+  "version": "3.0.3-local",
+  "type": "module",
+  "main": "./index.js"
+}
