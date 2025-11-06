@@ -60,8 +60,9 @@ function fmtUTC(value) {
     </header>
 
     <div class="home__grid">
-      <!-- Rayos X / Dst / Kp -->
-      <article class="home__tile home__tile--xray">
+      <div class="home__grid-top">
+        <!-- Rayos X / Dst / Kp -->
+        <article class="home__tile home__tile--xray">
         <header class="home__tile-head xray__head">
           <div class="xray__title">
             <h3>GOES X-ray Flux (0.05–0.4 nm y 0.1–0.8 nm)</h3>
@@ -157,16 +158,34 @@ function fmtUTC(value) {
             <KpChart embedded :height="200" />
           </div>
         </div>
-      </article>
-      <div class="home__aside-grid">
-        <!-- Magnetómetro -->
-        <article class="home__tile home__tile--magneto">
-          <MagnetometerChartOverview />
         </article>
 
-        <!-- Campo eléctrico local -->
-        <article class="home__tile home__tile--electric">
-          <ElectricFieldHomeCard />
+        <div class="home__grid-top-right">
+          <!-- Magnetómetro -->
+          <article class="home__tile home__tile--magneto">
+            <MagnetometerChartOverview />
+          </article>
+
+          <!-- Campo eléctrico local -->
+          <article class="home__tile home__tile--electric">
+            <ElectricFieldHomeCard />
+          </article>
+        </div>
+      </div>
+
+      <div class="home__grid-bottom">
+        <!-- Sol -->
+        <article class="home__tile home__tile--sun">
+          <header class="home__tile-head">
+            <div>
+              <h3>El Sol (SUVI)</h3>
+              <p>Vista en tiempo (casi) real del Sol por longitudes de onda EUV.</p>
+            </div>
+          </header>
+
+          <div class="home__tile-visual home__tile-visual--sun">
+            <SunViewer />
+          </div>
         </article>
 
         <!-- Ionograma -->
@@ -195,20 +214,6 @@ function fmtUTC(value) {
             />
           </div>
         </article>
-
-        <!-- Sol -->
-        <article class="home__tile home__tile--sun">
-          <header class="home__tile-head">
-            <div>
-              <h3>El Sol (SUVI)</h3>
-              <p>Vista en tiempo (casi) real del Sol por longitudes de onda EUV.</p>
-            </div>
-          </header>
-
-          <div class="home__tile-visual home__tile-visual--sun">
-            <SunViewer />
-          </div>
-        </article>
       </div>
     </div>
   </section>
@@ -232,17 +237,29 @@ function fmtUTC(value) {
 .home__grid {
   flex: 1;
   min-height: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+
+.home__grid-top {
   display: grid;
   gap: 1rem;
   grid-template-columns: minmax(0, 1fr);
   align-items: stretch;
 }
 
-.home__aside-grid {
+.home__grid-top-right {
   display: grid;
   gap: 1rem;
   grid-template-columns: minmax(0, 1fr);
-  grid-auto-rows: auto;
+}
+
+.home__grid-bottom {
+  display: grid;
+  gap: 1rem;
+  grid-template-columns: minmax(0, 1fr);
+  align-items: stretch;
 }
 
 .home__tile {
@@ -425,7 +442,7 @@ function fmtUTC(value) {
   background: #ffffff;
   align-items: stretch;
   justify-items: stretch;
-  height: clamp(18rem, 36vh, 24rem);
+  height: clamp(13rem, 22vh, 18rem);
 }
 
 .home__tile-visual--map :deep(.tad-card) {
@@ -489,24 +506,11 @@ function fmtUTC(value) {
 
 .xray__foot { margin-top:.25rem; color:#0f0f10; display:block; }
 
-.home__tile--electric {
+.home__tile--magneto {
   padding: 0;
 }
 
-.home__tile--electric :deep(.efield-home) {
-  height: 100%;
-  min-height: 0;
-}
-
-.home__tile--magneto,
-.home__tile--ionogram {
-  padding: 0;
-  background: transparent;
-  box-shadow: none;
-}
-
-.home__tile--magneto > *,
-.home__tile--ionogram > * {
+.home__tile--magneto > * {
   height: 100%;
   min-height: 0;
   display: flex;
@@ -523,7 +527,7 @@ function fmtUTC(value) {
 
 .home__tile--magneto :deep(.magneto__chart-wrapper) {
   width: 100%;
-  height: clamp(15rem, 28vh, 21rem);
+  height: clamp(18rem, 36vh, 26rem);
   border-radius: 0.75rem;
   overflow: hidden;
   background: #ffffff;
@@ -536,6 +540,25 @@ function fmtUTC(value) {
 .home__tile--magneto :deep(.magneto__chart) {
   flex: 1 1 auto;
   min-height: 0;
+}
+
+.home__tile--electric {
+  padding: 0;
+}
+
+.home__tile--electric :deep(.efield-home) {
+  height: 100%;
+  min-height: 0;
+}
+
+.home__tile--electric :deep(.efield-home__chart) {
+  min-height: clamp(17rem, 34vh, 24rem);
+}
+
+.home__tile--ionogram {
+  padding: 0;
+  background: transparent;
+  box-shadow: none;
 }
 
 .home__tile--ionogram :deep(.ionogram-card) {
@@ -556,28 +579,29 @@ function fmtUTC(value) {
   justify-content: center;
 }
 
-@media (min-width: 960px) {
-  .home__grid { grid-template-columns: minmax(22rem, 1fr) minmax(0, 1.1fr); align-items: start; }
-  .home__aside-grid {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-    grid-template-areas:
-      'magneto electric'
-      'map map'
-      'ionogram sun';
-  }
-  .home__tile--sun { grid-area: sun; }
-  .home__tile--electric { grid-area: electric; }
-  .home__tile--magneto { grid-area: magneto; }
-  .home__tile--ionogram { grid-area: ionogram; }
-  .home__tile--map { grid-area: map; }
+.home__tile--map {
+  background: #ffffff;
 }
 
-@media (min-width: 1200px) {
-  .home__grid { grid-template-columns: minmax(24rem, 1.05fr) minmax(28rem, 1.2fr); }
+@media (min-width: 960px) {
+  .home__grid-top {
+    grid-template-columns: minmax(24rem, 0.95fr) minmax(28rem, 1.1fr);
+    align-items: stretch;
+  }
+
+  .home__grid-top-right {
+    grid-template-rows: repeat(2, minmax(0, 1fr));
+  }
+
+  .home__grid-bottom {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
 }
 
 @media (min-width: 1280px) {
-  .home__grid { grid-template-columns: minmax(25rem, 1.05fr) minmax(32rem, 1.25fr); }
+  .home__grid-top {
+    grid-template-columns: minmax(26rem, 1fr) minmax(32rem, 1.1fr);
+  }
 }
 
 @media (max-width: 600px) {
