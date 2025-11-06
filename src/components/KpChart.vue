@@ -101,36 +101,43 @@ const options = computed(() => ({
   legend: { show: false },
 
   // 🔹 Reemplaza solo desde aquí:
-  xaxis: {
-    type: 'datetime',
-    labels: {
-      datetimeUTC: true,
-      datetimeFormatter: {
-        year:  'yyyy',
-        month: 'dd MMM',
-        day:   'dd MMM',
-        hour:  'HH:mm'
-      },
-      formatter: (val) => {
-        const n = Number(val)
-        if (!Number.isFinite(n)) return ''
-        const d  = new Date(n)
-        const hh = String(d.getUTCHours()).padStart(2,'0')
-        const mm = String(d.getUTCMinutes()).padStart(2,'0')
-        if (d.getUTCHours() === 0 && d.getUTCMinutes() === 0) {
-          const dateLbl = new Intl.DateTimeFormat('en-GB', {
-            day:'numeric', month:'short', year:'numeric', timeZone:'UTC'
-          }).format(d)
-          return `${hh}:${mm} ${dateLbl}` // Ej: "00:00 6 Nov 2025"
-        }
-        return `${hh}:${mm}`
-      },
-      style: { fontSize: '11px' }
+xaxis: {
+  type: 'datetime',
+  tickAmount: 24,           // fuerza ticks regulares
+  tickPlacement: 'on',      // ticks sobre las barras
+  labels: {
+    datetimeUTC: true,
+    rotate: 0,
+    formatter: (val, timestamp, opts) => {
+      const d = new Date(Number(val))
+      const hour = String(d.getUTCHours()).padStart(2, '0') + ':00'
+      const dayChange = d.getUTCHours() === 0
+      // fecha solo cuando cambia el día
+      if (dayChange) {
+        const dateLbl = new Intl.DateTimeFormat('en-GB', {
+          day: 'numeric',
+          month: 'short',
+          timeZone: 'UTC'
+        }).format(d)
+        return `${dateLbl}\n${hour}`  // fecha arriba, hora abajo
+      }
+      return hour                    // resto solo hora
     },
-    axisBorder: { show: false },
-    axisTicks: { show: false },
-    title: { text: 'time (UTC)', style: { fontSize: '12px', color: '#6b7280' } }
+    style: {
+      fontSize: '11px',
+      colors: '#4b5563',
+      fontWeight: 500,
+      whiteSpace: 'pre'              // permite el salto de línea
+    }
   },
+  axisBorder: { show: false },
+  axisTicks:  { show: true, color: '#d1d5db' },
+  title: {
+    text: 'Universal Time',
+    style: { fontSize: '12px', color: '#6b7280' }
+  }
+},
+
   // 🔹 hasta aquí
   yaxis: {
     min: 0, max: 9, tickAmount: 9,
