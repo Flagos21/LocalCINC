@@ -73,59 +73,142 @@ function isImageFile(name) {
   return imageExtensions.has(ext);
 }
 
-function sanitizeDstBody(body) {
-  if (!body) {
-    return '';
+function normalizeTwoDigitYear(yy) {
+  if (!Number.isFinite(yy)) {
+    return null;
   }
-
-  let text = body;
-  if (/<[a-z][\s\S]*>/i.test(text)) {
-    text = text.replace(/<br\s*\/?\s*>/gi, '\n');
-    text = text.replace(/<[^>]*>/g, ' ');
-  }
-
-  return text
-    .replace(/&nbsp;/gi, ' ')
-    .replace(/&amp;/gi, '&')
-    .replace(/\r?\n/g, '\n');
+  return yy >= 70 ? 1900 + yy : 2000 + yy;
 }
 
-function parseDstQuicklook(body) {
-  const sanitized = sanitizeDstBody(body);
-  const lines = sanitized.split('\n');
+function inferYearMonth({ url, raw }) {
+  const fileMatch = url?.match(/dst\s*(\d{2})(\d{2})\.(?:txt|for|dat)/i);
+  if (fileMatch) {
+    const yy = Number.parseInt(fileMatch[1], 10);
+    const mm = Number.parseInt(fileMatch[2], 10);
+    if (Number.isFinite(yy) && Number.isFinite(mm) && mm >= 1 && mm <= 12) {
+      return { yyyy: normalizeTwoDigitYear(yy), m0: mm - 1 };
+    }
+  }
+
+  const sample = typeof raw === 'string' ? raw.slice(0, 500) : '';
+
+  let match = sample.match(/\b((?:19|20)\d{2})\s+([01]?\d)\b/);
+  if (match) {
+    const yyyy = Number.parseInt(match[1], 10);
+    const mm = Number.parseInt(match[2], 10);
+    if (Number.isFinite(yyyy) && Number.isFinite(mm) && mm >= 1 && mm <= 12) {
+      return { yyyy, m0: mm - 1 };
+    }
+  }
+
+  match = sample.match(/\b(\d{2})\s+([01]?\d)\b/);
+  if (match) {
+    const yy = Number.parseInt(match[1], 10);
+    const mm = Number.parseInt(match[2], 10);
+    const yyyy = normalizeTwoDigitYear(yy);
+    if (Number.isFinite(yyyy) && Number.isFinite(mm) && mm >= 1 && mm <= 12) {
+      return { yyyy, m0: mm - 1 };
+    }
+  }
+
+  const now = new Date();
+  return { yyyy: now.getUTCFullYear(), m0: now.getUTCMonth() };
+}
+
+function parseDstMonthlyText(raw, inferred) {
+  if (!raw || !inferred || !Number.isFinite(inferred?.yyyy) || !Number.isFinite(inferred?.m0)) {
+    return [];
+  }
+
+  const lines = raw.split(/\r?\n/);
+  const points = [];
+  let previousDay = 0;
+
+  for (const line of lines) {
+    const trimmed = line.trim();
+    if (!trimmed) {
+      continue;
+    }
+
+    const tokens = trimmed.split(/\s+/);
+    if (tokens.length < 24) {
+      continue;
+    }
+
+    const numbers = tokens.map((token) => Number.parseInt(token, 10));
+    if (numbers.some((value) => !Number.isFinite(value))) {
+      continue;
+    }
+
+    let day;
+    let values;
+
+    if (numbers.length === 24) {
+      day = previousDay > 0 ? previousDay + 1 : 1;
+      values = numbers;
+    } else if (numbers.length >= 25) {
+      day = numbers[0];
+      values = numbers.slice(1, 25);
+    } else {
+      continue;
+    }
+
+    if (!Number.isFinite(day) || day < 1 || day > 31) {
+      continue;
+    }
+
+    previousDay = day;
+
+    for (let hour = 0; hour < values.length && hour < 24; hour += 1) {
+      const value = values[hour];
+      if (!Number.isFinite(value) || Math.abs(value) >= 9999) {
+        continue;
+      }
+
+      const timestamp = Date.UTC(inferred.yyyy, inferred.m0, day, hour, 0, 0);
+      if (Number.isFinite(timestamp)) {
+        points.push({ timestamp, value });
+      }
+    }
+  }
+
+  return points;
+}
+
+function parseDstHourlyRows(raw) {
+  if (!raw) {
+    return [];
+  }
+
+  const lines = raw.split(/\r?\n/);
   const points = [];
 
-  const primaryPattern = /^(\d{4})\s+(\d{1,2})\s+(\d{1,2})\s+(\d{1,2})\s+(-?\d+(?:\.\d+)?)/;
-  const fallbackPattern = /^(\d{4})[-\/]?(\d{1,2})[-\/]?(\d{1,2})\s+(\d{1,2})\s+(-?\d+(?:\.\d+)?)/;
-
-  for (const rawLine of lines) {
-    const line = rawLine.trim();
-    if (!line || !/\d/.test(line)) {
+  for (const line of lines) {
+    const trimmed = line.trim();
+    if (!trimmed) {
       continue;
     }
 
-    let match = line.match(primaryPattern);
-    if (!match) {
-      match = line.match(fallbackPattern);
-    }
-
-    if (!match) {
+    const tokens = trimmed.split(/\s+/);
+    if (tokens.length < 5) {
       continue;
     }
 
-    const year = Number.parseInt(match[1], 10);
-    const month = Number.parseInt(match[2], 10);
-    const day = Number.parseInt(match[3], 10);
-    const hour = Number.parseInt(match[4], 10);
-    const value = Number.parseFloat(match[5]);
+    let year = Number.parseInt(tokens[0], 10);
+    const month = Number.parseInt(tokens[1], 10);
+    const day = Number.parseInt(tokens[2], 10);
+    const hour = Number.parseInt(tokens[3], 10);
+    const value = Number.parseFloat(tokens[4]);
 
-    if (
-      !Number.isFinite(year) ||
-      !Number.isFinite(month) ||
-      !Number.isFinite(day) ||
-      !Number.isFinite(hour) ||
-      !Number.isFinite(value)
-    ) {
+    if (!Number.isFinite(year) || !Number.isFinite(month) || !Number.isFinite(day) || !Number.isFinite(hour) || !Number.isFinite(value)) {
+      continue;
+    }
+
+    if (year < 100) {
+      year = normalizeTwoDigitYear(year);
+    }
+
+    if (!Number.isFinite(year) || month < 1 || month > 12 || day < 1 || day > 31 || hour < 0 || hour > 23) {
       continue;
     }
 
@@ -133,41 +216,77 @@ function parseDstQuicklook(body) {
       continue;
     }
 
-    if (month < 1 || month > 12 || day < 1 || day > 31) {
-      continue;
+    const timestamp = Date.UTC(year, month - 1, day, hour, 0, 0);
+    if (Number.isFinite(timestamp)) {
+      points.push({ timestamp, value });
     }
-
-    let timestamp;
-    if (hour === 24) {
-      timestamp = Date.UTC(year, month - 1, day, 0) + 24 * 60 * 60 * 1000;
-    } else if (hour >= 0 && hour <= 23) {
-      timestamp = Date.UTC(year, month - 1, day, hour);
-    } else {
-      continue;
-    }
-
-    if (!Number.isFinite(timestamp)) {
-      continue;
-    }
-
-    points.push({ timestamp, value });
   }
-
-  points.sort((a, b) => a.timestamp - b.timestamp);
 
   return points;
 }
 
-let dstCache = { expiresAt: 0, payload: null };
-
-async function fetchDstRealtime() {
-  if (!DST_ENDPOINT) {
-    throw new Error('No se configuró la URL de origen para el índice Dst.');
+function normalizeDstPoints(points) {
+  if (!Array.isArray(points) || points.length === 0) {
+    return [];
   }
 
-  const now = Date.now();
-  if (dstCache.payload && DST_CACHE_TTL_MS > 0 && dstCache.expiresAt > now) {
-    return dstCache.payload;
+  const map = new Map();
+  for (const point of points) {
+    if (!point || !Number.isFinite(point.timestamp) || !Number.isFinite(point.value)) {
+      continue;
+    }
+
+    map.set(point.timestamp, point.value);
+  }
+
+  const timestamps = Array.from(map.keys()).sort((a, b) => a - b);
+  const nowYear = new Date().getUTCFullYear();
+  const normalized = [];
+
+  for (const timestamp of timestamps) {
+    const value = map.get(timestamp);
+    if (!Number.isFinite(value) || Math.abs(value) >= 9999) {
+      continue;
+    }
+
+    const date = new Date(timestamp);
+    const year = date.getUTCFullYear();
+    if (year < 1970 || year > nowYear + 1) {
+      continue;
+    }
+
+    normalized.push({
+      timestamp: date.toISOString(),
+      value
+    });
+  }
+
+  return normalized;
+}
+
+function cloneDstPayload(payload) {
+  if (!payload) {
+    return null;
+  }
+
+  return {
+    ...payload,
+    data: Array.isArray(payload.data) ? payload.data.map((entry) => ({ ...entry })) : [],
+    meta: payload.meta ? { ...payload.meta } : undefined
+  };
+}
+
+let dstCache = {
+  expiresAt: 0,
+  payload: null,
+  raw: '',
+  inferred: null,
+  updatedAt: null
+};
+
+async function fetchDstFromSource() {
+  if (!DST_ENDPOINT) {
+    throw new Error('No se configuró la URL de origen para el índice Dst.');
   }
 
   const controller = new AbortController();
@@ -184,28 +303,88 @@ async function fetchDstRealtime() {
       throw new Error(`Respuesta inválida desde Kyoto Dst (${response.status})`);
     }
 
-    const body = await response.text();
-    const points = parseDstQuicklook(body);
+    const raw = await response.text();
+    const inferred = inferYearMonth({ url: DST_ENDPOINT, raw });
+    let parsed = parseDstMonthlyText(raw, inferred);
+    if (!parsed.length) {
+      parsed = parseDstHourlyRows(raw);
+    }
+
+    const normalized = normalizeDstPoints(parsed);
+    if (!normalized.length) {
+      throw new Error('No se pudieron obtener puntos Dst válidos.');
+    }
+
+    const updatedAt = new Date().toISOString();
+    const meta = {
+      points: normalized.length,
+      url: DST_ENDPOINT,
+      cacheTtlSec: Math.round(DST_CACHE_TTL_MS / 1000),
+      inferred,
+      updatedAt
+    };
 
     const payload = {
-      points,
-      meta: {
-        source: 'WDC Kyoto quicklook',
-        url: DST_ENDPOINT,
-        fetchedAt: new Date().toISOString(),
-        cacheTtlSec: Math.round(DST_CACHE_TTL_MS / 1000)
-      }
+      source: 'live',
+      updatedAt,
+      data: normalized,
+      meta
     };
 
     dstCache = {
-      expiresAt: DST_CACHE_TTL_MS > 0 ? now + DST_CACHE_TTL_MS : 0,
-      payload
+      expiresAt: DST_CACHE_TTL_MS > 0 ? Date.now() + DST_CACHE_TTL_MS : 0,
+      payload,
+      raw,
+      inferred,
+      updatedAt
     };
 
-    return payload;
+    return cloneDstPayload(payload);
   } finally {
     clearTimeout(timeout);
   }
+}
+
+async function getDstData(allowFreshFetch = true) {
+  const now = Date.now();
+  const hasCache = Boolean(dstCache.payload);
+  const cacheValid = hasCache && DST_CACHE_TTL_MS > 0 && dstCache.expiresAt > now;
+
+  if (cacheValid) {
+    return cloneDstPayload(dstCache.payload);
+  }
+
+  if (!hasCache && !allowFreshFetch) {
+    allowFreshFetch = true;
+  }
+
+  if (allowFreshFetch) {
+    try {
+      return await fetchDstFromSource();
+    } catch (err) {
+      if (hasCache) {
+        const cached = cloneDstPayload(dstCache.payload);
+        if (cached) {
+          cached.source = 'stale-cache';
+          if (cached.meta) {
+            cached.meta = { ...cached.meta, error: err.message };
+          }
+          return cached;
+        }
+      }
+      throw err;
+    }
+  }
+
+  if (hasCache) {
+    const cached = cloneDstPayload(dstCache.payload);
+    if (cached) {
+      cached.source = 'stale-cache';
+      return cached;
+    }
+  }
+
+  throw new Error('No hay datos Dst disponibles.');
 }
 
 function buildImagePayload({ year, month, day, filename }) {
@@ -324,7 +503,7 @@ async function findLatestIonogram() {
 
 app.get('/api/dst/realtime', async (req, res) => {
   try {
-    const payload = await fetchDstRealtime();
+    const payload = await getDstData(true);
     res.json(payload);
   } catch (err) {
     console.error('API /api/dst/realtime error:', err);
@@ -334,7 +513,94 @@ app.get('/api/dst/realtime', async (req, res) => {
     }
 
     const status = isConnectionRefusedError(err) ? 502 : 500;
-    res.status(status).json({ error: 'No se pudo obtener el índice Dst.' });
+    const message = err?.message && err.message.includes('No hay datos')
+      ? err.message
+      : 'No se pudo obtener el índice Dst.';
+    res.status(status).json({ error: message });
+  }
+});
+
+app.get('/api/dst/debug/inferred', async (req, res) => {
+  try {
+    if (!dstCache.payload) {
+      await getDstData(true);
+    }
+
+    if (!dstCache.inferred) {
+      return res.status(404).json({ error: 'No hay información inferida disponible.' });
+    }
+
+    res.json({ inferred: dstCache.inferred, updatedAt: dstCache.updatedAt });
+  } catch (err) {
+    console.error('API /api/dst/debug/inferred error:', err);
+
+    if (err?.name === 'AbortError') {
+      return res.status(504).json({ error: 'Tiempo de espera excedido al consultar el índice Dst.' });
+    }
+
+    const status = isConnectionRefusedError(err) ? 502 : 500;
+    res.status(status).json({ error: 'No se pudo obtener la inferencia de fecha para Dst.' });
+  }
+});
+
+app.get('/api/dst/debug/raw-head', async (req, res) => {
+  try {
+    if (!dstCache.payload) {
+      await getDstData(true);
+    }
+
+    if (!dstCache.raw) {
+      return res.status(404).json({ error: 'No hay datos brutos disponibles.' });
+    }
+
+    const lines = dstCache.raw.split(/\r?\n/).slice(0, 30);
+    res.json({ lines, updatedAt: dstCache.updatedAt });
+  } catch (err) {
+    console.error('API /api/dst/debug/raw-head error:', err);
+
+    if (err?.name === 'AbortError') {
+      return res.status(504).json({ error: 'Tiempo de espera excedido al consultar el índice Dst.' });
+    }
+
+    const status = isConnectionRefusedError(err) ? 502 : 500;
+    res.status(status).json({ error: 'No se pudo obtener el origen bruto del Dst.' });
+  }
+});
+
+app.get('/api/dst/chart', async (req, res) => {
+  try {
+    const payload = await getDstData(false);
+    const data = Array.isArray(payload?.data) ? payload.data : [];
+
+    const labels = data.map((point) => point.timestamp);
+    const series = [
+      {
+        name: 'Dst (nT)',
+        data: data.map((point) => point.value)
+      }
+    ];
+
+    res.json({
+      labels,
+      series,
+      meta: {
+        points: labels.length,
+        updatedAt: payload?.updatedAt ?? null,
+        source: payload?.source ?? null
+      }
+    });
+  } catch (err) {
+    console.error('API /api/dst/chart error:', err);
+
+    if (err?.name === 'AbortError') {
+      return res.status(504).json({ error: 'Tiempo de espera excedido al consultar el índice Dst.' });
+    }
+
+    const status = isConnectionRefusedError(err) ? 502 : 500;
+    const message = err?.message && err.message.includes('No hay datos')
+      ? err.message
+      : 'No se pudo generar la serie Dst.';
+    res.status(status).json({ error: message });
   }
 });
 
