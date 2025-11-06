@@ -6,6 +6,7 @@ import SunCalc from 'suncalc'
 
 const props = defineProps({
   height: { type: String, default: '420px' },
+  aspectRatio: { type: [String, Number], default: null },
   autoRefreshMs: { type: Number, default: 60_000 }, // 1 min
   startPaused: { type: Boolean, default: false },
   // 'satellite' | 'map'  (empezamos con el que quieras)
@@ -43,6 +44,18 @@ let timer=null
 const mode = ref(props.mode)
 let animFrameId=null
 let animButtonEl=null
+
+const mapStyles = computed(() => {
+  const styles = {}
+  if (props.aspectRatio) {
+    styles.aspectRatio = typeof props.aspectRatio === 'number'
+      ? `${props.aspectRatio}`
+      : props.aspectRatio
+  } else if (props.height) {
+    styles.height = props.height
+  }
+  return styles
+})
 
 /* === Bounds Sudamérica + helper para encajar una sola vez === */
 let didInitialFit = false
@@ -394,7 +407,7 @@ watch(isAnimating, updateAnimButton)
 
 <template>
   <div class="tad-card">
-    <div ref="mapEl" class="tad-map" :style="{ height }"></div>
+    <div ref="mapEl" class="tad-map" :style="mapStyles"></div>
     <div class="tad-footer">
       <span class="tad-time">
         <strong>{{ timeLabel }}</strong> — {{ displayTime.toLocaleString('es-CL',{ timeZone:'UTC', hour12:false }) }}
