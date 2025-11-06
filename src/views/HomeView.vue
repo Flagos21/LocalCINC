@@ -158,6 +158,18 @@ function fmtUTC(value) {
           <div class="home__tile-subsection">
             <DstCard class="dst-card--embedded" />
           </div>
+
+          <div class="home__tile-divider" role="presentation" aria-hidden="true"></div>
+
+          <div class="home__tile-subsection home__tile-subsection--kp">
+            <header class="home__tile-subhead">
+              <div>
+                <h4>Índice geomagnético Kp (GFZ)</h4>
+                <p>Serie de barras de 3 h con colores por severidad. Fuente: GFZ.</p>
+              </div>
+            </header>
+            <KpChart embedded :height="240" />
+          </div>
         </div>
       </article>
 
@@ -169,19 +181,6 @@ function fmtUTC(value) {
       <!-- Magnetómetro -->
       <article class="home__tile home__tile--magneto">
         <MagnetometerChartOverview />
-      </article>
-
-      <!-- Índice Kp -->
-      <article class="home__tile home__tile--kp">
-        <header class="home__tile-head">
-          <div>
-            <h3>Índice geomagnético Kp (GFZ)</h3>
-            <p>Serie de barras de 3 h con colores por severidad. Fuente: GFZ.</p>
-          </div>
-        </header>
-        <div class="home__tile-visual home__tile-visual--chart">
-          <KpChart />
-        </div>
       </article>
 
       <!-- Ionograma -->
@@ -294,6 +293,35 @@ function fmtUTC(value) {
 
 .home__tile-subsection :deep(.dst-card) {
   flex: 0 0 auto !important;
+}
+
+.home__tile-subhead {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 0.5rem;
+  margin-bottom: 0.25rem;
+}
+
+.home__tile-subhead h4 {
+  margin: 0;
+  font-size: 0.95rem;
+  font-weight: 600;
+  color: #1f2933;
+}
+
+.home__tile-subhead p {
+  margin: 0.2rem 0 0;
+  font-size: 0.85rem;
+  color: #64748b;
+}
+
+.home__tile-subsection--kp {
+  gap: 0.5rem;
+}
+
+.home__tile-subsection--kp :deep(.kp-card) {
+  width: 100%;
 }
 
 
