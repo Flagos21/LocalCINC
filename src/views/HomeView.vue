@@ -151,12 +151,13 @@ function fmtUTC(value) {
               </template>
             </small>
           </template>
-        </div>
-      </article>
 
-      <!-- Dst -->
-      <article class="home__tile home__tile--dst">
-        <DstCard />
+          <div class="home__tile-divider" role="presentation" aria-hidden="true"></div>
+
+          <div class="home__tile-subsection">
+            <DstCard class="dst-card--embedded" />
+          </div>
+        </div>
       </article>
 
       <!-- Campo eléctrico local -->
@@ -260,6 +261,25 @@ function fmtUTC(value) {
   flex-direction: column;
   gap: 0.75rem;
   min-height: 0;
+}
+
+.home__tile-divider {
+  height: 1px;
+  width: 100%;
+  background: #e2e8f0;
+  border-radius: 999px;
+  margin: 0.25rem 0 0.5rem;
+}
+
+.home__tile-subsection {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  min-height: 0;
+}
+
+.home__tile-subsection :deep(.dst-card) {
+  flex: 0 0 auto !important;
 }
 
 
