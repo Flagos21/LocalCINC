@@ -15,6 +15,7 @@ import {
 
 import {
   getDstRealtime,
+  getDstRealtimeLatest,
   refreshDst,
   isDstEnabled
 } from './services/dstService.js';
@@ -523,6 +524,23 @@ app.get('/api/dst/realtime', async (req, res) => {
     res.json(data);
   } catch (err) {
     console.error('API /api/dst/realtime error:', err);
+    res.status(502).json({ error: String(err.message || err) });
+  }
+});
+
+
+app.get('/api/dst/realtime/latest', async (req, res) => {
+  try {
+    if (!isDstEnabled()) {
+      return res.status(503).json({ error: 'Dst disabled' });
+    }
+    const latest = await getDstRealtimeLatest();
+    if (!latest) {
+      return res.status(404).json({ error: 'No hay datos Dst disponibles.' });
+    }
+    res.json(latest);
+  } catch (err) {
+    console.error('API /api/dst/realtime/latest error:', err);
     res.status(502).json({ error: String(err.message || err) });
   }
 });

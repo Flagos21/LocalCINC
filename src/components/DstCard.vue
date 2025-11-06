@@ -2,11 +2,18 @@
 import { computed } from 'vue'
 import VueApexCharts from 'vue3-apexcharts'
 
-import { useDstRealtime } from '@/composables/useDstRealtime'
+import { useDstRealtime, useDstLatest } from '@/composables/useDstRealtime'
 
 const POLL_INTERVAL = 60000
 
-const { points, lastPoint, isLoading, errorMessage } = useDstRealtime({ pollMs: POLL_INTERVAL })
+const {
+  points,
+  lastPoint: realtimeLastPoint,
+  isLoading,
+  errorMessage: realtimeErrorMessage
+} = useDstRealtime({ pollMs: POLL_INTERVAL })
+
+const { point: latestPoint, errorMessage: latestErrorMessage } = useDstLatest({ pollMs: POLL_INTERVAL })
 
 const chartPoints = computed(() => {
   if (!points.value?.length) {
@@ -49,7 +56,7 @@ const chartOptions = computed(() => ({
   colors: ['#0ea5e9'],
   xaxis: {
     type: 'datetime',
-    labels: { datetimeUTC: false },
+    labels: { datetimeUTC: true },
     tooltip: { enabled: false }
   },
   yaxis: {
@@ -67,7 +74,7 @@ const chartOptions = computed(() => ({
   tooltip: {
     theme: 'dark',
     x: {
-      formatter: (value) => formatLocalDateTime(value)
+      formatter: (value) => formatUtcDateTime(value)
     },
     y: {
       formatter: (value) => (Number.isFinite(value) ? `${value.toFixed(0)} nT` : '—')
@@ -79,19 +86,21 @@ const chartOptions = computed(() => ({
   }
 }))
 
+const activePoint = computed(() => latestPoint.value || realtimeLastPoint.value || null)
+
 const lastValue = computed(() => {
-  if (!lastPoint.value) {
+  if (!activePoint.value) {
     return null
   }
-  return lastPoint.value.value
+  return activePoint.value.value
 })
 
 const lastTimestampLabel = computed(() => {
-  if (!lastPoint.value) {
+  if (!activePoint.value) {
     return '—'
   }
 
-  return formatLocalDateTime(lastPoint.value.timestamp)
+  return formatUtcDateTime(activePoint.value.timestamp)
 })
 
 const lastValueLabel = computed(() => {
@@ -117,20 +126,16 @@ const trendClass = computed(() => {
 
 const hasChartData = computed(() => chartPoints.value.length > 0)
 
-function formatLocalDateTime(value) {
+const errorMessage = computed(() => latestErrorMessage.value || realtimeErrorMessage.value)
+
+function formatUtcDateTime(value) {
   const ts = typeof value === 'number' ? value : Date.parse(value)
   if (!Number.isFinite(ts)) {
     return '—'
   }
 
-  return new Intl.DateTimeFormat('es-CL', {
-    year: 'numeric',
-    month: '2-digit',
-    day: '2-digit',
-    hour: '2-digit',
-    minute: '2-digit',
-    second: '2-digit'
-  }).format(new Date(ts))
+  const label = new Date(ts).toUTCString()
+  return label.replace(' GMT', ' UTC')
 }
 </script>
 
