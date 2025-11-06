@@ -16,7 +16,6 @@ import {
 import {
   getDstRealtime,
   getDstRealtimeLatest,
-  refreshDst,
   isDstEnabled
 } from './services/dstService.js';
 
@@ -513,6 +512,20 @@ async function findLatestIonogram() {
     throw err;
   }
 }
+
+// GET /api/dst/chart
+app.get('/api/dst/chart', async (req, res) => {
+  try {
+    if (!isDstEnabled()) {
+      return res.status(503).json({ error: 'Dst disabled' });
+    }
+    const data = await getDstRealtime();
+    res.json(data);
+  } catch (err) {
+    console.error('API /api/dst/chart error:', err);
+    res.status(502).json({ error: String(err.message || err) });
+  }
+});
 
 // GET /api/dst/realtime
 app.get('/api/dst/realtime', async (req, res) => {

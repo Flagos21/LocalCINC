@@ -26,18 +26,10 @@ const chartPoints = computed(() => {
     return []
   }
 
-  const now = Date.now()
-  const nowDate = new Date(now)
-  const monthStart = getUtcMonthStartTimestamp(nowDate)
-  const threshold = Math.max(monthStart, now - 7 * 24 * 60 * 60 * 1000)
-
-  const withinMonth = points.value.filter((point) => point.timestamp >= monthStart)
-  if (!withinMonth.length) {
-    return []
-  }
-
-  const recent = withinMonth.filter((point) => point.timestamp >= threshold)
-  return (recent.length ? recent : withinMonth).map((point) => [point.timestamp, point.value])
+  const monthStart = getUtcMonthStartTimestamp(new Date())
+  return points.value
+    .filter((point) => point.timestamp >= monthStart)
+    .map((point) => [point.timestamp, point.value])
 })
 
 const chartSeries = computed(() => [{ name: 'Dst (nT)', data: chartPoints.value }])
