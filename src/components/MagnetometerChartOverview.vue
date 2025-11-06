@@ -89,7 +89,7 @@ const metaSummary = computed(() => {
   const pointsLabel = points === 1 ? '1 punto' : `${points.toLocaleString('es-CL')} puntos`
   const resolutionLabel = resolution ? `Resolución: ${resolution}` : ''
 
-  return [filesLabel, pointsLabel, resolutionLabel].filter(Boolean).join(' · ')
+  return [filesLabel, pointsLabel, resolutionLabel].filter(Boolean).join(' – ')
 })
 
 const chartOptions = computed(() => ({
