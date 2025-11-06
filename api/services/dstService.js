@@ -150,6 +150,49 @@ function last24IntegersFromTail(s) {
   return [];
 }
 
+function sanitizeDstSeries(series) {
+  if (!Array.isArray(series) || !series.length) return [];
+
+  const now = Date.now();
+  const parsed = [];
+
+  for (const raw of series) {
+    if (!raw) continue;
+    const iso = toIso(raw.time ?? raw.timestamp ?? raw.datetime ?? raw.date ?? raw.timeTag ?? raw.time_tag);
+    const val = Number(raw.value ?? raw.dst ?? raw.Dst ?? raw.index);
+    if (!iso || !Number.isFinite(val) || Math.abs(val) >= 9999) continue;
+    const ts = Date.parse(iso);
+    if (!Number.isFinite(ts) || ts > now) continue;
+    parsed.push({ time: new Date(ts).toISOString(), value: val });
+  }
+
+  parsed.sort((a, b) => new Date(a.time) - new Date(b.time));
+
+  const byDay = new Map();
+  for (const entry of parsed) {
+    const dayKey = entry.time.slice(0, 10);
+    if (!byDay.has(dayKey)) byDay.set(dayKey, []);
+    const bucket = byDay.get(dayKey);
+    bucket.push(entry);
+    if (bucket.length > 24) {
+      bucket.shift();
+    }
+  }
+
+  const limited = Array.from(byDay.values()).flat();
+  limited.sort((a, b) => new Date(a.time) - new Date(b.time));
+
+  const dedup = [];
+  const seen = new Set();
+  for (const entry of limited) {
+    if (seen.has(entry.time)) continue;
+    seen.add(entry.time);
+    dedup.push({ ...entry });
+  }
+
+  return dedup;
+}
+
 function parseDstText(txt, debug = false) {
   const lines = normalizeAndSplitLines(txt);
   const out = [];
@@ -272,7 +315,7 @@ function parseDstText(txt, debug = false) {
     const first20 = lines.slice(0, 20).join('\n');
     console.warn('[Dst][DEBUG] primeras 20 líneas:\n' + first20);
   }
-  return dedup;
+  return sanitizeDstSeries(dedup);
 }
 
 // =========================
@@ -398,7 +441,8 @@ export async function refreshDst() {
     let lastErr;
     for (const url of candidates) {
       try {
-        const series = await withRetry(() => fetchDstSeries(url, debug), 2);
+        const rawSeries = await withRetry(() => fetchDstSeries(url, debug), 2);
+        const series = sanitizeDstSeries(rawSeries);
         cacheState = {
           updatedAt: new Date().toISOString(),
           expiry: Date.now() + cacheTtlMs,
@@ -412,7 +456,7 @@ export async function refreshDst() {
       }
     }
 
-    const local = await loadLocalFallback();
+    const local = sanitizeDstSeries(await loadLocalFallback());
     if (local.length) {
       cacheState = {
         updatedAt: new Date().toISOString(),
@@ -436,4 +480,27 @@ export async function getDstRealtime() {
   if (cacheState.series.length && cacheState.expiry > now) return getDstCache();
   await refreshDst();
   return getDstCache();
+}
+
+export async function getDstRealtimeLatest() {
+  const cache = await getDstRealtime();
+  const series = Array.isArray(cache.series) ? cache.series : [];
+  if (!series.length) return null;
+  const latest = series[series.length - 1];
+  if (!latest || latest.time == null || latest.value == null) return null;
+  return { time: latest.time, value: latest.value };
+}
+
+const AUTO_REFRESH_MS = 60_000;
+
+if (AUTO_REFRESH_MS > 0) {
+  const timer = setInterval(() => {
+    if (!isDstEnabled()) return;
+    refreshDst().catch((err) => {
+      if (process.env.NODE_ENV !== 'test') {
+        console.warn('[Dst] auto-refresh error:', err?.message || err);
+      }
+    });
+  }, AUTO_REFRESH_MS);
+  if (typeof timer.unref === 'function') timer.unref();
 }
