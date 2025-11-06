@@ -1,6 +1,7 @@
 /* eslint-env node */
 import 'dotenv/config';
 import process from 'node:process';
+import localFallbackSource from '../data/kpFallback.json' with { type: 'json' };
 
 // --- util: cron dinámico (soporta vendor/local si falta node-cron) ---
 async function resolveCron() {
@@ -17,9 +18,18 @@ const cron = await resolveCron();
 
 // --- endpoints conocidos ---
 const GFZ_APP_JSON = 'https://kp.gfz.de/app/json/'; // intento 1 (a veces 500)
-const NOAA_JSON = 'https://services.swpc.noaa.gov/json/planetary_k_index_1m.json'; // fallback oficial
+const NOAA_JSON_3H = 'https://services.swpc.noaa.gov/json/planetary_k_index.json';
+const NOAA_JSON_1M = 'https://services.swpc.noaa.gov/json/planetary_k_index_1m.json';
 
 const FETCH_TIMEOUT_MS = 30_000;
+
+const clone = (value) => (
+  typeof structuredClone === 'function'
+    ? structuredClone(value)
+    : JSON.parse(JSON.stringify(value))
+);
+
+let localFallbackData = clone(localFallbackSource);
 
 // -------------------- Config --------------------
 function parsePositiveInt(v, fb) {
@@ -51,8 +61,30 @@ function getCfg() {
 
 // -------------------- Normalizadores --------------------
 function toIso(x) {
-  if (!x) return null;
-  const d = new Date(x);
+  if (x === undefined || x === null) return null;
+
+  if (x instanceof Date) {
+    const t = x.getTime();
+    return Number.isNaN(t) ? null : x.toISOString();
+  }
+
+  if (typeof x === 'number') {
+    const d = new Date(x);
+    return Number.isNaN(d.getTime()) ? null : d.toISOString();
+  }
+
+  let s = String(x).trim();
+  if (!s) return null;
+
+  if (/^\d{4}-\d{2}-\d{2} \d{2}:\d{2}/.test(s)) {
+    s = s.replace(' ', 'T');
+  }
+
+  if (/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}/.test(s) && !/[zZ]|[+-]\d{2}:\d{2}$/.test(s)) {
+    s = `${s}Z`;
+  }
+
+  const d = new Date(s);
   return Number.isNaN(d.getTime()) ? null : d.toISOString();
 }
 function normStatus(s) {
@@ -199,17 +231,50 @@ async function tryGfzYmd() {
   }
 }
 
-// NOAA fallback (formato: [{time_tag:"YYYY-MM-DD HH:MM:SS", kp_index: 2.67}, ...])
+// NOAA fallback. Primero intenta la serie oficial de 3 horas y luego complementa con 1 minuto.
 async function tryNoaa() {
-  const body = await fetchJson(NOAA_JSON);
-  const s = [];
-  for (const it of body) {
-    const t = toIso(it.time_tag?.replace(' ', 'T') + 'Z');
-    const v = Number.parseFloat(it.kp_index ?? it.kp ?? it.value);
-    if (t && Number.isFinite(v)) s.push({ time: t, value: v, status: 'now' });
+  const collected = [];
+
+  try {
+    const body3h = await fetchJson(NOAA_JSON_3H);
+    const normalized3h = normalizeFlexible(body3h);
+    for (const p of normalized3h) {
+      if (p?.time && Number.isFinite(p?.value)) {
+        collected.push({ ...p, status: 'now' });
+      }
+    }
+  } catch (err) {
+    console.warn('[Kp] NOAA (3h) falló:', err.message || err);
   }
-  s.sort((a, b) => new Date(a.time) - new Date(b.time));
-  return s;
+
+  try {
+    const body1m = await fetchJson(NOAA_JSON_1M);
+    for (const it of body1m) {
+      const rawTime = it.time_tag ?? it.timeTag ?? it.time ?? it.timestamp ?? it.observed_time;
+      const t = toIso(rawTime);
+      const v = Number.parseFloat(it.kp_index ?? it.kp ?? it.value);
+      if (t && Number.isFinite(v)) {
+        collected.push({ time: t, value: v, status: 'now' });
+      }
+    }
+  } catch (err) {
+    console.warn('[Kp] NOAA (1m) falló:', err.message || err);
+  }
+
+  const sorted = sortDedup(collected);
+  if (!sorted.length) {
+    throw new Error('NOAA serie vacía/no reconocida');
+  }
+  return sorted;
+}
+
+function tryLocalFallback() {
+  const pools = normalizeFlexible(
+    localFallbackData?.data ?? localFallbackData?.series ?? localFallbackData
+  );
+  const sorted = sortDedup(pools);
+  if (!sorted.length) throw new Error('Fallback local vacío');
+  return sorted;
 }
 
 // -------------------- Cache & API --------------------
@@ -230,9 +295,31 @@ export async function refreshKp() {
   refreshing = (async () => {
     try {
       let series = [];
-      try { series = await tryGfzIso(); }
-      catch { try { series = await tryGfzYmd(); }
-      catch { console.warn('[Kp] Usando NOAA como fallback…'); series = await tryNoaa(); } }
+      const attempts = [
+        async () => await tryGfzIso(),
+        async () => await tryGfzYmd(),
+        async () => {
+          console.warn('[Kp] Usando NOAA como fallback…');
+          return await tryNoaa();
+        },
+        async () => {
+          console.warn('[Kp] Usando datos locales de respaldo…');
+          return tryLocalFallback();
+        }
+      ];
+
+      for (const attempt of attempts) {
+        try {
+          series = await attempt();
+          if (series?.length) break;
+        } catch (err) {
+          console.warn('[Kp] Intento fallido al obtener datos:', err.message || err);
+        }
+      }
+
+      if (!series?.length) {
+        throw new Error('No se pudo obtener la serie Kp desde las fuentes disponibles.');
+      }
 
       kpCache = { updatedAt: new Date().toISOString(), series };
       console.info(`[Kp] cache actualizado con ${series.length} puntos.`);
@@ -268,5 +355,27 @@ export async function initKpService() {
   return getKpCache();
 }
 
+export function stopKpService() {
+  if (cronTask) {
+    try { cronTask.stop(); } catch { /* ignore */ }
+    cronTask = null;
+  }
+  refreshing = null;
+  initialized = false;
+}
+
+function setLocalFallbackData(data) {
+  localFallbackData = data;
+}
+
+function resetLocalFallbackData() {
+  localFallbackData = clone(localFallbackSource);
+}
+
 // Exporte “internals” solo para tests si los usas
-export const __internals = { normalizeGfzMatrix, normalizeFlexible };
+export const __internals = {
+  normalizeGfzMatrix,
+  normalizeFlexible,
+  setLocalFallbackData,
+  resetLocalFallbackData,
+};
