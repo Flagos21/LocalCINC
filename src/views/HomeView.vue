@@ -442,7 +442,8 @@ function fmtUTC(value) {
   background: #ffffff;
   align-items: stretch;
   justify-items: stretch;
-  height: clamp(13rem, 22vh, 18rem);
+  height: auto;
+  aspect-ratio: 1 / 1;
 }
 
 .home__tile-visual--map :deep(.tad-card) {
