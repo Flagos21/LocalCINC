@@ -110,6 +110,12 @@ function toEntry(raw) {
   return null
 }
 
+function getUtcMonthStartTimestamp(referenceDate = new Date()) {
+  const year = referenceDate.getUTCFullYear()
+  const month = referenceDate.getUTCMonth()
+  return Date.UTC(year, month, 1)
+}
+
 function normalizeEntries(payload) {
   const rawSeries = extractSeries(payload)
   const entries = []
@@ -123,10 +129,11 @@ function normalizeEntries(payload) {
 
   entries.sort((a, b) => a.timestamp - b.timestamp)
 
-  const now = Date.now()
-  const monthStart = new Date(new Date(now).getFullYear(), new Date(now).getMonth(), 1).getTime()
+  const nowDate = new Date()
+  const nowTs = nowDate.getTime()
+  const monthStart = getUtcMonthStartTimestamp(nowDate)
 
-  return entries.filter((entry) => entry.timestamp >= monthStart && entry.timestamp <= now)
+  return entries.filter((entry) => entry.timestamp >= monthStart && entry.timestamp <= nowTs)
 }
 
 export function useDstRealtime({ pollMs = 60000, endpoint = DEFAULT_ENDPOINT } = {}) {

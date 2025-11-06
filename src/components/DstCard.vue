@@ -15,13 +15,20 @@ const {
 
 const { point: latestPoint, errorMessage: latestErrorMessage } = useDstLatest({ pollMs: POLL_INTERVAL })
 
+function getUtcMonthStartTimestamp(referenceDate = new Date()) {
+  const year = referenceDate.getUTCFullYear()
+  const month = referenceDate.getUTCMonth()
+  return Date.UTC(year, month, 1)
+}
+
 const chartPoints = computed(() => {
   if (!points.value?.length) {
     return []
   }
 
   const now = Date.now()
-  const monthStart = new Date(new Date(now).getFullYear(), new Date(now).getMonth(), 1).getTime()
+  const nowDate = new Date(now)
+  const monthStart = getUtcMonthStartTimestamp(nowDate)
   const threshold = Math.max(monthStart, now - 7 * 24 * 60 * 60 * 1000)
 
   const withinMonth = points.value.filter((point) => point.timestamp >= monthStart)
