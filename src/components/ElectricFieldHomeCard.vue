@@ -10,16 +10,14 @@ const AXIS_PADDING_RATIO = 0.1
 
 const presets = [
   { id: '1d', label: '1 día', duration: { amount: 1, unit: 'day' } },
-  { id: '7d', label: '7 días', duration: { amount: 7, unit: 'day' } },
-  { id: '1m', label: '1 mes', duration: { amount: 1, unit: 'month' } },
-  { id: 'all', label: 'Todo' }
+  { id: '3d', label: '3 días', duration: { amount: 3, unit: 'day' } },
+  { id: '7d', label: '7 días', duration: { amount: 7, unit: 'day' } }
 ]
 
 const activePreset = ref(presets[0].id)
 const from = ref('')
 const to = ref('')
 const availableRange = ref(null)
-const shouldApplyFullRange = ref(false)
 const hasInitializedPreset = ref(false)
 
 const {
@@ -226,17 +224,6 @@ function applyPreset(id, { anchorEnd } = {}) {
   }
 
   activePreset.value = id
-  shouldApplyFullRange.value = false
-
-  if (preset.id === 'all') {
-    if (availableRange.value?.start && availableRange.value?.end) {
-      setWindow({ start: availableRange.value.start, end: availableRange.value.end })
-      shouldApplyFullRange.value = false
-    } else {
-      shouldApplyFullRange.value = true
-    }
-    return
-  }
 
   const anchor = resolveAnchorEnd(anchorEnd)
   const end = anchor.endOf('minute')
@@ -332,11 +319,6 @@ watch(meta, (value) => {
       end: value.availableRange.end
     }
 
-    if (shouldApplyFullRange.value) {
-      setWindow({ start: value.availableRange.start, end: value.availableRange.end })
-      shouldApplyFullRange.value = false
-      return
-    }
   }
 
   if (!hasInitializedPreset.value) {
