@@ -5,8 +5,9 @@ import VueApexCharts from 'vue3-apexcharts'
 import dayjs from '@/utils/dayjs'
 import { useMagnetometerSeries } from '@/composables/useMagnetometerSeries'
 
-const DEFAULT_AXIS_SPAN = 2.5
-const AXIS_PADDING_RATIO = 0.1
+const FALLBACK_AXIS_MAGNITUDE = 1
+const MIN_AXIS_MAGNITUDE = 0.1
+const AXIS_PADDING_RATIO = 0.15
 
 const presets = [
   { id: '1d', label: '1 día', duration: { amount: 1, unit: 'day' } },
@@ -38,7 +39,7 @@ const {
 
 const chartSeries = ref([])
 const xDomain = ref({ min: null, max: null })
-const yDomain = ref({ min: -DEFAULT_AXIS_SPAN, max: DEFAULT_AXIS_SPAN })
+const yDomain = ref({ min: -FALLBACK_AXIS_MAGNITUDE, max: FALLBACK_AXIS_MAGNITUDE })
 const visiblePoints = ref(0)
 const dataExtent = ref(null)
 
@@ -119,8 +120,8 @@ const chartOptions = computed(() => ({
     axisTicks: { color: '#cbd5f5' }
   },
   yaxis: {
-    min: Number.isFinite(yDomain.value.min) ? yDomain.value.min : -DEFAULT_AXIS_SPAN,
-    max: Number.isFinite(yDomain.value.max) ? yDomain.value.max : DEFAULT_AXIS_SPAN,
+    min: Number.isFinite(yDomain.value.min) ? yDomain.value.min : -FALLBACK_AXIS_MAGNITUDE,
+    max: Number.isFinite(yDomain.value.max) ? yDomain.value.max : FALLBACK_AXIS_MAGNITUDE,
     labels: { formatter: (val) => (Number.isFinite(val) ? Number(val).toFixed(2) : '') },
     decimalsInFloat: 2,
     axisBorder: { show: false }
@@ -267,14 +268,18 @@ function draw() {
     const values = chartPoints.map(([, value]) => value)
     const minValue = Math.min(...values)
     const maxValue = Math.max(...values)
-    const maxAbs = Math.max(DEFAULT_AXIS_SPAN, Math.abs(minValue), Math.abs(maxValue))
-    const padding = maxAbs * AXIS_PADDING_RATIO
+    const largestMagnitude = Math.max(Math.abs(minValue), Math.abs(maxValue))
+    const safeMagnitude = Number.isFinite(largestMagnitude) ? largestMagnitude : MIN_AXIS_MAGNITUDE
+    const baseMagnitude = Math.max(safeMagnitude, MIN_AXIS_MAGNITUDE)
+    const padding = baseMagnitude * AXIS_PADDING_RATIO
+    const limit = baseMagnitude + padding
+    const round = (value) => Math.round(value * 1000) / 1000
     yDomain.value = {
-      min: -Math.round((maxAbs + padding) * 100) / 100,
-      max: Math.round((maxAbs + padding) * 100) / 100
+      min: -round(limit),
+      max: round(limit)
     }
   } else {
-    yDomain.value = { min: -DEFAULT_AXIS_SPAN, max: DEFAULT_AXIS_SPAN }
+    yDomain.value = { min: -FALLBACK_AXIS_MAGNITUDE, max: FALLBACK_AXIS_MAGNITUDE }
   }
 
   let xRange = null
