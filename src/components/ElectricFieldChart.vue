@@ -7,7 +7,9 @@ import VueApexCharts from 'vue3-apexcharts'
 import { useMagnetometerSeries } from '@/composables/useMagnetometerSeries'
 
 const DEFAULT_RANGE_DAYS = 1
-const DEFAULT_AXIS_SPAN = 5
+const MIN_AXIS_MAGNITUDE = 0.1
+const RANGE_PADDING_RATIO = 0.15
+const FALLBACK_AXIS_MAGNITUDE = 1
 
 const rangeInputRef = ref(null)
 const pickerRef = ref(null)
@@ -36,7 +38,7 @@ const chartSeries = ref([])
 const xDomain = ref({ min: null, max: null })
 const visiblePoints = ref(0)
 const dataExtent = ref(null)
-const yDomain = ref({ min: -DEFAULT_AXIS_SPAN, max: DEFAULT_AXIS_SPAN })
+const yDomain = ref({ min: -FALLBACK_AXIS_MAGNITUDE, max: FALLBACK_AXIS_MAGNITUDE })
 const hasBootstrappedRange = ref(false)
 
 const hasValidSelection = computed(() => dayjs(from.value).isValid() && dayjs(to.value).isValid())
@@ -76,8 +78,8 @@ const chartOptions = computed(() => ({
   },
   yaxis: {
     title: { text: 'E_z (kV/m)' },
-    min: Number.isFinite(yDomain.value.min) ? yDomain.value.min : -DEFAULT_AXIS_SPAN,
-    max: Number.isFinite(yDomain.value.max) ? yDomain.value.max : DEFAULT_AXIS_SPAN,
+    min: Number.isFinite(yDomain.value.min) ? yDomain.value.min : -FALLBACK_AXIS_MAGNITUDE,
+    max: Number.isFinite(yDomain.value.max) ? yDomain.value.max : FALLBACK_AXIS_MAGNITUDE,
     labels: {
       formatter: (val) => (Number.isFinite(val) ? Number(val).toFixed(2) : '')
     },
@@ -371,16 +373,18 @@ function draw() {
     const values = chartPoints.map(([, value]) => value)
     const minValue = Math.min(...values)
     const maxValue = Math.max(...values)
-    const maxAbs = Math.max(DEFAULT_AXIS_SPAN, Math.abs(minValue), Math.abs(maxValue))
-    const padding = Number.isFinite(maxAbs) ? maxAbs * 0.1 : DEFAULT_AXIS_SPAN * 0.1
-    const limit = Math.max(maxAbs + padding, DEFAULT_AXIS_SPAN)
-    const round = (value) => Math.round(value * 100) / 100
+    const largestMagnitude = Math.max(Math.abs(minValue), Math.abs(maxValue))
+    const safeMagnitude = Number.isFinite(largestMagnitude) ? largestMagnitude : MIN_AXIS_MAGNITUDE
+    const baseMagnitude = Math.max(safeMagnitude, MIN_AXIS_MAGNITUDE)
+    const padding = baseMagnitude * RANGE_PADDING_RATIO
+    const limit = baseMagnitude + padding
+    const round = (value) => Math.round(value * 1000) / 1000
     yDomain.value = {
       min: -round(limit),
       max: round(limit)
     }
   } else {
-    yDomain.value = { min: -DEFAULT_AXIS_SPAN, max: DEFAULT_AXIS_SPAN }
+    yDomain.value = { min: -FALLBACK_AXIS_MAGNITUDE, max: FALLBACK_AXIS_MAGNITUDE }
   }
 
   let xRange = null
