@@ -4,6 +4,7 @@ import VueApexCharts from 'vue3-apexcharts'
 
 import dayjs from '@/utils/dayjs'
 import { useMagnetometerSeries } from '@/composables/useMagnetometerSeries'
+import { buildDailyMedianBaseline } from '@/utils/timeSeriesBaseline'
 
 const presets = [
   { id: '1d', label: '1 día', duration: { amount: 1, unit: 'day' } },
@@ -17,6 +18,9 @@ const to = ref('')
 const availableRange = ref(null)
 const hasInitializedPreset = ref(false)
 
+const station = ref('CHI')
+const unit = ref('nT')
+
 const chartSeries = ref([])
 const xDomain = ref({ min: null, max: null })
 const visiblePoints = ref(0)
@@ -27,13 +31,39 @@ const { labels, series, isLoading, errorMessage, meta } = useMagnetometerSeries(
   to,
   range: ref(''),
   every: ref(''),
-  unit: ref('nT'),
-  station: ref('CHI'),
+  unit,
+  station,
   endpoint: ref('/api/local-magnetometer/series')
 })
 
+const {
+  labels: baselineLabels,
+  series: baselineSeries
+} = useMagnetometerSeries({
+  range: ref('7d'),
+  every: ref(''),
+  unit,
+  station,
+  from: ref(''),
+  to: ref(''),
+  endpoint: ref('/api/local-magnetometer/series')
+})
+
+const BASELINE_NAME = 'Mediana últimos 7 días'
+const BASELINE_COLOR = '#d1d5db'
 const LINE_PALETTE = ['#2563eb', '#9333ea', '#0ea5e9', '#f97316', '#facc15', '#22c55e', '#ef4444', '#8b5cf6']
-const chartColors = computed(() => chartSeries.value.map((_, index) => LINE_PALETTE[index % LINE_PALETTE.length]))
+const chartColors = computed(() => {
+  const baselineIndex = chartSeries.value.findIndex((item) => item?.name === BASELINE_NAME)
+
+  return chartSeries.value.map((_, index) => {
+    if (index === baselineIndex) {
+      return BASELINE_COLOR
+    }
+
+    const paletteIndex = baselineIndex !== -1 && index > baselineIndex ? index - 1 : index
+    return LINE_PALETTE[paletteIndex % LINE_PALETTE.length]
+  })
+})
 
 const requestedWindow = computed(() => {
   const start = dayjs(from.value)
@@ -92,7 +122,11 @@ const metaSummary = computed(() => {
   return [filesLabel, pointsLabel, resolutionLabel].filter(Boolean).join(' – ')
 })
 
-const chartOptions = computed(() => ({
+const chartOptions = computed(() => {
+  const hasBaselineSeries = chartSeries.value.length > 1
+  const strokeWidth = hasBaselineSeries ? [2, 2] : 2
+
+  return ({
   chart: {
     type: 'line',
     height: '100%',
@@ -101,7 +135,7 @@ const chartOptions = computed(() => ({
     background: 'transparent',
     foreColor: '#0f172a'
   },
-  stroke: { width: 2, curve: 'straight' },
+  stroke: { width: strokeWidth, curve: 'straight' },
   dataLabels: { enabled: false },
   markers: {
     size: 0,
@@ -143,7 +177,8 @@ const chartOptions = computed(() => ({
     text: isLoading.value ? 'Cargando magnetómetro…' : 'Sin datos para mostrar',
     style: { color: '#64748b', fontSize: '13px' }
   }
-}))
+  })
+})
 
 function toTimestamp(value) {
   const ts = new Date(value).getTime()
@@ -283,17 +318,39 @@ function draw() {
 
   xDomain.value = domain
 
-  chartSeries.value = chartPoints.length
+  if (!chartPoints.length) {
+    chartSeries.value = []
+    return
+  }
+
+  const baselinePoints = buildDailyMedianBaseline({
+    referenceTimestamps: baselineLabels.value,
+    referenceValues: baselineSeries.value,
+    targetTimestamps: chartPoints.map(([timestamp]) => timestamp)
+  })
+
+  const baselineHasData = baselinePoints.some(([, value]) => Number.isFinite(value))
+
+  chartSeries.value = baselineHasData
     ? [
+        {
+          name: BASELINE_NAME,
+          data: baselinePoints
+        },
         {
           name: 'H',
           data: chartPoints
         }
       ]
-    : []
+    : [
+        {
+          name: 'H',
+          data: chartPoints
+        }
+      ]
 }
 
-watch([labels, series], draw, { immediate: true })
+watch([labels, series, baselineLabels, baselineSeries], draw, { immediate: true })
 
 watch(meta, (value) => {
   if (value?.availableRange?.start && value?.availableRange?.end) {
