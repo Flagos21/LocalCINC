@@ -73,12 +73,87 @@ export function buildDailyMedianBaseline({
     medianBySecond.set(key, computeMedian(bucket))
   }
 
+  const sortedEntries = Array.from(medianBySecond.entries())
+    .filter(([, value]) => Number.isFinite(value))
+    .sort((a, b) => a[0] - b[0])
+
+  const sortedKeys = sortedEntries.map(([seconds]) => seconds)
+  const sortedValues = sortedEntries.map(([, value]) => value)
+
+  function interpolateBaseline(secondsKey) {
+    if (!Number.isFinite(secondsKey)) {
+      return Number.isFinite(fallbackMedian) ? fallbackMedian : null
+    }
+
+    if (!sortedKeys.length) {
+      return Number.isFinite(fallbackMedian) ? fallbackMedian : null
+    }
+
+    if (sortedKeys.length === 1) {
+      return sortedValues[0]
+    }
+
+    if (secondsKey <= sortedKeys[0]) {
+      return sortedValues[0]
+    }
+
+    const lastIndex = sortedKeys.length - 1
+    if (secondsKey >= sortedKeys[lastIndex]) {
+      return sortedValues[lastIndex]
+    }
+
+    let low = 0
+    let high = lastIndex
+
+    while (low <= high) {
+      const mid = Math.floor((low + high) / 2)
+      const midKey = sortedKeys[mid]
+
+      if (midKey === secondsKey) {
+        return sortedValues[mid]
+      }
+
+      if (midKey < secondsKey) {
+        low = mid + 1
+      } else {
+        high = mid - 1
+      }
+    }
+
+    const upperIndex = Math.max(0, Math.min(sortedKeys.length - 1, low))
+    const lowerIndex = Math.max(0, upperIndex - 1)
+
+    const lowerKey = sortedKeys[lowerIndex]
+    const upperKey = sortedKeys[upperIndex]
+    const lowerValue = sortedValues[lowerIndex]
+    const upperValue = sortedValues[upperIndex]
+
+    if (!Number.isFinite(lowerValue) && !Number.isFinite(upperValue)) {
+      return Number.isFinite(fallbackMedian) ? fallbackMedian : null
+    }
+
+    if (!Number.isFinite(lowerValue)) {
+      return upperValue
+    }
+
+    if (!Number.isFinite(upperValue)) {
+      return lowerValue
+    }
+
+    const span = upperKey - lowerKey
+
+    if (span <= 0) {
+      return lowerValue
+    }
+
+    const ratio = (secondsKey - lowerKey) / span
+    return lowerValue + (upperValue - lowerValue) * ratio
+  }
+
   return targetTimestamps
     .map((rawTimestamp) => {
       const secondsKey = getSecondsKey(rawTimestamp)
-      const baselineValue = secondsKey !== null && medianBySecond.has(secondsKey)
-        ? medianBySecond.get(secondsKey)
-        : fallbackMedian
+      const baselineValue = interpolateBaseline(secondsKey)
 
       const time = dayjs(rawTimestamp)
       const numericTime = time.isValid() ? time.valueOf() : Number(rawTimestamp)
