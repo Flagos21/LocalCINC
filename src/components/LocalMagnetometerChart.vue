@@ -58,9 +58,9 @@ const hasVisibleData = computed(() => visiblePoints.value > 0)
 
 const chartOptions = computed(() => {
   const hasBaselineSeries = chartSeries.value.length > 1
-  const colors = hasBaselineSeries ? ['#cbd5f5', '#f97316'] : ['#f97316']
+  const colors = hasBaselineSeries ? ['#475569', '#f97316'] : ['#f97316']
   const strokeWidth = hasBaselineSeries ? [2, 2] : 2
-  const dashArray = hasBaselineSeries ? [6, 0] : 0
+  const dashArray = hasBaselineSeries ? [0, 0] : 0
 
   return ({
   chart: {
