@@ -4,6 +4,7 @@ import VueApexCharts from 'vue3-apexcharts'
 
 import dayjs from '@/utils/dayjs'
 import { useMagnetometerSeries } from '@/composables/useMagnetometerSeries'
+import { buildDailyMedianBaseline } from '@/utils/timeSeriesBaseline'
 
 const FALLBACK_AXIS_MAGNITUDE = 1
 const MIN_AXIS_MAGNITUDE = 0.1
@@ -37,7 +38,22 @@ const {
   endpoint: ref('/api/electric-field/series')
 })
 
+const {
+  labels: baselineLabels,
+  series: baselineSeries
+} = useMagnetometerSeries({
+  range: ref('7d'),
+  every: ref(''),
+  unit: ref(''),
+  station: ref(''),
+  from: ref(''),
+  to: ref(''),
+  endpoint: ref('/api/electric-field/series')
+})
+
 const chartSeries = ref([])
+const BASELINE_NAME = 'Mediana últimos 7 días'
+const BASELINE_COLOR = '#d1d5db'
 const xDomain = ref({ min: null, max: null })
 const yDomain = ref({ min: -FALLBACK_AXIS_MAGNITUDE, max: FALLBACK_AXIS_MAGNITUDE })
 const visiblePoints = ref(0)
@@ -91,69 +107,75 @@ const metaSummary = computed(() => {
   return `${filesLabel} · ${pointsLabel}${resolutionLabel}`
 })
 
-const chartOptions = computed(() => ({
-  chart: {
-    type: 'line',
-    height: '100%',
-    toolbar: { show: false },
-    animations: { enabled: true, easing: 'easeinout', speed: 250 },
-    background: 'transparent',
-    foreColor: '#0f172a'
-  },
-  stroke: { width: 2, curve: 'straight' },
-  dataLabels: { enabled: false },
-  markers: {
-    size: 0,
-    strokeWidth: 2,
-    fillOpacity: 1,
-    strokeOpacity: 1,
-    hover: { sizeOffset: 3 }
-  },
-  colors: ['#f97316'],
-  xaxis: {
-    type: 'datetime',
-    min: Number.isFinite(xDomain.value.min) ? xDomain.value.min : undefined,
-    max: Number.isFinite(xDomain.value.max) ? xDomain.value.max : undefined,
-    labels: { datetimeUTC: true },
-    tooltip: { enabled: false },
-    axisBorder: { color: '#cbd5f5' },
-    axisTicks: { color: '#cbd5f5' }
-  },
-  yaxis: {
-    min: Number.isFinite(yDomain.value.min) ? yDomain.value.min : -FALLBACK_AXIS_MAGNITUDE,
-    max: Number.isFinite(yDomain.value.max) ? yDomain.value.max : FALLBACK_AXIS_MAGNITUDE,
-    labels: { formatter: (val) => (Number.isFinite(val) ? Number(val).toFixed(2) : '') },
-    decimalsInFloat: 2,
-    axisBorder: { show: false }
-  },
-  grid: {
-    borderColor: '#e2e8f0',
-    strokeDashArray: 4,
-    padding: { left: 12, right: 12 }
-  },
-  annotations: {
-    yaxis: [
-      {
-        y: 0,
-        borderColor: '#94a3b8',
-        strokeDashArray: 6,
-        opacity: 0.7
-      }
-    ]
-  },
-  tooltip: {
-    theme: 'dark',
-    shared: true,
-    intersect: false,
-    x: { format: 'yyyy-MM-dd HH:mm:ss' },
-    y: { formatter: (val) => (Number.isFinite(val) ? `${val.toFixed(2)} kV/m` : '—') }
-  },
-  legend: { show: false },
-  noData: {
-    text: isLoading.value ? 'Cargando campo eléctrico…' : 'Sin datos para mostrar',
-    style: { color: '#64748b', fontSize: '13px' }
-  }
-}))
+const chartOptions = computed(() => {
+  const hasBaselineSeries = chartSeries.value.length > 1
+  const strokeWidth = hasBaselineSeries ? [2, 2] : 2
+  const colors = hasBaselineSeries ? [BASELINE_COLOR, '#f97316'] : ['#f97316']
+
+  return ({
+    chart: {
+      type: 'line',
+      height: '100%',
+      toolbar: { show: false },
+      animations: { enabled: true, easing: 'easeinout', speed: 250 },
+      background: 'transparent',
+      foreColor: '#0f172a'
+    },
+    stroke: { width: strokeWidth, curve: 'straight' },
+    dataLabels: { enabled: false },
+    markers: {
+      size: 0,
+      strokeWidth: 2,
+      fillOpacity: 1,
+      strokeOpacity: 1,
+      hover: { sizeOffset: 3 }
+    },
+    colors,
+    xaxis: {
+      type: 'datetime',
+      min: Number.isFinite(xDomain.value.min) ? xDomain.value.min : undefined,
+      max: Number.isFinite(xDomain.value.max) ? xDomain.value.max : undefined,
+      labels: { datetimeUTC: true },
+      tooltip: { enabled: false },
+      axisBorder: { color: '#cbd5f5' },
+      axisTicks: { color: '#cbd5f5' }
+    },
+    yaxis: {
+      min: Number.isFinite(yDomain.value.min) ? yDomain.value.min : -FALLBACK_AXIS_MAGNITUDE,
+      max: Number.isFinite(yDomain.value.max) ? yDomain.value.max : FALLBACK_AXIS_MAGNITUDE,
+      labels: { formatter: (val) => (Number.isFinite(val) ? Number(val).toFixed(2) : '') },
+      decimalsInFloat: 2,
+      axisBorder: { show: false }
+    },
+    grid: {
+      borderColor: '#e2e8f0',
+      strokeDashArray: 4,
+      padding: { left: 12, right: 12 }
+    },
+    annotations: {
+      yaxis: [
+        {
+          y: 0,
+          borderColor: '#94a3b8',
+          strokeDashArray: 6,
+          opacity: 0.7
+        }
+      ]
+    },
+    tooltip: {
+      theme: 'dark',
+      shared: true,
+      intersect: false,
+      x: { format: 'yyyy-MM-dd HH:mm:ss' },
+      y: { formatter: (val) => (Number.isFinite(val) ? `${val.toFixed(2)} kV/m` : '—') }
+    },
+    legend: { show: false },
+    noData: {
+      text: isLoading.value ? 'Cargando campo eléctrico…' : 'Sin datos para mostrar',
+      style: { color: '#64748b', fontSize: '13px' }
+    }
+  })
+})
 
 function toTimestamp(value) {
   const ts = new Date(value).getTime()
@@ -264,10 +286,24 @@ function draw() {
 
   visiblePoints.value = chartPoints.length
 
-  if (chartPoints.length) {
-    const values = chartPoints.map(([, value]) => value)
-    const minValue = Math.min(...values)
-    const maxValue = Math.max(...values)
+  const baselinePoints = buildDailyMedianBaseline({
+    referenceTimestamps: baselineLabels.value,
+    referenceValues: baselineSeries.value,
+    targetTimestamps: chartPoints.map(([timestamp]) => timestamp)
+  })
+
+  const baselineValues = baselinePoints
+    .map(([, value]) => value)
+    .filter((value) => Number.isFinite(value))
+
+  const allValues = [
+    ...chartPoints.map(([, value]) => value),
+    ...baselineValues
+  ]
+
+  if (allValues.length) {
+    const minValue = Math.min(...allValues)
+    const maxValue = Math.max(...allValues)
     const largestMagnitude = Math.max(Math.abs(minValue), Math.abs(maxValue))
     const safeMagnitude = Number.isFinite(largestMagnitude) ? largestMagnitude : MIN_AXIS_MAGNITUDE
     const baseMagnitude = Math.max(safeMagnitude, MIN_AXIS_MAGNITUDE)
@@ -281,6 +317,8 @@ function draw() {
   } else {
     yDomain.value = { min: -FALLBACK_AXIS_MAGNITUDE, max: FALLBACK_AXIS_MAGNITUDE }
   }
+
+  const baselineHasData = baselinePoints.some(([, value]) => Number.isFinite(value))
 
   let xRange = null
 
@@ -307,16 +345,27 @@ function draw() {
   }
 
   chartSeries.value = chartPoints.length
-    ? [
-        {
-          name: 'E_z',
-          data: chartPoints
-        }
-      ]
+    ? baselineHasData
+      ? [
+          {
+            name: BASELINE_NAME,
+            data: baselinePoints
+          },
+          {
+            name: 'E_z',
+            data: chartPoints
+          }
+        ]
+      : [
+          {
+            name: 'E_z',
+            data: chartPoints
+          }
+        ]
     : []
 }
 
-watch([labels, series], draw, { immediate: true })
+watch([labels, series, baselineLabels, baselineSeries], draw, { immediate: true })
 watch(meta, (value) => {
   if (value?.availableRange?.start && value?.availableRange?.end) {
     availableRange.value = {
