@@ -5,6 +5,7 @@ import Litepicker from 'litepicker'
 import 'litepicker/dist/css/litepicker.css'
 import VueApexCharts from 'vue3-apexcharts'
 import { useMagnetometerSeries } from '@/composables/useMagnetometerSeries'
+import { buildDailyMedianBaseline } from '@/utils/timeSeriesBaseline'
 
 const DEFAULT_RANGE_DAYS = 1
 const MIN_AXIS_MAGNITUDE = 0.1
@@ -18,6 +19,8 @@ const pendingRange = ref(null)
 const from = ref('')
 const to = ref('')
 
+const station = ref('')
+
 const {
   labels,
   series,
@@ -30,7 +33,20 @@ const {
   range: ref(''),
   every: ref(''),
   unit: ref(''),
-  station: ref(''),
+  station,
+  endpoint: ref('/api/electric-field/series')
+})
+
+const {
+  labels: baselineLabels,
+  series: baselineSeries
+} = useMagnetometerSeries({
+  range: ref('7d'),
+  every: ref(''),
+  unit: ref(''),
+  station,
+  from: ref(''),
+  to: ref(''),
   endpoint: ref('/api/electric-field/series')
 })
 
@@ -44,7 +60,13 @@ const hasBootstrappedRange = ref(false)
 const hasValidSelection = computed(() => dayjs(from.value).isValid() && dayjs(to.value).isValid())
 const hasVisibleData = computed(() => visiblePoints.value > 0)
 
-const chartOptions = computed(() => ({
+const chartOptions = computed(() => {
+  const hasBaselineSeries = chartSeries.value.length > 1
+  const colors = hasBaselineSeries ? ['#475569', '#f97316'] : ['#f97316']
+  const strokeWidth = hasBaselineSeries ? [2, 2] : 2
+  const dashArray = hasBaselineSeries ? [0, 0] : 0
+
+  return ({
   chart: {
     type: 'line',
     height: 520,
@@ -58,7 +80,7 @@ const chartOptions = computed(() => ({
     zoom: { enabled: true, type: 'x' }
   },
   dataLabels: { enabled: false },
-  stroke: { width: 2, curve: 'straight' },
+  stroke: { width: strokeWidth, curve: 'straight', dashArray },
   markers: {
     size: 0,
     strokeWidth: 2,
@@ -66,7 +88,7 @@ const chartOptions = computed(() => ({
     strokeOpacity: 1,
     hover: { sizeOffset: 3 }
   },
-  colors: ['#f97316'],
+  colors,
   xaxis: {
     type: 'datetime',
     min: Number.isFinite(xDomain.value.min) ? xDomain.value.min : undefined,
@@ -116,7 +138,8 @@ const chartOptions = computed(() => ({
     text: isLoading.value ? 'Cargando campo eléctrico…' : 'Sin datos para mostrar',
     style: { color: '#64748b', fontSize: '14px' }
   }
-}))
+  })
+})
 
 function toDayjsInstance(value) {
   if (!value) {
@@ -369,19 +392,35 @@ function draw() {
 
   visiblePoints.value = chartPoints.length
 
-  if (chartPoints.length) {
-    const values = chartPoints.map(([, value]) => value)
-    const minValue = Math.min(...values)
-    const maxValue = Math.max(...values)
-    const largestMagnitude = Math.max(Math.abs(minValue), Math.abs(maxValue))
-    const safeMagnitude = Number.isFinite(largestMagnitude) ? largestMagnitude : MIN_AXIS_MAGNITUDE
-    const baseMagnitude = Math.max(safeMagnitude, MIN_AXIS_MAGNITUDE)
-    const padding = baseMagnitude * RANGE_PADDING_RATIO
-    const limit = baseMagnitude + padding
-    const round = (value) => Math.round(value * 1000) / 1000
-    yDomain.value = {
-      min: -round(limit),
-      max: round(limit)
+  const baselinePoints = buildDailyMedianBaseline({
+    referenceTimestamps: baselineLabels.value,
+    referenceValues: baselineSeries.value,
+    targetTimestamps: chartPoints.map(([timestamp]) => timestamp)
+  })
+
+  const baselineHasData = baselinePoints.some(([, value]) => Number.isFinite(value))
+
+  if (chartPoints.length || baselineHasData) {
+    const values = [
+      ...chartPoints.map(([, value]) => value),
+      ...baselinePoints.map(([, value]) => value)
+    ].filter((value) => Number.isFinite(value))
+
+    if (values.length) {
+      const minValue = Math.min(...values)
+      const maxValue = Math.max(...values)
+      const largestMagnitude = Math.max(Math.abs(minValue), Math.abs(maxValue))
+      const safeMagnitude = Number.isFinite(largestMagnitude) ? largestMagnitude : MIN_AXIS_MAGNITUDE
+      const baseMagnitude = Math.max(safeMagnitude, MIN_AXIS_MAGNITUDE)
+      const padding = baseMagnitude * RANGE_PADDING_RATIO
+      const limit = baseMagnitude + padding
+      const round = (value) => Math.round(value * 1000) / 1000
+      yDomain.value = {
+        min: -round(limit),
+        max: round(limit)
+      }
+    } else {
+      yDomain.value = { min: -FALLBACK_AXIS_MAGNITUDE, max: FALLBACK_AXIS_MAGNITUDE }
     }
   } else {
     yDomain.value = { min: -FALLBACK_AXIS_MAGNITUDE, max: FALLBACK_AXIS_MAGNITUDE }
@@ -419,12 +458,25 @@ function draw() {
 
   xDomain.value = domain
 
-  chartSeries.value = chartPoints.length
-    ? [{
-        name: `E_z – ${titleStart.format('YYYY-MM-DD')} a ${titleEnd.format('YYYY-MM-DD')}`,
-        data: chartPoints
-      }]
-    : []
+  if (!chartPoints.length) {
+    chartSeries.value = []
+    return
+  }
+
+  const mainSeries = {
+    name: `E_z – ${titleStart.format('YYYY-MM-DD')} a ${titleEnd.format('YYYY-MM-DD')}`,
+    data: chartPoints
+  }
+
+  chartSeries.value = baselineHasData
+    ? [
+        {
+          name: 'Mediana últimos 7 días',
+          data: baselinePoints
+        },
+        mainSeries
+      ]
+    : [mainSeries]
 }
 
 const rangeHint = computed(() => {
@@ -597,6 +649,7 @@ watch(meta, () => {
 })
 
 watch([labels, series], draw, { immediate: true })
+watch([baselineLabels, baselineSeries], draw)
 watch([from, to], draw)
 
 watch([from, to], ([start, end]) => {
