@@ -53,7 +53,7 @@ const {
 
 const chartSeries = ref([])
 const BASELINE_NAME = 'Mediana últimos 7 días'
-const BASELINE_COLOR = '#475569'
+const BASELINE_COLOR = '#d1d5db'
 const xDomain = ref({ min: null, max: null })
 const yDomain = ref({ min: -FALLBACK_AXIS_MAGNITUDE, max: FALLBACK_AXIS_MAGNITUDE })
 const visiblePoints = ref(0)
