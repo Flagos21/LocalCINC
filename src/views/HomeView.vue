@@ -204,8 +204,7 @@ function fmtUTC(value) {
           <div class="home__tile-visual home__tile-visual--map">
             <DayNightMap
               mode="map"
-              height="auto"
-              aspect-ratio="1 / 1"
+              height="100%"
               :autoRefreshMs="60000"
               :showTwilight="true"
               :showSunMoon="true"
@@ -261,6 +260,12 @@ function fmtUTC(value) {
   gap: 1rem;
   grid-template-columns: minmax(0, 1fr);
   align-items: stretch;
+  justify-items: center;
+  --home-bottom-media-height: clamp(16rem, min(34vw, 38vh), 22rem);
+}
+
+.home__grid-bottom > .home__tile {
+  width: min(100%, 28rem);
 }
 
 .home__tile {
@@ -395,13 +400,12 @@ function fmtUTC(value) {
 
 .home__tile-visual--sun {
   background: #ffffff;
-  --dashboard-aspect: 1 / 1;
   height: auto;
-  min-height: 0;
+  min-height: var(--home-bottom-media-height);
   padding: 0.75rem 0.9rem 1rem;
   display: flex;
   align-items: stretch;
-  justify-content: stretch;
+  justify-content: center;
   overflow: visible;
   border: 1px solid #e2e8f0;
   border-radius: 0.75rem;
@@ -420,9 +424,7 @@ function fmtUTC(value) {
   height: 100%;
   min-height: 0;
   max-width: 28rem;
-  margin: 0 auto;
 }
-
 .home__tile-visual--sun :deep(.sunviewer__toolbar) {
   flex-wrap: wrap;
   justify-content: space-between;
@@ -430,8 +432,18 @@ function fmtUTC(value) {
 
 .home__tile-visual--sun :deep(.sunviewer__frame) {
   flex: 1 1 auto;
-  width: min(100%, 28rem);
-  margin: 0 auto;
+  width: 100%;
+  min-height: var(--home-bottom-media-height);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  aspect-ratio: auto;
+}
+
+.home__tile-visual--sun :deep(.sunviewer__frame img) {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
 }
 
 .home__tile-visual--sun :deep(.sunviewer__footer) {
@@ -441,25 +453,25 @@ function fmtUTC(value) {
 
 .home__tile-visual--map {
   background: #ffffff;
-  align-items: center;
-  justify-items: center;
+  align-items: stretch;
+  justify-items: stretch;
   height: auto;
-  aspect-ratio: 1 / 1;
+  min-height: var(--home-bottom-media-height);
 }
 
 .home__tile-visual--map :deep(.tad-card) {
-  flex: 0 0 auto;
+  flex: 1 1 auto;
   display: flex;
   flex-direction: column;
   min-height: 0;
   width: 100%;
-  height: auto;
+  height: 100%;
   margin-inline: 0;
 }
 
 .home__tile-visual--map :deep(.tad-map) {
-  flex: 0 0 auto;
-  min-height: 0;
+  flex: 1 1 auto;
+  min-height: var(--home-bottom-media-height);
 }
 
 .home__tile-state {
@@ -569,12 +581,12 @@ function fmtUTC(value) {
   min-height: 0;
   display: flex;
   flex-direction: column;
+  --ionogram-body-min-height: var(--home-bottom-media-height);
 }
 
 .home__tile--ionogram :deep(.ionogram-card__body) {
-  flex: 0 0 auto;
-  width: min(100%, 28rem);
-  aspect-ratio: var(--dashboard-aspect, 5 / 4);
+  flex: 1 1 auto;
+  width: 100%;
   margin: 0 auto;
   border-radius: 0.75rem;
   overflow: hidden;
@@ -583,14 +595,12 @@ function fmtUTC(value) {
   display: flex;
   align-items: center;
   justify-content: center;
-  min-height: 0;
+  min-height: var(--home-bottom-media-height);
 }
 
 .home__tile--ionogram :deep(.ionogram-card__image) {
   width: 100%;
   height: 100%;
-  max-width: 100%;
-  max-height: 100%;
   object-fit: contain;
 }
 

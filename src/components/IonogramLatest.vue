@@ -159,13 +159,12 @@ onBeforeUnmount(() => {
   display: grid;
   place-items: center;
   overflow: hidden;
-  min-height: 0;
-  aspect-ratio: var(--dashboard-aspect, 5 / 4);
+  min-height: var(--ionogram-body-min-height, 18rem);
 }
 
 .ionogram-card__image {
   width: 100%;
-  height: auto;
+  height: 100%;
   max-height: 100%;
   object-fit: contain;
 }
