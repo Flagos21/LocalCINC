@@ -9,7 +9,6 @@ import { fileURLToPath } from 'url';
 import process from 'node:process';
 import { mountKpApi, startCron, refreshNow } from './services/kpService.js';
 
-
 import {
   getDstRealtime,
   getDstRealtimeLatest,
@@ -47,7 +46,16 @@ const {
   DEFAULT_STATION = 'CHI',
   PORT = 3001,
   KYOTO_DST_URL,
-  DST_CACHE_SEC: DST_CACHE_SEC_RAW = '60'
+  DST_CACHE_SEC: DST_CACHE_SEC_RAW = '60',
+
+  // ------- NUEVO: configuración EFM live -------
+  EFM_MEASUREMENT = 'efm',          // measurement para EFM en Influx
+  EFM_TAG_KEY = 'station',          // tag para filtrar estación (p.ej. 'station')
+  EFM_VALUE_FIELD = 'value',        // field del valor del EFM
+  EFM_STATUS_FIELD = 'status',      // field opcional para estado 0/1
+  DEFAULT_EFM_SINCE = '30s',        // ventana por defecto para /efm/live
+  DEFAULT_EFM_EVERY = '1s',         // aggregateWindow por defecto
+  EFM_MAX_POINTS = '2000'           // corte de seguridad
 } = process.env;
 
 const DEFAULT_DST_URL = 'https://wdc.kugi.kyoto-u.ac.jp/dst_realtime/presentmonth/index.html';
@@ -192,7 +200,7 @@ function parseDstHourlyRows(raw) {
     return [];
   }
 
-  const lines = raw.split(/\r?\n/);
+  const lines = raw.split(/\r?\n/); // ← aquí faltaba el punto
   const points = [];
 
   for (const line of lines) {
@@ -212,7 +220,10 @@ function parseDstHourlyRows(raw) {
     const hour = Number.parseInt(tokens[3], 10);
     const value = Number.parseFloat(tokens[4]);
 
-    if (!Number.isFinite(year) || !Number.isFinite(month) || !Number.isFinite(day) || !Number.isFinite(hour) || !Number.isFinite(value)) {
+    if (
+      !Number.isFinite(year) || !Number.isFinite(month) || !Number.isFinite(day) ||
+      !Number.isFinite(hour) || !Number.isFinite(value)
+    ) {
       continue;
     }
 
@@ -220,7 +231,12 @@ function parseDstHourlyRows(raw) {
       year = normalizeTwoDigitYear(year);
     }
 
-    if (!Number.isFinite(year) || month < 1 || month > 12 || day < 1 || day > 31 || hour < 0 || hour > 23) {
+    if (
+      !Number.isFinite(year) ||
+      month < 1 || month > 12 ||
+      day < 1 || day > 31 ||
+      hour < 0 || hour > 23
+    ) {
       continue;
     }
 
@@ -236,6 +252,7 @@ function parseDstHourlyRows(raw) {
 
   return points;
 }
+
 
 function normalizeDstPoints(points) {
   if (!Array.isArray(points) || points.length === 0) {
@@ -541,7 +558,6 @@ app.get('/api/dst/realtime', async (req, res) => {
   }
 });
 
-
 app.get('/api/dst/realtime/latest', async (req, res) => {
   try {
     if (!isDstEnabled()) {
@@ -557,9 +573,6 @@ app.get('/api/dst/realtime/latest', async (req, res) => {
     res.status(502).json({ error: String(err.message || err) });
   }
 });
-
-
-
 
 app.get('/api/ionograms/latest', async (req, res) => {
   try {
@@ -840,6 +853,95 @@ app.get('/api/electric-field/series', async (req, res) => {
   }
 });
 
+// ==================== EFM LIVE (InfluxDB) ====================
+app.get('/api/efm/live', async (req, res) => {
+  try {
+    const {
+      INFLUX_BUCKET,
+      EFM_MEASUREMENT = 'efm100',
+      EFM_TAG_KEY = 'host',
+      EFM_VALUE_FIELD = 'efm_value',
+      EFM_STATUS_FIELD = 'efm_status',
+      DEFAULT_EFM_SINCE = '10m',
+      DEFAULT_EFM_EVERY = '5s',
+      EFM_MAX_POINTS = '2000'
+    } = process.env;
+
+    const station = (req.query.station || process.env.DEFAULT_STATION || '*').toString();
+    const since   = (req.query.since   || DEFAULT_EFM_SINCE).toString();
+    const every   = (req.query.every   || DEFAULT_EFM_EVERY).toString();
+    const maxPts  = Number.parseInt(req.query.maxPoints ?? EFM_MAX_POINTS, 10);
+
+    const sanitizeDuration = (d, def) =>
+      /^\d+(ms|s|m|h|d|w|y)$/i.test((d||'').toString().trim()) ? d : def;
+
+    const _since = sanitizeDuration(since, DEFAULT_EFM_SINCE);
+    const _every = sanitizeDuration(every, DEFAULT_EFM_EVERY);
+    const _max   = Number.isFinite(maxPts) ? maxPts : 2000;
+
+    const hasStation = station && station !== '*';
+    const stationFilter = hasStation
+      ? `|> filter(fn: (r) => r.${EFM_TAG_KEY} == "${station}")`
+      : '';
+
+    const flux = `
+from(bucket: "${INFLUX_BUCKET}")
+  |> range(start: -${_since})
+  |> filter(fn: (r) => r._measurement == "${EFM_MEASUREMENT}")
+  ${stationFilter}
+  |> filter(fn: (r) => r._field == "${EFM_VALUE_FIELD}" or r._field == "${EFM_STATUS_FIELD}")
+  |> aggregateWindow(every: ${_every}, fn: mean, createEmpty: false)
+  |> yield(name: "mean")
+`;
+
+    // Consulta y arma puntos {t, value, status}
+    const raw = [];
+    await queryApi.collectRows(flux, (row, meta) => {
+      const o = meta.toObject(row);
+      raw.push({ t: new Date(o._time).getTime(), field: o._field, v: Number(o._value) });
+    });
+
+    const byTs = new Map();
+    for (const r of raw) {
+      const e = byTs.get(r.t) || { t: r.t, value: null, status: null };
+      if (r.field === EFM_VALUE_FIELD)  e.value  = r.v;
+      if (r.field === EFM_STATUS_FIELD) e.status = r.v;
+      byTs.set(r.t, e);
+    }
+
+    let arr = Array.from(byTs.values()).sort((a,b)=>a.t-b.t);
+    if (arr.length > _max) arr = arr.slice(-_max);
+
+    return res.json(arr);
+  } catch (err) {
+    console.error('API /api/efm/live error:', err);
+    res.status(500).json({ error: 'No se pudo obtener EFM live desde Influx.', details: String(err?.message || err) });
+  }
+});
+
+// --- DEBUG (temporal): ver 10 filas crudas del measurement EFM ---
+app.get('/api/efm/_debug/raw10', async (req, res) => {
+  try {
+    const { INFLUX_BUCKET, EFM_MEASUREMENT = 'efm100' } = process.env;
+    const flux = `
+from(bucket: "${INFLUX_BUCKET}")
+  |> range(start: -30m)
+  |> filter(fn: (r) => r._measurement == "${EFM_MEASUREMENT}")
+  |> sort(columns: ["_time"], desc: true)
+  |> limit(n: 10)
+`;
+    const rows = [];
+    await queryApi.collectRows(flux, (row, meta) => rows.push(meta.toObject(row)));
+    res.json(rows);
+  } catch (e) {
+    res.status(500).json({ error: String(e?.message || e) });
+  }
+});
+// ==============================================================
+
+
+
+
 // Helpers
 function toFluxDuration(ms) {
   const s = Math.max(1, Math.round(ms / 1000));
@@ -860,6 +962,107 @@ function autoEvery(startISO, stopISO, requestedEvery) {
   const chosen = nice.find(n => raw <= n) ?? 24*60*60e3;
   return toFluxDuration(chosen);
 }
+
+// --- NUEVO: caché TTL simple para EFM live ---
+const efmCache = new Map(); // key -> {expires, data}
+function cacheGet(key) {
+  const hit = efmCache.get(key);
+  if (!hit) return null;
+  if (Date.now() > hit.expires) { efmCache.delete(key); return null; }
+  return hit.data;
+}
+function cacheSet(key, data, ttlMs = 2500) {
+  efmCache.set(key, { expires: Date.now() + ttlMs, data });
+}
+
+// --- NUEVO: sanitizador básico de duraciones Flux ---
+function sanitizeDuration(d, fallback) {
+  const s = (d || '').toString().trim();
+  // Acepta: 123ms | 5s | 30m | 1h | 2d | 1w | 1y
+  if (/^\d+(ms|s|m|h|d|w|y)$/i.test(s)) return s;
+  return fallback;
+}
+
+// --- NUEVO: Servicio EFM live (ventana now()-since .. now()) ---
+async function queryEfmLive({ station, since, every, maxPoints }) {
+  const _since = sanitizeDuration(since, DEFAULT_EFM_SINCE);
+  const _every = sanitizeDuration(every, DEFAULT_EFM_EVERY);
+  const _max = Number.isFinite(+maxPoints) ? +maxPoints : Number(EFM_MAX_POINTS) || 2000;
+
+  // Nota: usamos string Flux + collectRows (consistente con tu estilo actual)
+  const flux = `
+from(bucket: "${INFLUX_BUCKET}")
+  |> range(start: -${_since})
+  |> filter(fn: (r) => r._measurement == "${EFM_MEASUREMENT}")
+  |> filter(fn: (r) => r.${EFM_TAG_KEY} == "${station}")
+  |> filter(fn: (r) => r._field == "${EFM_VALUE_FIELD}" or r._field == "${EFM_STATUS_FIELD}")
+  |> aggregateWindow(every: ${_every}, fn: mean, createEmpty: false)
+  |> yield(name: "mean")
+`;
+
+  const raw = [];
+  await queryApi.collectRows(flux, (row, meta) => {
+    const o = meta.toObject(row);
+    raw.push({
+      t: new Date(o._time).getTime(),
+      field: o._field,
+      v: Number(o._value)
+    });
+  });
+
+  // Pivot por timestamp: {t, value, status}
+  const byT = new Map();
+  for (const r of raw) {
+    const e = byT.get(r.t) || { t: r.t, value: null, status: null };
+    if (r.field === EFM_VALUE_FIELD)  e.value  = r.v;
+    if (r.field === EFM_STATUS_FIELD) e.status = r.v;
+    byT.set(r.t, e);
+  }
+
+  const arr = Array.from(byT.values()).sort((a, b) => a.t - b.t);
+  if (arr.length > _max) arr.splice(0, arr.length - _max);
+  return arr;
+}
+
+// --- NUEVOS ENDPOINTS: EFM live ---
+app.get('/api/efm/live', async (req, res) => {
+  try {
+    const station   = (req.query.station || DEFAULT_STATION).toString();
+    const since     = (req.query.since   || DEFAULT_EFM_SINCE).toString();
+    const every     = (req.query.every   || DEFAULT_EFM_EVERY).toString();
+    const maxPoints = req.query.maxPoints || EFM_MAX_POINTS;
+
+    const key = `efm:live:${station}:${since}:${every}:${maxPoints}`;
+    const cached = cacheGet(key);
+    if (cached) return res.json(cached);
+
+    const data = await queryEfmLive({ station, since, every, maxPoints });
+    cacheSet(key, data, 2500);
+    res.json(data);
+  } catch (err) {
+    if (isConnectionRefusedError(err)) {
+      console.error('API /api/efm/live error: InfluxDB no está disponible (conexión rechazada).');
+      return res.status(503).json({ error: 'InfluxDB no está disponible. Intenta más tarde.' });
+    }
+    console.error('API /api/efm/live error:', err);
+    res.status(500).json({ error: 'No se pudo obtener EFM live.' });
+  }
+});
+
+app.get('/api/efm/last', async (req, res) => {
+  try {
+    const station = (req.query.station || DEFAULT_STATION).toString();
+    const data = await queryEfmLive({ station, since: '5s', every: '1s', maxPoints: 200 });
+    res.json(data.at(-1) ?? null);
+  } catch (err) {
+    if (isConnectionRefusedError(err)) {
+      console.error('API /api/efm/last error: InfluxDB no está disponible (conexión rechazada).');
+      return res.status(503).json({ error: 'InfluxDB no está disponible. Intenta más tarde.' });
+    }
+    console.error('API /api/efm/last error:', err);
+    res.status(500).json({ error: 'No se pudo obtener el último punto EFM.' });
+  }
+});
 
 // GET /api/series?from=...&to=...
 app.get('/api/series', async (req, res) => {
@@ -935,8 +1138,7 @@ from(bucket: "${INFLUX_BUCKET}")
     res.status(500).json({ error: 'No se pudieron obtener datos del servicio.' });
   }
 });
-// --- NUEVO ENDPOINT: /api/series-dh ---
-// Calcula ΔH = H - media_diaria(H)
+
 // --- NUEVO ENDPOINT: /api/series-dh ---
 // ΔH = H - media del primer día del intervalo
 app.get('/api/series-dh', async (req, res) => {
@@ -999,6 +1201,7 @@ from(bucket: "${INFLUX_BUCKET}")
     res.status(500).json({ error: 'No se pudieron calcular ΔH.' });
   }
 });
+
 if (process.env.NODE_ENV !== 'test') {
   try {
     // primer fetch de datos Kp y arranque del cron

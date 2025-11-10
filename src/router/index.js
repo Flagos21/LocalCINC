@@ -52,6 +52,11 @@ const router = createRouter({
       path: '/magnetometros',
       redirect: { name: 'magnetometers-influxdb' },
     },
+    {
+  path: '/efm-live',
+  name: 'efm-live',
+  component: () => import('@/views/ElectricFieldLiveView.vue')
+}
   ],
 })
 
