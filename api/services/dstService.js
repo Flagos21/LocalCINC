@@ -232,7 +232,7 @@ function parseDstText(txt, debug = false) {
       for (let h = 0; h < hours.length && h < 24; h++) {
         const v = hours[h];
         if (!Number.isFinite(v) || Math.abs(v) >= 9999) continue;
-        const iso = toIsoUtc(head.Y, head.M, head.D, h);
+        const iso = toIsoUtc(head.Y, head.M, head.D, h + 1);
         if (iso) out.push({ time: iso, value: v });
       }
       lastDay = head.D;
@@ -261,7 +261,7 @@ function parseDstText(txt, debug = false) {
         for (let h = 0; h < 24; h++) {
           const V = Number(parts[3 + h]);
           if (!Number.isFinite(V) || Math.abs(V) >= 9999) continue;
-          const iso = toIsoUtc(Y, M, D, h); if (iso) out.push({ time: iso, value: V });
+          const iso = toIsoUtc(Y, M, D, h + 1); if (iso) out.push({ time: iso, value: V });
         }
         lastDay = D; continue;
       }
@@ -274,7 +274,7 @@ function parseDstText(txt, debug = false) {
         for (let h = 0; h < 24 && (1 + h) < n; h++) {
           const V = Number(parts[1 + h]);
           if (!Number.isFinite(V) || Math.abs(V) >= 9999) continue;
-          const iso = toIsoUtc(Y, M, D, h); if (iso) out.push({ time: iso, value: V });
+          const iso = toIsoUtc(Y, M, D, h + 1); if (iso) out.push({ time: iso, value: V });
         }
         lastDay = D; continue;
       }
@@ -285,7 +285,7 @@ function parseDstText(txt, debug = false) {
       const D = (lastDay > 0 ? lastDay + 1 : 1); const { Y, M } = ctxYM;
       for (let h = 0; h < 24; h++) {
         const V = Number(parts[h]); if (!Number.isFinite(V) || Math.abs(V) >= 9999) continue;
-        const iso = toIsoUtc(Y, M, D, h); if (iso) out.push({ time: iso, value: V });
+        const iso = toIsoUtc(Y, M, D, h + 1); if (iso) out.push({ time: iso, value: V });
       }
       lastDay = D; continue;
     }
@@ -489,6 +489,11 @@ export async function getDstRealtimeLatest() {
   const latest = series[series.length - 1];
   if (!latest || latest.time == null || latest.value == null) return null;
   return { time: latest.time, value: latest.value };
+}
+
+// Expuesto solo para pruebas automatizadas
+export function __testParseDstText(input, debug = false) {
+  return parseDstText(input, debug);
 }
 
 const AUTO_REFRESH_MS = 60_000;

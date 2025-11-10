@@ -179,13 +179,13 @@ function parseDstMonthlyText(raw, inferred) {
 
     previousDay = day;
 
-    for (let hour = 0; hour < values.length && hour < 24; hour += 1) {
-      const value = values[hour];
+    for (let hourIndex = 0; hourIndex < values.length && hourIndex < 24; hourIndex += 1) {
+      const value = values[hourIndex];
       if (!Number.isFinite(value) || Math.abs(value) >= 9999) {
         continue;
       }
 
-      const timestamp = Date.UTC(inferred.yyyy, inferred.m0, day, hour, 0, 0);
+      const timestamp = Date.UTC(inferred.yyyy, inferred.m0, day, hourIndex + 1, 0, 0);
       if (Number.isFinite(timestamp)) {
         points.push({ timestamp, value });
       }
