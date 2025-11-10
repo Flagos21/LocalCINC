@@ -260,7 +260,12 @@ function fmtUTC(value) {
   gap: 1rem;
   grid-template-columns: minmax(0, 1fr);
   align-items: stretch;
-  --home-bottom-media-height: clamp(16rem, 32vw, 22rem);
+  justify-items: center;
+  --home-bottom-media-height: clamp(16rem, min(34vw, 38vh), 22rem);
+}
+
+.home__grid-bottom > .home__tile {
+  width: min(100%, 28rem);
 }
 
 .home__tile {
