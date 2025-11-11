@@ -1,4 +1,13 @@
-// src/composables/useEfmLive.js
+/*
+  Composable Vue 3 para obtener datos en vivo del campo eléctrico E_z
+  desde una API REST y refrescarlos periódicamente.
+
+  Cambios clave:
+  - Soporta opts.since (string tipo '10m') además de opts.range.
+    Si llega since, usamos range = `since:${since}`.
+  - Mantiene compatibilidad con 'today' | '1h' | '6h' | '24h' | 'since:10m'
+*/
+
 import { ref, onMounted, onBeforeUnmount, watch } from 'vue';
 
 // convierte ms → "Xs|Xm|Xh|Xd" (lo que entiende tu API)
@@ -13,24 +22,32 @@ function msToInfluxSince(ms) {
 export function useEfmLive(opts = {}) {
   const baseUrl   = opts.baseUrl ?? import.meta.env.VITE_API_URL ?? 'http://localhost:3001';
   const station   = ref(opts.station ?? '*');
-  // range puede ser: '1h' | '6h' | '24h' | 'today'
-  const range     = ref(opts.range ?? 'today');
+
+  // Si viene since, priorizamos "since:<dur>" como range; si no, usamos range directo o 'today'
+  const initialRange =
+    opts.since ? `since:${opts.since}` :
+    (opts.range ?? 'today');
+
+  const range     = ref(initialRange);           // 'today' | '1h' | '6h' | '24h' | 'since:10m'
   const every     = ref(opts.every ?? '5s');     // agregación backend
-  const refreshMs = ref(opts.refreshMs ?? 5000); // 5s como pediste
+  const refreshMs = ref(opts.refreshMs ?? 5000); // 5s por defecto
 
   const points = ref([]);
   const error  = ref(null);
   let timer;
 
   function computeSinceForRange(rng) {
+    // rng puede ser 'since:10m', 'today', '1h', '6h', '24h'
+    if (typeof rng === 'string' && rng.startsWith('since:')) {
+      return rng.slice('since:'.length); // → '10m'
+    }
     if (rng === 'today') {
       const now = new Date();
       const start = new Date(now);
-      // medianoche local
-      start.setHours(0, 0, 0, 0);
+      start.setHours(0, 0, 0, 0); // medianoche local
       return msToInfluxSince(now.getTime() - start.getTime());
     }
-    // si viene '1h','6h','24h' ya lo entiende tu backend tal cual
+    // '1h','6h','24h' ya lo entiende tu backend tal cual
     return rng;
   }
 
@@ -38,7 +55,7 @@ export function useEfmLive(opts = {}) {
     try {
       const url = new URL('/api/efm/live', baseUrl);
       url.searchParams.set('station', station.value || '*');
-      url.searchParams.set('since', computeSinceForRange(range.value)); // clave
+      url.searchParams.set('since', computeSinceForRange(range.value));
       url.searchParams.set('every', every.value);
 
       const res = await fetch(url.toString(), { cache: 'no-store' });
@@ -64,7 +81,7 @@ export function useEfmLive(opts = {}) {
   onMounted(start);
   onBeforeUnmount(stop);
 
-  // si el usuario cambia rango / every / refreshMs, reiniciamos el polling
+  // Si el usuario cambia rango / every / refreshMs / station, reiniciamos el polling
   watch([range, every, refreshMs, station], start);
 
   return {

@@ -1,3 +1,7 @@
+<!--
+  Vista dedicada "live" (independiente del Home).
+  Mantengo tu layout original, usando directamente el composable actualizado.
+-->
 <script setup>
 import { computed } from 'vue'
 import VueApexCharts from 'vue3-apexcharts'
@@ -6,23 +10,23 @@ import { useEfmLive } from '@/composables/useEfmLive'
 // Props configurables
 const props = defineProps({
   station:   { type: String, default: '*' },   // CHI / * / etc.
-  since:     { type: String, default: '10m' }, // ventana temporal en backend (ej: '10m')
-  every:     { type: String, default: '5s' },  // agregación en backend (ej: '5s')
+  since:     { type: String, default: '10m' }, // ventana temporal (ej: '10m')
+  every:     { type: String, default: '5s' },  // agregación (ej: '5s')
   refreshMs: { type: Number, default: 2000 },  // auto-refresh
   yMin:      { type: Number, default: -0.4 },
   yMax:      { type: Number, default:  0.4 },
   height:    { type: [Number, String], default: 520 }
 })
 
-// Hook en vivo (reactivo)
+// Hook en vivo (reactivo) — ahora puedes pasar since directo
 const {
   points, error,
-  range,   // p.ej. '1h' | '6h' | '24h' | 'today' | 'since:<dur>'
+  range,   // '1h' | '6h' | '24h' | 'today' | 'since:<dur>'
   every: agg, refreshMs, station,
   refresh
 } = useEfmLive({
   station: props.station,
-  range:   `since:${props.since}`, // tip: usamos el formato 'since:<dur>'
+  since:   props.since,   // 👈 usamos since (el composable arma range='since:<dur>')
   every:   props.every,
   refreshMs: props.refreshMs
 })
@@ -33,7 +37,7 @@ const series = computed(() => [{
   data: points.value.map(p => [p.t, p.value]) // [timestamp_ms, value]
 }])
 
-// Opciones Apex con la misma estética del otro componente
+// Opciones Apex
 const chartOptions = computed(() => ({
   chart: {
     type: 'line',
@@ -47,19 +51,10 @@ const chartOptions = computed(() => ({
     foreColor: '#0f172a',
     zoom: { enabled: true, type: 'x' }
   },
-  colors: ['#f97316'], // naranja
+  colors: ['#f97316'],
   stroke: { width: 2, curve: 'straight', dashArray: 0 },
-  markers: {
-    size: 0, strokeWidth: 2, fillOpacity: 1, strokeOpacity: 1,
-    hover: { sizeOffset: 3 }
-  },
-  xaxis: {
-    type: 'datetime',
-    labels: { datetimeUTC: true },
-    tooltip: { enabled: false },
-    axisBorder: { color: '#cbd5f5' },
-    axisTicks:  { color: '#cbd5f5' }
-  },
+  markers: { size: 0, strokeWidth: 2, hover: { sizeOffset: 3 } },
+  xaxis: { type: 'datetime', labels: { datetimeUTC: true }, axisBorder: { color: '#cbd5f5' }, axisTicks: { color: '#cbd5f5' } },
   yaxis: {
     title: { text: 'E_z (kV/m)' },
     min: props.yMin,
@@ -69,33 +64,21 @@ const chartOptions = computed(() => ({
     axisBorder: { show: false },
     tickAmount: 8
   },
-  grid: {
-    borderColor: '#e2e8f0',
-    strokeDashArray: 4,
-    padding: { left: 16, right: 16 }
-  },
-  annotations: {
-    yaxis: [
-      { y: 0, borderColor: '#94a3b8', strokeDashArray: 6, opacity: 0.7 }
-    ]
-  },
+  grid: { borderColor: '#e2e8f0', strokeDashArray: 4, padding: { left: 16, right: 16 } },
+  annotations: { yaxis: [{ y: 0, borderColor: '#94a3b8', strokeDashArray: 6, opacity: 0.7 }] },
   tooltip: {
     theme: 'dark',
-    shared: true,
-    intersect: false,
+    shared: true, intersect: false,
     x: { format: 'yyyy-MM-dd HH:mm:ss' },
     y: { formatter: (v) => (Number.isFinite(v) ? `${v.toFixed(2)} kV/m` : '—') }
   },
-  noData: {
-    text: 'Cargando campo eléctrico…',
-    style: { color: '#64748b', fontSize: '14px' }
-  }
+  noData: { text: 'Cargando campo eléctrico…', style: { color: '#64748b', fontSize: '14px' } }
 }))
 
 // Acciones rápidas
 function setQuickRange(r) {
-  // r: '1h' | '6h' | '24h' | 'today' | 'since:10m'
-  range.value = r.startsWith('since:') ? r : r
+  // r puede ser '1h' | '6h' | '24h' | 'today' | 'since:10m'
+  range.value = r
 }
 </script>
 
@@ -169,7 +152,6 @@ function setQuickRange(r) {
             :series="series"
           />
         </div>
-
         <p v-if="error" class="efield__error">⚠️ {{ error }}</p>
       </div>
     </div>
