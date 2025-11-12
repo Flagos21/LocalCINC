@@ -2,6 +2,8 @@
 import { computed } from 'vue'
 import VueApexCharts from 'vue3-apexcharts'
 import { useEfmLive } from '@/composables/useEfmLive'
+import { useMagnetometerSeries } from '@/composables/useMagnetometerSeries'
+import { buildDailyMedianBaseline } from '@/utils/timeSeriesBaseline'
 
 const {
   points, error,
@@ -14,12 +16,62 @@ const {
   refreshMs: 2000
 })
 
-const series = computed(() => [{
-  name: 'E_z',
-  data: points.value.map(p => [p.t, p.value])
-}])
+const BASELINE_NAME = 'Mediana últimos 7 días'
 
-const chartOptions = computed(() => ({
+const {
+  labels: baselineLabels,
+  series: baselineValues
+} = useMagnetometerSeries({
+  range: '7d',
+  every: '',
+  unit: '',
+  station,
+  from: '',
+  to: '',
+  endpoint: '/api/electric-field/series'
+})
+
+const chartSeries = computed(() => {
+  const livePoints = points.value
+    .map((point) => {
+      const timestamp = Number(point?.t ?? point?.time)
+      const value = Number(point?.value)
+      if (!Number.isFinite(timestamp) || !Number.isFinite(value)) {
+        return null
+      }
+      return [timestamp, value]
+    })
+    .filter((entry) => Array.isArray(entry))
+
+  if (!livePoints.length) {
+    return []
+  }
+
+  const baselinePoints = buildDailyMedianBaseline({
+    referenceTimestamps: baselineLabels.value,
+    referenceValues: baselineValues.value,
+    targetTimestamps: livePoints.map(([timestamp]) => timestamp)
+  })
+
+  const hasBaseline = baselinePoints.some(([, value]) => Number.isFinite(value))
+
+  return hasBaseline
+    ? [
+        { name: BASELINE_NAME, data: baselinePoints },
+        { name: 'E_z', data: livePoints }
+      ]
+    : [
+        { name: 'E_z', data: livePoints }
+      ]
+})
+
+const chartOptions = computed(() => {
+  const hasBaselineSeries = chartSeries.value.some((series) => series?.name === BASELINE_NAME)
+  const colors = hasBaselineSeries ? ['#d1d5db', '#f97316'] : ['#f97316']
+  const strokeWidth = hasBaselineSeries ? [2, 2] : 2
+  const dashArray = hasBaselineSeries ? [0, 0] : 0
+
+  return ({
   chart: {
     type: 'line',
     animations: { enabled: true, easing: 'easeinout', speed: 250 },
@@ -31,8 +83,8 @@ const chartOptions = computed(() => ({
     foreColor: '#0f172a',
     zoom: { enabled: true, type: 'x' }
   },
-  colors: ['#f97316'],
-  stroke: { width: 2, curve: 'straight' },
+  colors,
+  stroke: { width: strokeWidth, curve: 'straight', dashArray },
   markers: { size: 0, strokeWidth: 2, hover: { sizeOffset: 3 } },
   xaxis: { type: 'datetime', labels: { datetimeUTC: true } },
   yaxis: {
@@ -50,7 +102,8 @@ const chartOptions = computed(() => ({
     y: { formatter: v => (Number.isFinite(v) ? `${v.toFixed(2)} kV/m` : '—') }
   },
   noData: { text: 'Cargando campo eléctrico…', style: { color: '#64748b', fontSize: '14px' } }
-}))
+  })
+})
 
 function setQuickRange(r) { range.value = r }
 function isActive(r) { return range.value === r }
@@ -112,7 +165,7 @@ function isActive(r) { return range.value === r }
         class="chart"
         :height="'100%'"
         :options="chartOptions"
-        :series="series"
+        :series="chartSeries"
       />
     </div>
 
