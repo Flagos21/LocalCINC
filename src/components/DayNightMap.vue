@@ -1,15 +1,25 @@
 <script setup>
-import { onMounted, onBeforeUnmount, ref, watch } from 'vue'
+import { onMounted, onBeforeUnmount, ref, watch, computed } from 'vue'
 import L from 'leaflet'
 import 'leaflet/dist/leaflet.css'
 import SunCalc from 'suncalc'
 
 const props = defineProps({
   height: { type: String, default: '420px' },
+  aspectRatio: { type: [String, Number], default: null },
   autoRefreshMs: { type: Number, default: 60_000 }, // 1 min
   startPaused: { type: Boolean, default: false },
   // 'satellite' | 'map'  (empezamos con el que quieras)
   mode: { type: String, default: 'satellite' },
+  showAnimationControl: { type: Boolean, default: true },
+  focusBounds: {
+    type: Array,
+    default: () => [
+      [-60, -110], // sudoeste
+      [18, -25], // noreste
+    ],
+  },
+  focusMaxZoom: { type: Number, default: 5 },
 
   // Sombras
   nightOpacity: { type: Number, default: 0.38 },
@@ -25,12 +35,45 @@ const props = defineProps({
 
 /* ---------- estado ---------- */
 const mapEl = ref(null)
-const lastUpdated = ref(new Date())
+const displayTime = ref(new Date())
+const isAnimating = ref(false)
 let map, baseLayer, labelsLayer
 let nightPoly=null, civilPoly=null, nautPoly=null, astroPoly=null
 let sunMarker=null, moonMarker=null
 let timer=null
 const mode = ref(props.mode)
+let animFrameId=null
+let animButtonEl=null
+
+const mapStyles = computed(() => {
+  const styles = {}
+  if (props.aspectRatio) {
+    styles.aspectRatio = typeof props.aspectRatio === 'number'
+      ? `${props.aspectRatio}`
+      : props.aspectRatio
+  } else if (props.height) {
+    styles.height = props.height
+  }
+  return styles
+})
+
+/* === Bounds Sudamérica + helper para encajar una sola vez === */
+let didInitialFit = false
+function getFocusBounds() {
+  try {
+    const bounds = L.latLngBounds(props.focusBounds)
+    return bounds.isValid() ? bounds : null
+  } catch (err) {
+    return null
+  }
+}
+function fitLatamOnce() {
+  if (didInitialFit || !map) return
+  const bounds = getFocusBounds()
+  if (!bounds) return
+  didInitialFit = true
+  map.fitBounds(bounds, { padding:[20,20], maxZoom: props.focusMaxZoom ?? 5 })
+}
 
 /* ---------- helpers astronómicos (igual que antes) ---------- */
 const d2r = d => d*Math.PI/180, r2d = r => r*180/Math.PI
@@ -96,28 +139,42 @@ function makeBaseAndLabels(currentMode){
     // Satélite (Esri) + rótulos transparentes
     baseLayer = L.tileLayer(
       'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}',
-      { minZoom:1, maxZoom:7, attribution:'Esri, Maxar, Earthstar Geographics' }
+      { minZoom:1, maxZoom:7, attribution:'Esri, Maxar, Earthstar Geographics', noWrap:true }
     ).addTo(map)
 
     labelsLayer = L.tileLayer(
       'https://server.arcgisonline.com/ArcGIS/rest/services/Reference/World_Boundaries_and_Places/MapServer/tile/{z}/{y}/{x}',
-      { pane:'labels', minZoom:1, maxZoom:7, opacity:0.9 }
+      { pane:'labels', minZoom:1, maxZoom:7, opacity:0.9, noWrap:true }
     ).addTo(map)
+
+    // encajar cuando carguen los tiles
+    if (baseLayer) {
+      baseLayer.once('load', () => fitLatamOnce())
+    } else {
+      fitLatamOnce()
+    }
   } else {
     // Mapa claro con etiquetas (Carto Positron)
     baseLayer = L.tileLayer(
       'https://{s}.basemaps.cartocdn.com/rastertiles/light_all/{z}/{x}/{y}.png',
-      { minZoom:1, maxZoom:7, subdomains:'abcd', attribution:'© OSM, © CARTO' }
+      { minZoom:1, maxZoom:7, subdomains:'abcd', attribution:'© OSM, © CARTO', noWrap:true }
     ).addTo(map)
     // Extra opcional de labels (normalmente no hace falta porque Positron ya trae):
     labelsLayer = null
+
+    // encajar cuando carguen los tiles
+    if (baseLayer) {
+      baseLayer.once('load', () => fitLatamOnce())
+    } else {
+      fitLatamOnce()
+    }
   }
 }
 
 /* ---------- dibujar terminador ---------- */
-function redrawAll(){
-  const now = new Date()
-  lastUpdated.value = now
+function redrawAll(date = new Date()){
+  const now = date instanceof Date ? date : new Date(date)
+  displayTime.value = now
 
   const { curve: zero, lambda_s } = curveAtElevation(now, 0, 1)
   const dayNorth = sideIsNorth(zero, lambda_s)
@@ -184,6 +241,104 @@ function addModeSwitch(){
   map.addControl(new C())
 }
 
+function addExtrasControls(){
+  const C = L.Control.extend({
+    options:{ position:'topleft' },
+    onAdd(){
+      const el = L.DomUtil.create('div','map-tools')
+      const buttons = [`
+        <button class="btn reset" type="button" title="Restablecer vista" aria-label="Restablecer vista">
+          ⟲
+        </button>
+      `]
+      if (props.showAnimationControl) {
+        buttons.push(`
+          <button class="btn anim" type="button" title="Animar sombra diaria" aria-label="Animar sombra diaria">
+            Animar día
+          </button>
+        `)
+      }
+      el.innerHTML = buttons.join('')
+
+      const [resetBtn, animBtn] = el.querySelectorAll('button')
+      animButtonEl = props.showAnimationControl ? animBtn : null
+
+      L.DomEvent.disableClickPropagation(el)
+      L.DomEvent.disableScrollPropagation(el)
+
+      resetBtn.addEventListener('click', () => {
+        // volver al enfoque principal (por defecto Sudamérica)
+        const bounds = getFocusBounds()
+        if (bounds?.isValid()) {
+          map.fitBounds(bounds, { padding:[20,20], maxZoom: props.focusMaxZoom ?? 5 })
+        }
+      })
+
+      if (props.showAnimationControl && animBtn) {
+        animBtn.addEventListener('click', () => {
+          if (isAnimating.value) stopAnimation()
+          else startAnimation()
+        })
+      }
+
+      updateAnimButton()
+
+      return el
+    }
+  })
+
+  map.addControl(new C())
+}
+
+function updateAnimButton(){
+  if (!props.showAnimationControl || !animButtonEl) return
+  animButtonEl.textContent = isAnimating.value ? 'Detener animación' : 'Animar día'
+  animButtonEl.classList.toggle('active', isAnimating.value)
+  animButtonEl.setAttribute('aria-pressed', String(isAnimating.value))
+}
+
+function startAnimation(){
+  if (!props.showAnimationControl) return
+  if (isAnimating.value) return
+  stopTimer()
+  isAnimating.value = true
+  updateAnimButton()
+
+  const now = new Date()
+  const dayStart = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate()))
+  const dayEnd = now
+  const durationMs = 20000
+  const startTs = performance.now()
+
+  function step(ts){
+    if (!isAnimating.value) return
+    const t = Math.min((ts - startTs)/durationMs, 1)
+    const simDate = new Date(dayStart.getTime() + (dayEnd.getTime() - dayStart.getTime())*t)
+    redrawAll(simDate)
+    if (t < 1){
+      animFrameId = requestAnimationFrame(step)
+    } else {
+      stopAnimation()
+    }
+  }
+
+  redrawAll(dayStart)
+  animFrameId = requestAnimationFrame(step)
+}
+
+function stopAnimation(){
+  if (!props.showAnimationControl) return
+  if (!isAnimating.value) return
+  isAnimating.value = false
+  if (animFrameId){ cancelAnimationFrame(animFrameId); animFrameId=null }
+  updateAnimButton()
+  redrawAll(new Date())
+  startTimer()
+}
+
+const timeLabel = computed(() => isAnimating.value ? 'Simulación' : 'UTC')
+const timeHint = computed(() => isAnimating.value ? '(modo animación)' : '(actualizado cada 1 min)')
+
 /* ---------- icons ---------- */
 function sunIcon(){ return L.divIcon({ className:'sun-ico', html:`<svg viewBox="0 0 64 64" width="38" height="38">
   <circle cx="32" cy="32" r="14" fill="#FDB813" stroke="#F59E0B" stroke-width="3"/>
@@ -199,36 +354,64 @@ function moonIcon(){ return L.divIcon({ className:'moon-ico', html:`<svg viewBox
   iconSize:[34,34], iconAnchor:[17,17] }) }
 
 /* ---------- ciclo de vida ---------- */
-function startTimer(){ if (!timer) timer=setInterval(redrawAll, props.autoRefreshMs) }
+function startTimer(){
+  if (isAnimating.value) return
+  if (!timer) timer=setInterval(() => redrawAll(), props.autoRefreshMs)
+}
 function stopTimer(){ if (timer){ clearInterval(timer); timer=null } }
 
 onMounted(() => {
-  map = L.map(mapEl.value, { worldCopyJump:true, zoomControl:true, attributionControl:false })
-        .setView([5,20], 2)
+  map = L.map(mapEl.value, {
+    zoomControl:true,
+    attributionControl:false,
+    worldCopyJump:false,
+    maxBounds:[[-85,-180],[85,180]],
+    maxBoundsViscosity:1.0,
+  })
+
+  // ✅ vista inicial provisional enfocada en el área principal (Sudamérica por defecto)
+  const focusBounds = getFocusBounds()
+  if (focusBounds) {
+    const center = focusBounds.getCenter()
+    map.setView(center, Math.min(props.focusMaxZoom ?? 5, 4))
+  } else {
+    map.setView([-15, -60], 3)
+  }
 
   makeBaseAndLabels(mode.value)
+  fitLatamOnce()
+
   // arreglos de tamaño
   requestAnimationFrame(()=> map.invalidateSize())
   setTimeout(()=> map.invalidateSize(), 400)
   const ro = new ResizeObserver(()=> map.invalidateSize())
   ro.observe(mapEl.value); map.__ro = ro
 
+  // Encajar a Sudamérica cuando el mapa esté listo y tras el primer render
+  map.whenReady(() => {
+    fitLatamOnce()
+    setTimeout(fitLatamOnce, 0)
+  })
+
   addModeSwitch()
+  addExtrasControls()
   redrawAll(); startTimer()
 })
 onBeforeUnmount(() => {
+  stopAnimation()
   stopTimer(); if (map?.__ro) map.__ro.disconnect(); map?.remove()
 })
 watch(() => props.autoRefreshMs, () => { stopTimer(); startTimer() })
+watch(isAnimating, updateAnimButton)
 </script>
 
 <template>
   <div class="tad-card">
-    <div ref="mapEl" class="tad-map" :style="{ height }"></div>
+    <div ref="mapEl" class="tad-map" :style="mapStyles"></div>
     <div class="tad-footer">
       <span class="tad-time">
-        <strong>UTC</strong> — {{ lastUpdated.toLocaleString('es-CL',{ timeZone:'UTC', hour12:false }) }}
-        <em>(actualizado cada 1 min)</em>
+        <strong>{{ timeLabel }}</strong> — {{ displayTime.toLocaleString('es-CL',{ timeZone:'UTC', hour12:false }) }}
+        <em>{{ timeHint }}</em>
       </span>
     </div>
   </div>
@@ -236,13 +419,18 @@ watch(() => props.autoRefreshMs, () => { stopTimer(); startTimer() })
 
 <style scoped>
 .tad-card{
-  background:#0a0e14; border-radius:12px; overflow:hidden;
-  margin-inline:auto; /* centrado */
+  background:#0a0e14;
+  border-radius:12px;
+  overflow:hidden;
   box-shadow:0 12px 28px rgba(0,0,0,.35);
   border:1px solid rgba(255,255,255,.06);
-  max-width: 980px; /* ancho razonable */
+  display:flex;
+  flex-direction:column;
+  height:100%;
+  min-height:0;
+  width:100%;
 }
-.tad-map{ width:100%; }
+.tad-map{ width:100%; flex:1 1 auto; min-height:0; }
 .tad-footer{
   background:#3b3b3b; color:#e5e7eb; padding:.55rem .8rem;
   font-size:.95rem; display:flex; justify-content:flex-start;
@@ -264,4 +452,28 @@ watch(() => props.autoRefreshMs, () => { stopTimer(); startTimer() })
 /* por si el base trae labels fuertes, mantener nuestras capas visibles */
 :deep(.leaflet-control-attribution){ display:none; }
 :deep(.leaflet-pane .sun-ico), :deep(.leaflet-pane .moon-ico){ filter:drop-shadow(0 1px 2px rgba(0,0,0,.5)); }
+
+:deep(.map-tools){
+  display:flex;
+  gap:6px;
+  background:rgba(15,23,42,.82);
+  padding:6px;
+  border-radius:8px;
+  backdrop-filter:blur(4px);
+  box-shadow:0 4px 16px rgba(0,0,0,.35);
+}
+:deep(.map-tools .btn){
+  border:none;
+  cursor:pointer;
+  padding:.35rem .6rem;
+  border-radius:6px;
+  color:#e5e7eb;
+  background:#1f2937;
+  font-weight:600;
+  display:flex;
+  align-items:center;
+  gap:.35rem;
+}
+:deep(.map-tools .btn.reset){ font-size:1.1rem; line-height:1; }
+:deep(.map-tools .btn.active){ background:#2563eb; color:#fff; }
 </style>

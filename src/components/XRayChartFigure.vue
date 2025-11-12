@@ -84,6 +84,8 @@ const thrLog = thresholds.map(t => ({ y: Math.log10(t.y), label: t.label }));
 const chartSeries = ref([]);
 const gridX = ref([]); // guardamos la grilla para tooltip custom
 const TOLERANCE_MS = 120_000;
+const XRAY_PALETTE = ['#f97316', '#2563eb', '#9333ea', '#facc15', '#10b981', '#ef4444', '#38bdf8', '#ec4899'];
+const chartColors = computed(() => chartSeries.value.map((_, index) => XRAY_PALETTE[index % XRAY_PALETTE.length]));
 
 function rebuildSeries() {
   // 1) log10 de todas las series
@@ -116,7 +118,7 @@ watch(() => [props.longBySat, props.shortBySat, props.sats], rebuildSeries, { de
 const options = computed(() => ({
   chart: {
     type: 'line',
-    height: 380,
+    height: '100%',
     animations: { enabled: true, easing: 'linear', dynamicAnimation: { speed: 300 } },
     toolbar: { show: true, tools: { download: true, selection: true, zoom: true, zoomin: true, zoomout: true, pan: true } },
     zoom: { enabled: true, type: 'x' },
@@ -150,7 +152,7 @@ const options = computed(() => ({
       label: { text: t.label, style: { background: '#f8fafc', color: '#0f172a' } }
     })),
   },
-  colors: ['#ea580c', '#6b21a8', '#f59e0b', '#4c1d95'],
+  colors: chartColors.value,
 
   /* === Tooltip SIEMPRE con todas las series visibles (por índice común) === */
   tooltip: {

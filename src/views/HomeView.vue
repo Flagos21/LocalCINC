@@ -4,11 +4,12 @@ import { ref, onMounted, onBeforeUnmount } from 'vue'
 import SunViewer from '@/components/SunViewer.vue'
 import IonogramLatest from '@/components/IonogramLatest.vue'
 import MagnetometerChartOverview from '@/components/MagnetometerChartOverview.vue'
-
+// import ElectricFieldHomeCard from '@/components/ElectricFieldHomeCard.vue' // histórico (conservado)
+import ElectricFieldLiveHomeCard from '@/components/ElectricFieldLiveHomeCard.vue' // LIVE con controles
 import XRayChartFigure from '@/components/XRayChartFigure.vue'
+import DstCard from '@/components/DstCard.vue'
+import KpChart from '@/components/KpChart.vue'
 import { useGoesXrays } from '@/composables/useGoesXrays'
-
-// Mapa Día/Noche
 import DayNightMap from '@/components/DayNightMap.vue'
 
 const {
@@ -26,12 +27,10 @@ const {
 } = useGoesXrays({ range: '6h', pollMs: 60000, auto: true })
 
 const utcNow = ref(new Date())
-let clockTimer = null // 👈 sin tipos TS
+let clockTimer = null
 
 onMounted(() => {
-  clockTimer = window.setInterval(() => {
-    utcNow.value = new Date()
-  }, 1000)
+  clockTimer = window.setInterval(() => { utcNow.value = new Date() }, 1000)
 })
 onBeforeUnmount(() => { if (clockTimer) clearInterval(clockTimer) })
 
@@ -57,42 +56,11 @@ function fmtUTC(value) {
       <p>Visualiza aquí los indicadores clave cuando estén disponibles.</p>
     </header>
 
-      <!-- Day/Night: ocupa todo el ancho y centrado -->
-      <div class="home__cell home__cell--daynight">
-        <div class="daynight-wrap">
-          <!-- refresco cada 1 minuto -->
-          <DayNightMap
-            mode="satellite"
-            height="clamp(520px, 55vh, 720px)"
-            :autoRefreshMs="60000"
-            :showTwilight="true"
-            :showSunMoon="true"
-            nightColor="#050a18"
-            twilightColor="#0b1736"
-            :nightOpacity="0.38"
-            :twilightCivilOpacity="0.26"
-            :twilightNauticalOpacity="0.18"
-            :twilightAstroOpacity="0.12"
-          />
-        </div>
-      </div>
-
     <div class="home__grid">
-      <!-- Sol -->
-      <div class="home__cell home__cell--sun">
-        <article class="panel">
-          <div class="panel__head">
-            <h3>El Sol (SUVI)</h3>
-            <p>Vista en tiempo (casi) real del Sol por longitudes de onda EUV.</p>
-          </div>
-          <SunViewer />
-        </article>
-      </div>
-
-      <!-- Rayos X -->
-      <div class="home__cell home__cell--xray">
-        <article class="panel panel--chart">
-          <div class="panel__head xray__head">
+      <div class="home__grid-top">
+        <!-- Rayos X / Dst / Kp -->
+        <article class="home__tile home__tile--xray">
+          <header class="home__tile-head xray__head">
             <div class="xray__title">
               <h3>GOES X-ray Flux (0.05–0.4 nm y 0.1–0.8 nm)</h3>
               <p>Escala logarítmica con umbrales A/B/C/M/X. Fuente: SWPC.</p>
@@ -109,7 +77,7 @@ function fmtUTC(value) {
               </div>
 
               <label class="xray__range">
-                <span class="tag">Rango:</span>
+                <span class="tag">Intervalo:</span>
                 <select v-model="xrRange">
                   <option value="6h">6 h</option>
                   <option value="1d">1 día</option>
@@ -131,28 +99,30 @@ function fmtUTC(value) {
 
               <button class="ghost" type="button" @click="refresh">Refrescar</button>
             </div>
-          </div>
+          </header>
 
-          <div class="panel__body" aria-live="polite">
-            <div v-if="xrError" class="panel__state panel__state--error">
+          <div class="home__tile-body" aria-live="polite">
+            <div v-if="xrError" class="home__tile-state home__tile-state--error">
               <strong>Problema al cargar rayos X.</strong>
               <p>{{ xrError }}</p>
             </div>
-            <div v-else-if="xrLoading" class="panel__state panel__state--loading">
+            <div v-else-if="xrLoading" class="home__tile-state home__tile-state--loading">
               <span class="loader" aria-hidden="true"></span>
               <p>Cargando rayos X…</p>
             </div>
-            <div v-else-if="!xrHasData" class="panel__state">
-              <p>No hay datos disponibles para este rango.</p>
+            <div v-else-if="!xrHasData" class="home__tile-state">
+              <p>No hay datos disponibles para este intervalo.</p>
             </div>
 
             <template v-else>
-              <XRayChartFigure
-                :long-by-sat="longBySat"
-                :short-by-sat="shortBySat"
-                :sats="sats"
-                :height="260"
-              />
+              <div class="home__tile-visual home__tile-visual--chart">
+                <XRayChartFigure
+                  :long-by-sat="longBySat"
+                  :short-by-sat="shortBySat"
+                  :sats="sats"
+                  :height="'100%'"
+                />
+              </div>
               <small class="xray__foot">
                 Sats: {{ sats.join(', ') }}
                 · Pts totales Long: {{
@@ -166,23 +136,83 @@ function fmtUTC(value) {
                 </template>
               </small>
             </template>
+
+            <div class="home__tile-divider" role="presentation" aria-hidden="true"></div>
+
+            <div class="home__tile-subsection">
+              <DstCard class="dst-card--embedded" />
+            </div>
+
+            <div class="home__tile-divider" role="presentation" aria-hidden="true"></div>
+
+            <div class="home__tile-subsection home__tile-subsection--kp">
+              <header class="home__tile-subhead">
+                <div>
+                  <h4>Índice geomagnético Kp (GFZ)</h4>
+                  <p>Serie de barras de 3 h con colores por severidad. Fuente: GFZ.</p>
+                </div>
+              </header>
+              <KpChart embedded :height="200" />
+            </div>
           </div>
         </article>
-      </div>
 
-      <!-- Magnetómetro -->
-      <div class="home__cell home__cell--magneto">
-        <div class="panel panel--flush home__magneto-card">
-          <MagnetometerChartOverview />
+        <div class="home__grid-top-right">
+          <!-- Magnetómetro -->
+          <article class="home__tile home__tile--magneto">
+            <MagnetometerChartOverview />
+          </article>
+
+          <!-- Campo eléctrico (LIVE con controles) -->
+          <article class="home__tile home__tile--electric">
+            <!-- <ElectricFieldHomeCard /> -->
+            <ElectricFieldLiveHomeCard />
+          </article>
         </div>
       </div>
 
-      <!-- Ionograma -->
-      <div class="home__cell home__cell--ionogram">
-        <IonogramLatest />
+      <div class="home__grid-bottom">
+        <!-- Sol -->
+        <article class="home__tile home__tile--sun">
+          <header class="home__tile-head">
+            <div>
+              <h3>El Sol (SUVI)</h3>
+              <p>Vista en tiempo (casi) real del Sol por longitudes de onda EUV.</p>
+            </div>
+          </header>
+
+          <div class="home__tile-visual home__tile-visual--sun">
+            <SunViewer />
+          </div>
+        </article>
+
+        <!-- Ionograma -->
+        <article class="home__tile home__tile--ionogram">
+          <IonogramLatest />
+        </article>
+
+        <!-- Mapa día/noche -->
+        <article class="home__tile home__tile--map">
+          <header class="home__tile-head">
+            <div>
+              <h3>Mapa día/noche</h3>
+              <p>Observa el terminador solar y penumbras actualizadas cada minuto.</p>
+            </div>
+          </header>
+          <div class="home__tile-visual home__tile-visual--map">
+            <DayNightMap
+              mode="map"
+              height="100%"
+              :autoRefreshMs="60000"
+              :showTwilight="true"
+              :showSunMoon="true"
+              :showAnimationControl="false"
+              :focusBounds="[[ -55, -82 ], [ 15, -35 ]]"
+              :focusMaxZoom="5"
+            />
+          </div>
+        </article>
       </div>
-
-
     </div>
   </section>
 </template>
@@ -191,10 +221,11 @@ function fmtUTC(value) {
 .home {
   display: flex;
   flex-direction: column;
-  gap: 1.25rem;
+  gap: 1.1rem;
   flex: 1;
   min-height: 0;
-  height: 100%;
+  height: auto;
+  overflow: hidden;
 }
 
 /* Titulares en negro sobre fondo oscuro del main */
@@ -204,55 +235,194 @@ function fmtUTC(value) {
 .home__grid {
   flex: 1;
   min-height: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+
+.home__grid-top {
   display: grid;
   gap: 1rem;
-  grid-template-columns: repeat(auto-fit, minmax(min(20rem, 100%), 1fr));
-  grid-auto-rows: auto;
-  align-items: start;
+  grid-template-columns: minmax(0, 1fr);
+  align-items: stretch;
 }
 
-.home__cell { width: 100%; }
-.home__cell > * { width: 100%; }
-
-/* Day/Night a lo ancho y centrado */
-.home__cell--daynight {
-  grid-column: 1 / -1; /* ocupa todas las columnas del grid */
+.home__grid-top-right {
+  display: grid;
+  gap: 1rem;
+  grid-template-columns: minmax(0, 1fr);
 }
 
-.daynight-wrap{
-  display: flex;
-  justify-content: center;
-  padding: 8px 0 2px;
+.home__grid-bottom {
+  display: grid;
+  gap: 1rem;
+  grid-template-columns: minmax(0, 1fr);
+  align-items: stretch;
+  justify-items: center;
+
+  /* ↑ aumenté el clamp para que Sol/Mapa no queden “cortados” */
+  --home-bottom-media-height: clamp(19rem, min(40vw, 46vh), 27rem);
 }
 
-/* limitar ancho del card del mapa y usar todo el ancho en móvil */
-.daynight-wrap :deep(.tad-card){
-  width: min(1280px, 100%);
-  box-shadow: 0 14px 32px rgba(0,0,0,.38);
+.home__grid-bottom > .home__tile {
+  width: min(100%, 28rem);
 }
 
-/* ---------- Panels ---------- */
-.panel {
+.home__tile {
   background: #ffffff;
   border-radius: 0.75rem;
-  padding: 0.75rem 1rem;
+  padding: 0.9rem 1rem 1rem;
   box-shadow: 0 6px 14px rgba(15, 23, 42, 0.08);
   display: flex;
   flex-direction: column;
-  gap: 0.6rem;
-  height: auto;
+  gap: 0.65rem;
+  height: 100%;
+  min-height: 0;
+  overflow: hidden;
 }
 
-.panel--chart { padding-bottom: 0.75rem; }
-.panel--flush { padding: 0; background: transparent; box-shadow: none; }
+.home__tile-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 0.75rem;
+  flex-wrap: wrap;
+}
 
-.panel__head h3 { font-size: 1.05rem; font-weight: 600; color: #1f2933; }
-.panel__head p   { color: #69707d; margin-bottom: 0.25rem; font-size: 0.85rem; }
+.home__tile-head h3 { font-size: 1.05rem; font-weight: 600; color: #1f2933; }
+.home__tile-head p  { color: #69707d; margin-top: 0.25rem; font-size: 0.9rem; }
 
-.panel__body { flex: 0 1 auto; display: flex; flex-direction: column; min-height: 0; }
+.home__tile-body {
+  flex: 1 1 auto;
+  display: flex;
+  flex-direction: column;
+  gap: 0.9rem;
+  min-height: 0;
+  overflow: hidden;
+}
 
-/* Estados */
-.panel__state {
+.home__tile-divider {
+  height: 1px; width: 100%;
+  background: #e2e8f0; border-radius: 999px;
+  margin: 0.5rem 0 0.75rem;
+}
+
+.home__tile-subsection { display: flex; flex-direction: column; gap: 0.75rem; min-height: 0; }
+.home__tile-subsection :deep(.dst-card) { flex: 0 0 auto !important; }
+
+.home__tile-subhead {
+  display: flex; justify-content: space-between; align-items: flex-start;
+  gap: 0.5rem; margin-bottom: 0.25rem;
+}
+.home__tile-subhead h4 { margin: 0; font-size: 0.95rem; font-weight: 600; color: #1f2933; }
+.home__tile-subhead p  { margin: 0.2rem 0 0; font-size: 0.85rem; color: #64748b; }
+
+.home__tile-subsection--kp { gap: 0.5rem; }
+.home__tile-subsection--kp :deep(.kp-card) { width: 100%; }
+
+.home__tile--xray .home__tile-divider { margin: 0.75rem 0 1rem; }
+.home__tile--xray .home__tile-subsection { gap: 1rem; }
+
+.home__tile-visual {
+  width: 100%;
+  height: clamp(14rem, 24vh, 19rem);
+  border-radius: 0.75rem;
+  overflow: hidden;
+  position: relative;
+  display: grid;
+  place-items: center;
+  background: #f8fafc;
+  border: 1px solid #e2e8f0;
+}
+.home__tile-visual > * { width: 100%; height: 100%; min-height: 0; }
+
+.home__tile-visual--chart { background: #ffffff; padding: 0.4rem; }
+.home__tile-visual--chart :deep(svg), .home__tile-visual--chart :deep(canvas) { width: 100%; height: 100%; }
+
+/* === SUN === */
+.home__tile-visual--sun {
+  background: #ffffff;
+  height: auto;
+  min-height: var(--home-bottom-media-height);
+  padding: 0.75rem 0.9rem 1rem;
+  display: flex;
+  align-items: stretch;
+  justify-content: center;
+  overflow: visible; /* que no “corte” toolbars internas */
+  border: 1px solid #e2e8f0;
+  border-radius: 0.75rem;
+}
+.home__tile-visual--sun > * { width: 100%; min-height: 0; }
+.home__tile-visual--sun :deep(.sunviewer) { display: flex; flex-direction: column; gap: 0.75rem; width: 100%; height: 100%; min-height: 0; max-width: 28rem; }
+.home__tile-visual--sun :deep(.sunviewer__toolbar) { flex-wrap: wrap; justify-content: space-between; }
+.home__tile-visual--sun :deep(.sunviewer__frame)  { flex: 1 1 auto; width: 100%; min-height: var(--home-bottom-media-height); display: flex; align-items: center; justify-content: center; }
+.home__tile-visual--sun :deep(.sunviewer__frame img) { width: 100%; height: 100%; object-fit: contain; }
+.home__tile-visual--sun :deep(.sunviewer__footer) { flex-wrap: wrap; justify-content: space-between; }
+
+/* === MAP === */
+.home__tile-visual--map {
+  background: #ffffff;
+  align-items: stretch;
+  justify-items: stretch;
+  height: auto;
+  min-height: var(--home-bottom-media-height);
+}
+.home__tile-visual--map :deep(.tad-card) {
+  flex: 1 1 auto; display: flex; flex-direction: column;
+  min-height: 0; width: 100%; height: 100%; margin-inline: 0;
+}
+.home__tile-visual--map :deep(.tad-map) { flex: 1 1 auto; min-height: var(--home-bottom-media-height); }
+
+.home__tile-visual--map {
+  /* +2rem respecto al resto para igualar su “altura visible” */
+  min-height: calc(var(--home-bottom-media-height) + 2rem);
+}
+.home__tile-visual--map :deep(.tad-map) {
+  /* asegúrate que el contenedor interno acompañe el mayor alto */
+  min-height: calc(var(--home-bottom-media-height) + 2rem);
+}
+
+
+/* === MAGNETO === */
+.home__tile--magneto { padding: 0; }
+.home__tile--magneto > * { height: 100%; min-height: 0; display: flex; flex-direction: column; }
+.home__tile--magneto :deep(.magneto__body) { display: flex; flex-direction: column; gap: 0.75rem; flex: 1 1 auto; min-height: 0; }
+.home__tile--magneto :deep(.magneto__chart-wrapper) {
+  width: 100%; height: clamp(18rem, 36vh, 26rem);
+  border-radius: 0.75rem; overflow: hidden; background: #ffffff; border: 1px solid #e2e8f0;
+  display: flex; align-items: stretch; justify-content: center;
+}
+.home__tile--magneto :deep(.magneto__chart) { flex: 1 1 auto; min-height: 0; }
+
+/* === ELECTRIC LIVE === */
+.home__tile--electric { padding: 0; }
+.home__tile--electric :deep(.efield-home__chart) {
+  /* un poco más alto para que se respire bien el chart */
+  min-height: clamp(19rem, 34vh, 28rem);
+}
+
+/* === IONOGRAM ===
+   -> devolvemos fondo y sombra para que tenga el “contorno” igual a los demás tiles */
+.home__tile--ionogram {
+  padding: 0;            /* el cuerpo del componente controla el interior */
+  background: #ffffff;   /* antes estaba transparente */
+  box-shadow: 0 6px 14px rgba(15, 23, 42, 0.08);
+  border-radius: 0.75rem;
+}
+.home__tile--ionogram :deep(.ionogram-card) {
+  height: 100%; min-height: 0; display: flex; flex-direction: column;
+  --ionogram-body-min-height: var(--home-bottom-media-height);
+}
+.home__tile--ionogram :deep(.ionogram-card__body) {
+  flex: 1 1 auto; width: 100%; margin: 0 auto; border-radius: 0.75rem;
+  overflow: hidden; border: 1px solid #e2e8f0; background: #ffffff;
+  display: flex; align-items: center; justify-content: center;
+  min-height: var(--home-bottom-media-height);
+}
+.home__tile--ionogram :deep(.ionogram-card__image) { width: 100%; height: 100%; object-fit: contain; }
+
+/* utilidades varias */
+.home__tile-state {
   margin: auto 0;
   display: grid;
   place-items: center;
@@ -263,20 +433,17 @@ function fmtUTC(value) {
   border: 1px dashed #d3dae6;
   border-radius: 0.75rem;
 }
-.panel__state--error { color: #b42318; border-color: rgba(180,35,24,.35); background: rgba(180,35,24,.06); }
-.panel__state--loading { color: #0f0f10; }
+.home__tile-state--error { color: #b42318; border-color: rgba(180,35,24,.35); background: rgba(180,35,24,.06); }
+.home__tile-state--loading { color: #0f0f10; }
 
-.loader {
-  width: 1.75rem; height: 1.75rem; border-radius: 50%;
-  border: 3px solid rgba(37,99,235,.2); border-top-color:#2563eb;
-  animation: spin 1s linear infinite;
-}
+.loader { width: 1.75rem; height: 1.75rem; border-radius: 50%; border: 3px solid rgba(37,99,235,.2); border-top-color:#2563eb; animation: spin 1s linear infinite; }
 @keyframes spin { to { transform: rotate(360deg) } }
 
-.xray__head { display:flex; gap:.75rem; align-items:center; justify-content:space-between; flex-wrap:wrap; }
+.xray__head { gap: .75rem; }
 .xray__title h3 { margin-bottom: .25rem; }
-.xray__controls { display:flex; gap:.5rem; align-items:center; flex-wrap:wrap; }
+.xray__controls { display:flex; gap:.5rem; align-items:center; flex-wrap:wrap; justify-content:flex-end; }
 .xray__clock { display:flex; gap:.35rem; align-items:baseline; }
+.xray__range select { border-radius: 0.5rem; padding: 0.3rem 0.45rem; border: 1px solid #cbd5e1; }
 .tag { color:#0f0f10; font-size:.85rem; }
 .mono { font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, 'Liberation Mono', monospace; color:#0f0f10; }
 
@@ -293,22 +460,22 @@ function fmtUTC(value) {
 .ghost { background:transparent; border:1px solid #cbd5e1; color:#0f0f10; padding:.35rem .6rem; border-radius:.5rem; cursor:pointer; }
 .ghost:hover { background:#f1f5f9; }
 
-.xray__foot { margin-top:.5rem; color:#0f0f10; }
-
-.home__magneto-card { height:100%; min-height:0; }
-.home__magneto-card :deep(.magneto) { height:100%; min-height:0; }
-.home__magneto-card :deep(.magneto__card){ height:100%; min-height:0; display:flex; flex-direction:column; }
-.home__magneto-card :deep(.magneto__body){ flex:1; min-height:0; display:flex; flex-direction:column; }
-.home__magneto-card :deep(.magneto__chart-wrapper){ flex:1; min-height:0; }
-.home__magneto-card :deep(.magneto__chart){ height:100%; min-height:0; }
+.xray__foot { margin-top:.25rem; color:#0f0f10; display:block; }
 
 @media (min-width: 960px) {
-  .home__grid { grid-template-columns: repeat(auto-fit, minmax(18rem, 1fr)); }
+  .home__grid-top {
+    grid-template-columns: minmax(24rem, 0.95fr) minmax(28rem, 1.1fr);
+    align-items: stretch;
+  }
+  .home__grid-top-right { grid-template-rows: repeat(2, minmax(0, 1fr)); }
+  .home__grid-bottom { grid-template-columns: repeat(3, minmax(0, 1fr)); }
 }
+
 @media (min-width: 1280px) {
-  .home__grid { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+  .home__grid-top { grid-template-columns: minmax(26rem, 1fr) minmax(32rem, 1.1fr); }
 }
+
 @media (max-width: 600px) {
-  .panel { padding: .75rem; }
+  .home__tile { padding: 0.75rem; }
 }
 </style>

@@ -3,6 +3,7 @@ import { ref, computed, watch, onMounted } from 'vue'
 import VueApexCharts from 'vue3-apexcharts'
 import dayjs from 'dayjs'
 import { useMagnetometerSeries } from '@/composables/useMagnetometerSeries'
+import { buildDailyMedianBaseline } from '@/utils/timeSeriesBaseline'
 
 const props = defineProps({
   range: { type: String, default: '7d' },
@@ -17,6 +18,20 @@ const from = ref('')
 const to = ref('')
 
 const chartSeries = ref([])
+const BASELINE_NAME = 'Mediana últimos 7 días'
+const BASELINE_COLOR = '#d1d5db'
+const LINE_PALETTE = ['#2563eb', '#9333ea', '#0ea5e9', '#f97316', '#facc15', '#22c55e', '#ef4444', '#8b5cf6']
+const chartColors = computed(() => {
+  const baselineIndex = chartSeries.value.findIndex((series) => series?.name === BASELINE_NAME)
+  return chartSeries.value.map((_, index) => {
+    if (index === baselineIndex) {
+      return BASELINE_COLOR
+    }
+
+    const paletteIndex = baselineIndex !== -1 && index > baselineIndex ? index - 1 : index
+    return LINE_PALETTE[paletteIndex % LINE_PALETTE.length]
+  })
+})
 const xDomain = ref({ min: null, max: null })
 const latestSample = ref(null)
 const extent = ref(null)
@@ -29,6 +44,18 @@ const { labels, series, isLoading, errorMessage } = useMagnetometerSeries({
   station: props.station,
   from,
   to,
+})
+
+const {
+  labels: baselineLabels,
+  series: baselineSeries
+} = useMagnetometerSeries({
+  range: ref('7d'),
+  every: ref(''),
+  unit: unitRef,
+  station: props.station,
+  from: ref(''),
+  to: ref('')
 })
 
 const hasData = computed(() => pointCount.value > 0)
@@ -50,7 +77,11 @@ const formattedExtent = computed(() => {
   return `${dayjs(extent.value.start).format('YYYY-MM-DD')} → ${dayjs(extent.value.end).format('YYYY-MM-DD')}`
 })
 
-const chartOptions = computed(() => ({
+const chartOptions = computed(() => {
+  const hasBaselineSeries = chartSeries.value.length > 1
+  const strokeWidth = hasBaselineSeries ? [2, 2] : 2
+
+  return ({
   chart: {
     type: 'line',
     height: 220,
@@ -61,7 +92,7 @@ const chartOptions = computed(() => ({
     zoom: { enabled: true, type: 'x' }
   },
   dataLabels: { enabled: false },
-  stroke: { width: 2, curve: 'straight' },
+  stroke: { width: strokeWidth, curve: 'straight' },
   markers: {
     size: 0,
     strokeWidth: 2,
@@ -69,7 +100,7 @@ const chartOptions = computed(() => ({
     strokeOpacity: 1,
     hover: { sizeOffset: 3 }
   },
-  colors: ['#2563eb'],
+  colors: chartColors.value,
   xaxis: {
     type: 'datetime',
     min: Number.isFinite(xDomain.value.min) ? xDomain.value.min : undefined,
@@ -102,7 +133,8 @@ const chartOptions = computed(() => ({
     text: 'Sin datos para mostrar',
     style: { color: '#64748b', fontSize: '13px' }
   }
-}))
+  })
+})
 
 function buildPoints() {
   return (labels.value || [])
@@ -147,20 +179,46 @@ function draw() {
 
   xDomain.value = domain
 
-  chartSeries.value = points.length
-    ? [{
-        name: `Serie ${props.station}`,
-        data: points
-          .map((point) => {
-            const ts = new Date(point.t).getTime()
-            return Number.isFinite(ts) ? [ts, point.v] : null
-          })
-          .filter(Boolean)
-      }]
-    : []
+  const chartPoints = points
+    .map((point) => {
+      const ts = new Date(point.t).getTime()
+      return Number.isFinite(ts) ? [ts, point.v] : null
+    })
+    .filter(Boolean)
+
+  if (!chartPoints.length) {
+    chartSeries.value = []
+    return
+  }
+
+  const baselinePoints = buildDailyMedianBaseline({
+    referenceTimestamps: baselineLabels.value,
+    referenceValues: baselineSeries.value,
+    targetTimestamps: chartPoints.map(([timestamp]) => timestamp)
+  })
+
+  const baselineHasData = baselinePoints.some(([, value]) => Number.isFinite(value))
+
+  chartSeries.value = baselineHasData
+    ? [
+        {
+          name: BASELINE_NAME,
+          data: baselinePoints
+        },
+        {
+          name: `Serie ${props.station}`,
+          data: chartPoints
+        }
+      ]
+    : [
+        {
+          name: `Serie ${props.station}`,
+          data: chartPoints
+        }
+      ]
 }
 
-watch([labels, series], draw, { immediate: true })
+watch([labels, series, baselineLabels, baselineSeries], draw, { immediate: true })
 
 onMounted(() => {
   draw()
@@ -196,7 +254,7 @@ onMounted(() => {
         <p>Cargando datos…</p>
       </div>
       <div v-else-if="!hasData" class="magneto-card__state">
-        <p>Sin datos para el rango solicitado.</p>
+        <p>Sin datos para el intervalo solicitado.</p>
       </div>
       <div v-else class="magneto-card__plot">
         <VueApexCharts
@@ -312,8 +370,8 @@ onMounted(() => {
   width: 1.5rem;
   height: 1.5rem;
   border-radius: 50%;
-  border: 3px solid rgba(59, 130, 246, 0.2);
-  border-top-color: #2563eb;
+  border: 3px solid rgba(249, 115, 22, 0.2);
+  border-top-color: #f97316;
   animation: spin 1s linear infinite;
 }
 

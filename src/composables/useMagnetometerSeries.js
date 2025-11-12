@@ -1,5 +1,5 @@
 import { isRef, onBeforeUnmount, onMounted, ref, watch } from 'vue';
-import dayjs from 'dayjs';
+import dayjs from '@/utils/dayjs';
 
 export function useMagnetometerSeries({
   range,
@@ -7,7 +7,8 @@ export function useMagnetometerSeries({
   unit,
   station,
   from,
-  to
+  to,
+  endpoint
 } = {}) {
   const rangeRef = isRef(range) ? range : ref(range ?? '24h');
   const everyRef = isRef(every) ? every : ref(every ?? '1m');
@@ -15,6 +16,7 @@ export function useMagnetometerSeries({
   const stationRef = isRef(station) ? station : ref(station ?? 'CHI');
   const fromRef = isRef(from) ? from : ref(from ?? '');
   const toRef = isRef(to) ? to : ref(to ?? '');
+  const endpointRef = isRef(endpoint) ? endpoint : ref(endpoint ?? '/api/series');
 
   const labels = ref([]);
   const series = ref([]);
@@ -40,7 +42,7 @@ export function useMagnetometerSeries({
     const parsedTo = toValue ? dayjs(toValue) : null;
 
     if ((parsedFrom && !parsedFrom.isValid()) || (parsedTo && !parsedTo.isValid())) {
-      errorMessage.value = 'Selecciona un rango de fechas válido.';
+      errorMessage.value = 'Selecciona un intervalo de fechas válido.';
       labels.value = [];
       series.value = [];
       if (abortController.value === controller) {
@@ -73,45 +75,62 @@ export function useMagnetometerSeries({
     series.value = [];
     meta.value = null;
 
-    const searchParams = new URLSearchParams({
-      station: stationRef.value,
-      every: everyRef.value,
-      unit: unitRef.value
-    });
+    const searchParams = new URLSearchParams();
+
+    if (stationRef.value) {
+      searchParams.set('station', stationRef.value);
+    }
+
+    if (everyRef.value) {
+      searchParams.set('every', everyRef.value);
+    }
+
+    if (unitRef.value) {
+      searchParams.set('unit', unitRef.value);
+    }
 
     if (parsedFrom && parsedTo) {
-      searchParams.set('from', parsedFrom.format('YYYY-MM-DDTHH:mm'));
-      searchParams.set('to', parsedTo.format('YYYY-MM-DDTHH:mm'));
-    } else {
+      const normalizedFrom = parsedFrom.utc().format('YYYY-MM-DDTHH:mm:ss[Z]');
+      const normalizedTo = parsedTo.utc().format('YYYY-MM-DDTHH:mm:ss[Z]');
+
+      searchParams.set('from', normalizedFrom);
+      searchParams.set('to', normalizedTo);
+    } else if (rangeRef.value) {
       searchParams.set('range', rangeRef.value);
     }
 
     try {
-      const response = await fetch(`/api/series?${searchParams.toString()}`, {
+      const endpointUrl = endpointRef.value || '/api/series';
+      const response = await fetch(`${endpointUrl}?${searchParams.toString()}`, {
         signal: controller.signal
       });
-
-      if (!response.ok) {
-        throw new Error('No se pudieron obtener los datos del servicio.');
-      }
 
       const rawBody = await response.text();
       const contentType = response.headers.get('content-type') || '';
       let payload;
 
-      try {
+      if (rawBody) {
         if (contentType.includes('application/json') || contentType.includes('+json')) {
-          payload = JSON.parse(rawBody);
-        } else {
-          throw new Error();
+          try {
+            payload = JSON.parse(rawBody);
+          } catch {
+            const snippet = rawBody.slice(0, 140).replace(/\s+/g, ' ').trim();
+            throw new Error(
+              snippet
+                ? `La respuesta no es JSON válido. Detalle: "${snippet}${rawBody.length > 140 ? '…' : ''}"`
+                : 'La respuesta no es JSON válido.'
+            );
+          }
         }
-      } catch {
-        const snippet = rawBody.slice(0, 140).replace(/\s+/g, ' ').trim();
-        throw new Error(
-          snippet
-            ? `La respuesta no es JSON válido. Detalle: "${snippet}${rawBody.length > 140 ? '…' : ''}"`
-            : 'La respuesta no es JSON válido.'
-        );
+      }
+
+      if (!response.ok) {
+        const message = payload?.error || 'No se pudieron obtener los datos del servicio.';
+        throw new Error(message);
+      }
+
+      if (!payload) {
+        throw new Error('La respuesta no es JSON válido.');
       }
 
       const incomingLabels = Array.isArray(payload.labels) ? payload.labels : [];
@@ -143,7 +162,7 @@ export function useMagnetometerSeries({
 
   onMounted(fetchData);
 
-  watch([rangeRef, everyRef, unitRef, stationRef, fromRef, toRef], () => {
+  watch([rangeRef, everyRef, unitRef, stationRef, fromRef, toRef, endpointRef], () => {
     fetchData();
   });
 

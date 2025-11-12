@@ -25,20 +25,57 @@ See [Vite Configuration Reference](https://vite.dev/config/).
 npm install
 ```
 
-### Compile and Hot-Reload for Development
+La API Express vive en `api/` y requiere su propia instalación:
 
 ```sh
-npm run dev
+cd api
+npm install
 ```
 
-### Compile and Minify for Production
+### Variables de entorno
 
-```sh
-npm run build
+Se incluye `api/.env.example` con la configuración necesaria para InfluxDB y el servicio del índice Kp.
+
+| Variable | Descripción |
+| --- | --- |
+| `KP_ENABLED` | Activa/desactiva la ingesta del índice Kp. |
+| `KP_LOOKBACK_DAYS` | Días de historia solicitados al servicio de GFZ. |
+| `KP_CRON` | Expresión cron usada para refrescar la caché (por defecto cada 15 minutos). |
+| `KP_STATUS` | Valores `now` (nowcast) o `def` (definitivos). |
+
+### Backend API – Índice Kp (GFZ)
+
+El backend expone `GET /api/kp`, que retorna la última serie almacenada en caché:
+
+```json
+{
+  "updatedAt": "2025-11-06T12:00:00Z",
+  "series": [
+    { "time": "2025-11-06T00:00:00Z", "value": 3.3, "status": "now" }
+  ]
+}
 ```
 
-### Lint with [ESLint](https://eslint.org/)
+La caché se refresca automáticamente según `KP_CRON`. Si el servicio se encuentra deshabilitado (`KP_ENABLED=false`) el endpoint responde `503`.
+Cuando la API de GFZ no está disponible, el backend conserva el último dato válido y, si aún no existe caché, inicializa una serie de respaldo incluida en el repositorio para mantener operativo el dashboard.
+
+### Frontend
+
+- `npm run dev`: arranca Vite con proxy hacia `http://localhost:3001`.
+- `npm run build`: genera la aplicación estática lista para producción.
+- `npm run preview`: sirve la build generada.
+- El componente `<KpChart />` muestra el gráfico de barras del índice Kp con auto-refresh (10 minutos) y aparece en la vista principal (`HomeView`).
+
+### Tests y utilidades
 
 ```sh
+# Pruebas y utilidades de frontend
+npm run test
+
+# API Express
+cd api
+npm test
+
+# Linter
 npm run lint
 ```

@@ -35,6 +35,16 @@ const router = createRouter({
       component: () => import('../views/MagnetometerLocalView.vue'),
     },
     {
+      path: '/campo-electrico',
+      name: 'electric-field',
+      component: () => import('../views/ElectricFieldView.vue'),
+    },
+    {
+      path: '/mapa-dia-noche',
+      name: 'day-night-map',
+      component: () => import('../views/DayNightMapView.vue'),
+    },
+    {
       path: '/graphs',
       redirect: { name: 'magnetometers-influxdb' },
     },
@@ -42,6 +52,11 @@ const router = createRouter({
       path: '/magnetometros',
       redirect: { name: 'magnetometers-influxdb' },
     },
+    {
+  path: '/efm-live',
+  name: 'efm-live',
+  component: () => import('@/views/ElectricFieldLiveView.vue')
+}
   ],
 })
 

@@ -1,39 +1,141 @@
 <script setup>
 import { ref, computed, watch, onMounted } from 'vue'
 import VueApexCharts from 'vue3-apexcharts'
-import dayjs from 'dayjs'
+
+import dayjs from '@/utils/dayjs'
 import { useMagnetometerSeries } from '@/composables/useMagnetometerSeries'
+import { buildDailyMedianBaseline } from '@/utils/timeSeriesBaseline'
+
+const presets = [
+  { id: '1d', label: '1 día', duration: { amount: 1, unit: 'day' } },
+  { id: '3d', label: '3 días', duration: { amount: 3, unit: 'day' } },
+  { id: '7d', label: '7 días', duration: { amount: 7, unit: 'day' } }
+]
+
+const activePreset = ref(presets[0].id)
+const from = ref('')
+const to = ref('')
+const availableRange = ref(null)
+const hasInitializedPreset = ref(false)
+
+const station = ref('CHI')
+const unit = ref('nT')
 
 const chartSeries = ref([])
 const xDomain = ref({ min: null, max: null })
-const activePreset = ref('1m')
-const rangeRef = ref('')
-const from = ref('')
-const to = ref('')
-
-const { labels, series, isLoading, errorMessage } = useMagnetometerSeries({
-  range: rangeRef,
-  every: ref(''),
-  unit: ref('nT'),
-  station: ref('CHI'),
-  from,
-  to
-})
-
 const visiblePoints = ref(0)
 const dataExtent = ref(null)
 
-const chartOptions = computed(() => ({
+const { labels, series, isLoading, errorMessage, meta } = useMagnetometerSeries({
+  from,
+  to,
+  range: ref(''),
+  every: ref(''),
+  unit,
+  station,
+  endpoint: ref('/api/local-magnetometer/series')
+})
+
+const {
+  labels: baselineLabels,
+  series: baselineSeries
+} = useMagnetometerSeries({
+  range: ref('7d'),
+  every: ref(''),
+  unit,
+  station,
+  from: ref(''),
+  to: ref(''),
+  endpoint: ref('/api/local-magnetometer/series')
+})
+
+const BASELINE_NAME = 'Mediana últimos 7 días'
+const BASELINE_COLOR = '#d1d5db'
+const LINE_PALETTE = ['#2563eb', '#9333ea', '#0ea5e9', '#f97316', '#facc15', '#22c55e', '#ef4444', '#8b5cf6']
+const chartColors = computed(() => {
+  const baselineIndex = chartSeries.value.findIndex((item) => item?.name === BASELINE_NAME)
+
+  return chartSeries.value.map((_, index) => {
+    if (index === baselineIndex) {
+      return BASELINE_COLOR
+    }
+
+    const paletteIndex = baselineIndex !== -1 && index > baselineIndex ? index - 1 : index
+    return LINE_PALETTE[paletteIndex % LINE_PALETTE.length]
+  })
+})
+
+const requestedWindow = computed(() => {
+  const start = dayjs(from.value)
+  const end = dayjs(to.value)
+
+  if (!start.isValid() || !end.isValid()) {
+    return null
+  }
+
+  return { start, end }
+})
+
+const rangeLabel = computed(() => {
+  const window = requestedWindow.value
+
+  if (!window) {
+    const preset = presets.find((preset) => preset.id === activePreset.value)
+    return preset?.label ?? 'Sin selección'
+  }
+
+  const { start, end } = window
+  return `${start.format('YYYY-MM-DD HH:mm')} → ${end.format('YYYY-MM-DD HH:mm')}`
+})
+
+const dataWindowLabel = computed(() => {
+  if (dataExtent.value) {
+    return `${dayjs(dataExtent.value.start).format('YYYY-MM-DD HH:mm')} → ${dayjs(dataExtent.value.end).format('YYYY-MM-DD HH:mm')}`
+  }
+
+  if (availableRange.value?.start && availableRange.value?.end) {
+    return `${dayjs(availableRange.value.start).format('YYYY-MM-DD HH:mm')} → ${dayjs(availableRange.value.end).format('YYYY-MM-DD HH:mm')}`
+  }
+
+  return ''
+})
+
+const hasVisibleData = computed(() => visiblePoints.value > 0)
+
+const metaSummary = computed(() => {
+  const value = meta.value
+
+  if (!value) {
+    return visiblePoints.value
+      ? `${visiblePoints.value.toLocaleString('es-CL')} puntos visibles`
+      : ''
+  }
+
+  const points = Number.isFinite(Number(value.points)) ? Number(value.points) : 0
+  const filesCount = Array.isArray(value.files) ? value.files.length : 0
+  const resolution = typeof value.bucket?.size === 'string' ? value.bucket.size : ''
+
+  const filesLabel = filesCount === 1 ? '1 archivo' : `${filesCount} archivos`
+  const pointsLabel = points === 1 ? '1 punto' : `${points.toLocaleString('es-CL')} puntos`
+  const resolutionLabel = resolution ? `Resolución: ${resolution}` : ''
+
+  return [filesLabel, pointsLabel, resolutionLabel].filter(Boolean).join(' – ')
+})
+
+const chartOptions = computed(() => {
+  const hasBaselineSeries = chartSeries.value.length > 1
+  const strokeWidth = hasBaselineSeries ? [2, 2] : 2
+
+  return ({
   chart: {
     type: 'line',
-    height: 420,
-    toolbar: { show: true, tools: { download: true, selection: true, zoom: true, zoomin: true, zoomout: true, pan: true } },
-    background: 'transparent',
-    foreColor: '#0f172a',
+    height: '100%',
+    toolbar: { show: false },
     animations: { enabled: true, easing: 'easeinout', speed: 250 },
-    zoom: { enabled: true, type: 'x' }
+    background: 'transparent',
+    foreColor: '#0f172a'
   },
-  stroke: { width: 2, curve: 'straight' },
+  stroke: { width: strokeWidth, curve: 'straight' },
   dataLabels: { enabled: false },
   markers: {
     size: 0,
@@ -42,7 +144,7 @@ const chartOptions = computed(() => ({
     strokeOpacity: 1,
     hover: { sizeOffset: 3 }
   },
-  colors: ['#2563eb'],
+  colors: chartColors.value,
   xaxis: {
     type: 'datetime',
     min: Number.isFinite(xDomain.value.min) ? xDomain.value.min : undefined,
@@ -72,94 +174,93 @@ const chartOptions = computed(() => ({
     y: { formatter: (val) => (Number.isFinite(val) ? `${val.toFixed(2)} nT` : '—') }
   },
   noData: {
-    text: 'Sin datos para mostrar',
-    style: { color: '#64748b', fontSize: '14px' }
+    text: isLoading.value ? 'Cargando magnetómetro…' : 'Sin datos para mostrar',
+    style: { color: '#64748b', fontSize: '13px' }
   }
-}))
-
-const presets = [
-  { id: '1m', label: '1 m', description: 'Último mes', duration: { amount: 1, unit: 'month' } },
-  { id: '6m', label: '6 m', description: 'Últimos 6 meses', duration: { amount: 6, unit: 'month' } },
-  { id: '1y', label: '1 y', description: 'Último año', duration: { amount: 1, unit: 'year' } },
-  { id: 'all', label: 'Todo', description: 'Últimos 5 años', duration: { amount: 5, unit: 'year' }, rangeToken: '5y' }
-]
-
-const selectedPreset = computed(() => presets.find((preset) => preset.id === activePreset.value) ?? presets[0])
-
-const requestedWindow = computed(() => {
-  const preset = selectedPreset.value
-  if (!preset) return null
-
-  if (preset.rangeToken) {
-    const end = dayjs()
-    const start = end.subtract(preset.duration.amount, preset.duration.unit)
-    return { start, end }
-  }
-
-  const start = dayjs(from.value)
-  const end = dayjs(to.value)
-
-  if (!start.isValid() || !end.isValid()) {
-    return null
-  }
-
-  return { start, end }
+  })
 })
-
-const rangeHint = computed(() => {
-  const preset = selectedPreset.value
-  const window = requestedWindow.value
-
-  if (!preset) {
-    return 'Sin selección'
-  }
-
-  if (!window) {
-    return preset.description
-  }
-
-  return `${window.start.format('YYYY-MM-DD HH:mm')} → ${window.end.format('YYYY-MM-DD HH:mm')}`
-})
-
-const dataWindowHint = computed(() => {
-  if (!dataExtent.value) {
-    return ''
-  }
-
-  return `${dayjs(dataExtent.value.start).format('YYYY-MM-DD HH:mm')} → ${dayjs(dataExtent.value.end).format('YYYY-MM-DD HH:mm')}`
-})
-
-const hasVisibleData = computed(() => visiblePoints.value > 0)
-
-function applyPreset(id) {
-  const preset = presets.find((item) => item.id === id)
-  if (!preset) return
-
-  activePreset.value = id
-
-  if (preset.rangeToken) {
-    rangeRef.value = preset.rangeToken
-    from.value = ''
-    to.value = ''
-    draw()
-    return
-  }
-
-  rangeRef.value = ''
-  const end = dayjs()
-  const start = end.subtract(preset.duration.amount, preset.duration.unit)
-  from.value = start.format('YYYY-MM-DDTHH:mm')
-  to.value = end.format('YYYY-MM-DDTHH:mm')
-  draw()
-}
 
 function toTimestamp(value) {
   const ts = new Date(value).getTime()
   return Number.isFinite(ts) ? ts : null
 }
 
+function resolveAnchorEnd(explicitEnd) {
+  const candidates = [
+    explicitEnd,
+    availableRange.value?.end,
+    meta.value?.availableRange?.end,
+    meta.value?.range?.end,
+    meta.value?.to,
+    dataExtent.value?.end,
+    labels.value?.[labels.value.length - 1]
+  ]
+
+  for (const candidate of candidates) {
+    if (!candidate) {
+      continue
+    }
+
+    const parsed = dayjs(candidate)
+    if (parsed.isValid()) {
+      return parsed
+    }
+  }
+
+  return dayjs()
+}
+
+function setWindow({ start, end }) {
+  const startDate = dayjs(start)
+  const endDate = dayjs(end)
+
+  if (!startDate.isValid() || !endDate.isValid()) {
+    return
+  }
+
+  let clampedStart = startDate
+  let clampedEnd = endDate
+
+  if (availableRange.value?.start && availableRange.value?.end) {
+    const min = dayjs(availableRange.value.start)
+    const max = dayjs(availableRange.value.end)
+
+    if (min.isValid() && clampedStart.isBefore(min)) {
+      clampedStart = min
+    }
+
+    if (max.isValid() && clampedEnd.isAfter(max)) {
+      clampedEnd = max
+    }
+  }
+
+  if (clampedEnd.isBefore(clampedStart)) {
+    ;[clampedStart, clampedEnd] = [clampedEnd, clampedStart]
+  }
+
+  from.value = clampedStart.utc().format('YYYY-MM-DDTHH:mm:ss[Z]')
+  to.value = clampedEnd.utc().format('YYYY-MM-DDTHH:mm:ss[Z]')
+  hasInitializedPreset.value = true
+}
+
+function applyPreset(id, { anchorEnd } = {}) {
+  const preset = presets.find((item) => item.id === id)
+  if (!preset) {
+    return
+  }
+
+  activePreset.value = id
+
+  const anchor = resolveAnchorEnd(anchorEnd)
+  const end = anchor.endOf('minute')
+  const start = end.subtract(preset.duration.amount, preset.duration.unit).startOf('minute')
+
+  setWindow({ start, end })
+}
+
 function draw() {
-  const rawPoints = (labels.value || []).map((t, i) => ({ t, v: (series.value || [])[i] }))
+  const rawPoints = (labels.value || [])
+    .map((t, i) => ({ t, v: (series.value || [])[i] }))
     .filter((point) => point.t && Number.isFinite(point.v))
     .sort((a, b) => new Date(a.t) - new Date(b.t))
 
@@ -174,13 +275,26 @@ function draw() {
     dataExtent.value = null
   }
 
-  visiblePoints.value = rawPoints.length
+  const chartPoints = rawPoints
+    .map((point) => {
+      const ts = toTimestamp(point.t)
+      const value = Number(point.v)
+
+      if (ts === null || !Number.isFinite(value)) {
+        return null
+      }
+
+      return [ts, value]
+    })
+    .filter((entry) => entry !== null)
+
+  visiblePoints.value = chartPoints.length
 
   let xRange = null
 
-  if (rawPoints.length) {
-    const start = dayjs(rawPoints[0].t)
-    const end = dayjs(rawPoints[rawPoints.length - 1].t)
+  if (chartPoints.length) {
+    const start = dayjs(chartPoints[0][0])
+    const end = dayjs(chartPoints[chartPoints.length - 1][0])
     const hasSpan = end.diff(start) > 0
     const paddedStart = hasSpan ? start : start.subtract(6, 'hour')
     const paddedEnd = hasSpan ? end : end.add(6, 'hour')
@@ -188,16 +302,14 @@ function draw() {
   } else if (requestedWindow.value) {
     const { start, end } = requestedWindow.value
     xRange = [start, end]
+  } else if (availableRange.value?.start && availableRange.value?.end) {
+    xRange = [dayjs(availableRange.value.start), dayjs(availableRange.value.end)]
   }
 
   if (!xRange) {
     const now = dayjs()
     xRange = [now.subtract(1, 'day'), now.add(1, 'day')]
   }
-
-  const displayWindow = rawPoints.length
-    ? { start: dayjs(rawPoints[0].t), end: dayjs(rawPoints[rawPoints.length - 1].t) }
-    : requestedWindow.value
 
   const domain = {
     min: Number.isFinite(xRange[0]?.valueOf?.()) ? xRange[0].valueOf() : null,
@@ -206,300 +318,291 @@ function draw() {
 
   xDomain.value = domain
 
-  chartSeries.value = rawPoints.length
-    ? [{
-        name: displayWindow
-          ? `H – ${displayWindow.start.format('YYYY-MM-DD')} a ${displayWindow.end.format('YYYY-MM-DD')}`
-          : 'H',
-        data: rawPoints
-          .map((point) => {
-            const ts = toTimestamp(point.t)
-            return [ts, point.v]
-          })
-          .filter(([ts]) => ts !== null)
-      }]
-    : []
+  if (!chartPoints.length) {
+    chartSeries.value = []
+    return
+  }
+
+  const baselinePoints = buildDailyMedianBaseline({
+    referenceTimestamps: baselineLabels.value,
+    referenceValues: baselineSeries.value,
+    targetTimestamps: chartPoints.map(([timestamp]) => timestamp)
+  })
+
+  const baselineHasData = baselinePoints.some(([, value]) => Number.isFinite(value))
+
+  chartSeries.value = baselineHasData
+    ? [
+        {
+          name: BASELINE_NAME,
+          data: baselinePoints
+        },
+        {
+          name: 'H',
+          data: chartPoints
+        }
+      ]
+    : [
+        {
+          name: 'H',
+          data: chartPoints
+        }
+      ]
 }
 
-applyPreset(activePreset.value)
+watch([labels, series, baselineLabels, baselineSeries], draw, { immediate: true })
 
-watch([labels, series], draw, { immediate: true })
+watch(meta, (value) => {
+  if (value?.availableRange?.start && value?.availableRange?.end) {
+    availableRange.value = {
+      start: value.availableRange.start,
+      end: value.availableRange.end
+    }
+  }
+
+  if (!hasInitializedPreset.value) {
+    const fallbackEnd =
+      value?.availableRange?.end ||
+      value?.range?.end ||
+      value?.to ||
+      dataExtent.value?.end ||
+      labels.value?.[labels.value.length - 1]
+
+    applyPreset(activePreset.value, { anchorEnd: fallbackEnd })
+  }
+})
 
 onMounted(() => {
-  draw()
+  if (!hasInitializedPreset.value) {
+    applyPreset(activePreset.value)
+  }
 })
 </script>
 
 <template>
-  <section class="magneto">
-    <article class="magneto__card">
-      <header class="magneto__header">
-        <div>
-          <h1 class="magneto__title">Magnetómetro – Estación única</h1>
-          <p class="magneto__description">
-            Visualiza la componente H con atajos rápidos para cambiar el periodo observado.
-          </p>
-        </div>
-
-        <div class="magneto__filters">
-          <div class="magneto__field">
-            <span class="magneto__label">Rangos rápidos</span>
-            <div class="magneto__quick">
-              <button
-                v-for="preset in presets"
-                :key="preset.id"
-                type="button"
-                class="magneto__quick-button"
-                :class="{ 'magneto__quick-button--active': preset.id === activePreset }"
-                @click="applyPreset(preset.id)"
-              >
-                {{ preset.label }}
-              </button>
-            </div>
-          </div>
-
-          <div class="magneto__summary" role="status" aria-live="polite">
-            <div class="magneto__summary-block">
-              <span class="magneto__summary-label">Seleccionado</span>
-              <span class="magneto__summary-value">{{ rangeHint }}</span>
-            </div>
-            <div class="magneto__summary-block">
-              <span class="magneto__summary-label">Datos disponibles</span>
-              <span class="magneto__summary-value">{{ dataWindowHint || 'Sin datos en el último refresco' }}</span>
-            </div>
-          </div>
-        </div>
-      </header>
-
-      <div class="magneto__body">
-        <div class="magneto__chart-wrapper">
-          <VueApexCharts
-            type="line"
-            class="magneto__chart"
-            height="420"
-            :options="chartOptions"
-            :series="chartSeries"
-          />
-
-          <div v-if="isLoading" class="magneto__loading" role="status" aria-live="polite">
-            <span class="magneto__spinner" aria-hidden="true"></span>
-            <p>Cargando serie de datos…</p>
-          </div>
-        </div>
-
-        <p v-if="!isLoading && !hasVisibleData && !errorMessage" class="magneto__empty">
-          No hay datos disponibles para el rango seleccionado.
-        </p>
-
-        <p v-if="errorMessage" class="magneto__error">⚠️ {{ errorMessage }}</p>
+  <article class="panel panel--chart magneto-home">
+    <header class="magneto-home__head">
+      <div>
+        <h3>Magnetómetro – Estación única</h3>
+        <p>Visualiza la componente H con atajos rápidos para cambiar el periodo observado.</p>
       </div>
-    </article>
-  </section>
+
+      <div class="magneto-home__head-actions">
+        <div class="magneto-home__presets" role="group" aria-label="Intervalos rápidos">
+          <button
+            v-for="preset in presets"
+            :key="preset.id"
+            type="button"
+            class="magneto-home__preset"
+            :class="{ 'is-active': preset.id === activePreset }"
+            @click="applyPreset(preset.id)"
+          >
+            {{ preset.label }}
+          </button>
+        </div>
+      </div>
+    </header>
+
+    <div class="magneto-home__meta">
+      <div class="magneto-home__meta-item">
+        <span class="magneto-home__label">Seleccionado</span>
+        <span class="magneto-home__value">{{ rangeLabel }}</span>
+      </div>
+      <div class="magneto-home__meta-item" v-if="dataWindowLabel">
+        <span class="magneto-home__label">Datos</span>
+        <span class="magneto-home__value">{{ dataWindowLabel }}</span>
+      </div>
+      <div class="magneto-home__meta-item" v-if="metaSummary">
+        <span class="magneto-home__label">Resumen</span>
+        <span class="magneto-home__value">{{ metaSummary }}</span>
+      </div>
+    </div>
+
+    <div class="magneto-home__chart" role="figure" aria-label="Magnetómetro local">
+      <VueApexCharts
+        type="line"
+        height="100%"
+        class="magneto-home__chart-canvas"
+        :options="chartOptions"
+        :series="chartSeries"
+      />
+
+      <div v-if="isLoading" class="magneto-home__loading" role="status" aria-live="polite">
+        <span class="magneto-home__spinner" aria-hidden="true"></span>
+        <p>Cargando magnetómetro…</p>
+      </div>
+    </div>
+
+    <p v-if="!isLoading && !hasVisibleData && !errorMessage" class="magneto-home__empty">
+      No hay datos disponibles para este intervalo.
+    </p>
+
+    <p v-if="errorMessage" class="magneto-home__error">⚠️ {{ errorMessage }}</p>
+  </article>
 </template>
 
 <style scoped>
-.magneto {
-  height: 100%;
-}
-
-.magneto__card {
-  width: 100%;
-  display: flex;
-  flex-direction: column;
-  background: #ffffff;
-  border-radius: 0.75rem;
-  border: 1px solid #e2e8f0;
-  box-shadow: 0 6px 14px rgba(15, 23, 42, 0.06);
-  gap: 0.75rem;
-  padding: 0.9rem 1rem;
-  min-height: 0;
-  height: 100%;
-}
-
-.magneto__header {
+.magneto-home {
   display: flex;
   flex-direction: column;
   gap: 0.75rem;
+  height: 100%;
+  padding: 1rem 1.25rem 1.25rem;
 }
 
-.magneto__title {
-  font-size: 1.1rem;
+.magneto-home__head {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 1rem;
+}
+
+.magneto-home__head-actions {
+  display: flex;
+  align-items: center;
+  gap: 0.65rem;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+}
+
+.magneto-home__head h3 {
+  margin: 0;
+  font-size: 1.25rem;
   font-weight: 600;
   color: #0f172a;
 }
 
-.magneto--compact .magneto__title {
-  font-size: 1.25rem;
-}
-
-.magneto__description {
+.magneto-home__head p {
+  margin: 0.25rem 0 0;
   color: #475569;
   font-size: 0.9rem;
-  line-height: 1.4;
 }
 
-.magneto__filters {
+.magneto-home__presets {
   display: flex;
+  gap: 0.5rem;
   flex-wrap: wrap;
-  gap: 0.65rem;
-  align-items: center;
+  justify-content: flex-end;
 }
 
-.magneto__field {
-  display: flex;
-  flex-direction: column;
-  gap: 0.35rem;
-  min-width: 160px;
-}
-
-.magneto__label {
-  font-size: 0.65rem;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
-  color: #64748b;
-  font-weight: 600;
-}
-
-.magneto__quick {
-  display: flex;
-  gap: 0.35rem;
-  flex-wrap: wrap;
-}
-
-.magneto__quick-button {
-  border: 1px solid rgba(37, 99, 235, 0.35);
-  background: rgba(37, 99, 235, 0.12);
-  color: #1d4ed8;
-  padding: 0.3rem 0.55rem;
+.magneto-home__preset {
+  border: 1px solid rgba(15, 23, 42, 0.12);
+  background: rgba(248, 250, 252, 0.85);
+  color: #0f172a;
   border-radius: 999px;
-  font-size: 0.78rem;
+  padding: 0.4rem 0.9rem;
   font-weight: 600;
+  font-size: 0.85rem;
   cursor: pointer;
-  transition: background-color 0.2s ease, color 0.2s ease, border-color 0.2s ease;
+  transition: background 0.2s ease, color 0.2s ease, transform 0.15s ease;
 }
 
-.magneto__quick-button:hover,
-.magneto__quick-button:focus-visible {
-  background: rgba(37, 99, 235, 0.2);
-  border-color: #2563eb;
-  color: #1e3a8a;
+.magneto-home__preset:hover,
+.magneto-home__preset:focus-visible {
+  background: #f97316;
+  color: #ffffff;
   outline: none;
 }
 
-.magneto__quick-button--active {
-  background: #2563eb;
+.magneto-home__preset.is-active {
+  background: #f97316;
   color: #ffffff;
-  border-color: #1d4ed8;
+  box-shadow: 0 10px 25px rgba(249, 115, 22, 0.25);
 }
 
-.magneto__summary {
+.magneto-home__meta {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
-  gap: 0.5rem;
-  padding: 0.5rem;
-  border-radius: 0.65rem;
-  background: #f1f5f9;
-  color: #1e3a8a;
-}
-
-.magneto__summary-block {
-  display: flex;
-  flex-direction: column;
-  gap: 0.2rem;
-}
-
-.magneto__summary-label {
-  font-size: 0.6rem;
-  text-transform: uppercase;
-  letter-spacing: 0.08em;
-  font-weight: 600;
-  color: #1d4ed8;
-}
-
-.magneto__summary-value {
+  grid-template-columns: repeat(auto-fit, minmax(12rem, 1fr));
+  gap: 0.75rem;
   font-size: 0.85rem;
-  color: #0f172a;
-  font-weight: 500;
 }
 
-.magneto__body {
+.magneto-home__meta-item {
   display: flex;
   flex-direction: column;
-  gap: 0.65rem;
-  flex: 1;
-  min-height: 0;
+  gap: 0.25rem;
 }
 
-.magneto__chart-wrapper {
+.magneto-home__label {
+  font-size: 0.75rem;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: #b45309;
+}
+
+.magneto-home__value {
+  color: #0f172a;
+}
+
+.magneto-home__chart {
   position: relative;
-  border-radius: 0.65rem;
-  overflow: hidden;
-  border: 1px solid #e2e8f0;
-  background: #ffffff;
-  flex: 1;
+  flex: 1 1 auto;
+  min-height: clamp(260px, 45vh, 520px);
   display: flex;
-  min-height: 0;
 }
 
-.magneto__chart {
-  height: min(240px, 100%);
+.magneto-home__chart-canvas,
+.magneto-home__chart-canvas :deep(svg) {
   width: 100%;
-}
-
-.magneto--compact .magneto__chart {
   height: 100%;
 }
 
-.magneto__loading {
+.magneto-home__loading {
   position: absolute;
   inset: 0;
-  display: grid;
-  place-items: center;
-  text-align: center;
-  gap: 0.75rem;
-  background: rgba(255, 255, 255, 0.85);
+  background: rgba(255, 255, 255, 0.8);
   backdrop-filter: blur(4px);
-  color: #1e293b;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 0.75rem;
   font-size: 0.9rem;
+  color: #0f172a;
 }
 
-.magneto__spinner {
-  width: 1.4rem;
-  height: 1.4rem;
+.magneto-home__spinner {
+  width: 32px;
+  height: 32px;
   border-radius: 50%;
-  border: 3px solid rgba(37, 99, 235, 0.25);
-  border-top-color: #2563eb;
-  animation: magneto-spin 1s linear infinite;
+  border: 3px solid rgba(249, 115, 22, 0.2);
+  border-top-color: #f97316;
+  animation: spin 0.8s linear infinite;
 }
 
-.magneto__empty {
-  padding: 0.75rem 1rem;
-  background: rgba(59, 130, 246, 0.12);
-  border-radius: 0.65rem;
-  color: #1d4ed8;
-  font-weight: 500;
-  text-align: center;
-}
-
-.magneto__error {
-  text-align: center;
-  color: #b91c1c;
+.magneto-home__empty {
+  margin: 0;
   font-size: 0.9rem;
-  font-weight: 500;
+  color: #475569;
 }
 
-@keyframes magneto-spin {
-  0% {
+.magneto-home__error {
+  margin: 0;
+  font-size: 0.9rem;
+  color: #b91c1c;
+}
+
+@keyframes spin {
+  from {
     transform: rotate(0deg);
   }
-  100% {
+  to {
     transform: rotate(360deg);
   }
 }
 
-@media (max-width: 768px) {
-  .magneto__chart {
-    height: min(220px, 100%);
+@media (max-width: 960px) {
+  .magneto-home__head {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .magneto-home__head-actions {
+    justify-content: flex-start;
+  }
+
+  .magneto-home__presets {
+    justify-content: flex-start;
   }
 }
 </style>

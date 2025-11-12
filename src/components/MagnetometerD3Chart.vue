@@ -54,7 +54,7 @@ let gridGroup;
 const clipPathId = `clip-${Math.random().toString(36).slice(2, 10)}`;
 const MS_IN_DAY = 1000 * 60 * 60 * 24;
 
-const DEFAULT_COLORS = ['#2563eb', '#f97316', '#14b8a6', '#8b5cf6', '#f973ab', '#facc15'];
+const DEFAULT_COLORS = ['#f97316', '#ea580c', '#14b8a6', '#8b5cf6', '#f973ab', '#facc15'];
 
 const xScaleBase = d3.scaleTime();
 const yScale = d3.scaleLinear();
