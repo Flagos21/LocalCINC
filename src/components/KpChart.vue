@@ -104,7 +104,8 @@ const DATE_FMT = new Intl.DateTimeFormat('es-CL', {
   month: 'short',
   timeZone: 'UTC',
 })
-const options = computed(() => ({
+const options = computed(() => {
+  return {
     chart: {
       animations: { enabled: true },
       toolbar: {
@@ -165,7 +166,6 @@ const options = computed(() => ({
       },
     },
 
-    // 🔹 hasta aquí
     yaxis: {
       min: 0,
       max: 9,
@@ -200,7 +200,7 @@ const options = computed(() => ({
       y: { formatter: (v) => Number(v).toFixed(1) },
     },
   }
-}))
+})
 </script>
 
 <style scoped>
