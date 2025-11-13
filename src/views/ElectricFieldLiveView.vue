@@ -6,6 +6,8 @@
 import { computed } from 'vue'
 import VueApexCharts from 'vue3-apexcharts'
 import { useEfmLive } from '@/composables/useEfmLive'
+import { useMagnetometerSeries } from '@/composables/useMagnetometerSeries'
+import { buildDailyMedianBaseline } from '@/utils/timeSeriesBaseline'
 
 // Props configurables
 const props = defineProps({
@@ -20,7 +22,8 @@ const props = defineProps({
 
 // Hook en vivo (reactivo) — ahora puedes pasar since directo
 const {
-  points, error,
+  points,
+  error,
   range,   // '1h' | '6h' | '24h' | 'today' | 'since:<dur>'
   every: agg, refreshMs, station,
   refresh
@@ -31,11 +34,60 @@ const {
   refreshMs: props.refreshMs
 })
 
-// Serie
-const series = computed(() => [{
-  name: 'E_z',
-  data: points.value.map(p => [p.t, p.value]) // [timestamp_ms, value]
-}])
+const BASELINE_NAME = 'Mediana últimos 7 días'
+
+const {
+  labels: baselineLabels,
+  series: baselineValues
+} = useMagnetometerSeries({
+  range: '7d',
+  every: '',
+  unit: '',
+  station,
+  from: '',
+  to: '',
+  endpoint: '/api/electric-field/series'
+})
+
+const livePoints = computed(() =>
+  points.value
+    .map((point) => {
+      const timestamp = Number(point?.t ?? point?.time)
+      const value = Number(point?.value)
+      if (!Number.isFinite(timestamp) || !Number.isFinite(value)) {
+        return null
+      }
+      return [timestamp, value]
+    })
+    .filter((entry) => Array.isArray(entry))
+)
+
+const baselinePoints = computed(() =>
+  buildDailyMedianBaseline({
+    referenceTimestamps: baselineLabels.value,
+    referenceValues: baselineValues.value,
+    targetTimestamps: livePoints.value.map(([timestamp]) => timestamp)
+  })
+)
+
+const chartSeries = computed(() => {
+  if (!livePoints.value.length && !baselinePoints.value.length) {
+    return []
+  }
+
+  const hasBaseline = baselinePoints.value.some(([, value]) => Number.isFinite(value))
+
+  return hasBaseline
+    ? [
+        { name: BASELINE_NAME, data: baselinePoints.value },
+        { name: 'E_z', data: livePoints.value }
+      ]
+    : [
+        { name: 'E_z', data: livePoints.value }
+      ]
+})
+
+const hasBaselineSeries = computed(() => chartSeries.value.some((series) => series?.name === BASELINE_NAME))
 
 // Opciones Apex
 const chartOptions = computed(() => ({
@@ -51,8 +103,12 @@ const chartOptions = computed(() => ({
     foreColor: '#0f172a',
     zoom: { enabled: true, type: 'x' }
   },
-  colors: ['#f97316'],
-  stroke: { width: 2, curve: 'straight', dashArray: 0 },
+  colors: hasBaselineSeries.value ? ['#d1d5db', '#f97316'] : ['#f97316'],
+  stroke: {
+    width: hasBaselineSeries.value ? [2, 2] : 2,
+    curve: 'straight',
+    dashArray: hasBaselineSeries.value ? [0, 0] : 0
+  },
   markers: { size: 0, strokeWidth: 2, hover: { sizeOffset: 3 } },
   xaxis: { type: 'datetime', labels: { datetimeUTC: true }, axisBorder: { color: '#cbd5f5' }, axisTicks: { color: '#cbd5f5' } },
   yaxis: {
@@ -72,6 +128,7 @@ const chartOptions = computed(() => ({
     x: { format: 'yyyy-MM-dd HH:mm:ss' },
     y: { formatter: (v) => (Number.isFinite(v) ? `${v.toFixed(2)} kV/m` : '—') }
   },
+  legend: { show: hasBaselineSeries.value },
   noData: { text: 'Cargando campo eléctrico…', style: { color: '#64748b', fontSize: '14px' } }
 }))
 
@@ -149,7 +206,7 @@ function setQuickRange(r) {
             class="efield__chart"
             :height="height"
             :options="chartOptions"
-            :series="series"
+            :series="chartSeries"
           />
         </div>
         <p v-if="error" class="efield__error">⚠️ {{ error }}</p>
