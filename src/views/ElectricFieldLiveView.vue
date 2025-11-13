@@ -8,13 +8,14 @@ import VueApexCharts from 'vue3-apexcharts'
 import { useEfmLive } from '@/composables/useEfmLive'
 import { useMagnetometerSeries } from '@/composables/useMagnetometerSeries'
 import { buildDailyMedianBaseline } from '@/utils/timeSeriesBaseline'
+import { durationStringToMs, injectNullGaps } from '@/utils/timeSeriesGaps'
 
 // Props configurables
 const props = defineProps({
   station:   { type: String, default: '*' },   // CHI / * / etc.
-  since:     { type: String, default: '10m' }, // ventana temporal (ej: '10m')
-  every:     { type: String, default: '5s' },  // agregación (ej: '5s')
-  refreshMs: { type: Number, default: 2000 },  // auto-refresh
+  since:     { type: String, default: '1d' },  // ventana temporal (ej: '1d')
+  every:     { type: String, default: '1m' },  // agregación (ej: '1m')
+  refreshMs: { type: Number, default: 5000 },  // auto-refresh
   yMin:      { type: Number, default: -0.4 },
   yMax:      { type: Number, default:  0.4 },
   height:    { type: [Number, String], default: 520 }
@@ -49,18 +50,25 @@ const {
   endpoint: '/api/electric-field/series'
 })
 
-const livePoints = computed(() =>
-  points.value
+const livePoints = computed(() => {
+  const rawPoints = points.value
     .map((point) => {
       const timestamp = Number(point?.t ?? point?.time)
-      const value = Number(point?.value)
-      if (!Number.isFinite(timestamp) || !Number.isFinite(value)) {
+
+      if (!Number.isFinite(timestamp)) {
         return null
       }
+
+      const numericValue = Number(point?.value)
+      const value = Number.isFinite(numericValue) ? numericValue : null
+
       return [timestamp, value]
     })
     .filter((entry) => Array.isArray(entry))
-)
+
+  const stepMs = durationStringToMs(agg.value)
+  return injectNullGaps(rawPoints, stepMs)
+})
 
 const baselinePoints = computed(() =>
   buildDailyMedianBaseline({
@@ -134,7 +142,7 @@ const chartOptions = computed(() => ({
 
 // Acciones rápidas
 function setQuickRange(r) {
-  // r puede ser '1h' | '6h' | '24h' | 'today' | 'since:10m'
+  // r puede ser '1d' | '3d' | '7d'
   range.value = r
 }
 </script>
@@ -158,20 +166,10 @@ function setQuickRange(r) {
             <span class="efield__label">Ventana rápida</span>
             <div class="efield__controls">
               <div class="efield__quick">
-                <button class="efield__quick-btn" @click="setQuickRange('since:10m')">10 min</button>
-                <button class="efield__quick-btn" @click="setQuickRange('1h')">1 h</button>
-                <button class="efield__quick-btn" @click="setQuickRange('6h')">6 h</button>
-                <button class="efield__quick-btn" @click="setQuickRange('24h')">24 h</button>
-                <button class="efield__quick-btn" @click="setQuickRange('today')">Hoy</button>
+                <button class="efield__quick-btn" @click="setQuickRange('1d')">1 día</button>
+                <button class="efield__quick-btn" @click="setQuickRange('3d')">3 días</button>
+                <button class="efield__quick-btn" @click="setQuickRange('7d')">7 días</button>
               </div>
-            </div>
-          </div>
-
-          <!-- Estación -->
-          <div class="efield__field">
-            <span class="efield__label">Estación</span>
-            <div class="efield__controls">
-              <input class="efield__picker" v-model="station" placeholder="*, CHI, etc." />
             </div>
           </div>
 
@@ -250,13 +248,13 @@ function setQuickRange(r) {
 }
 .efield__quick-btn:hover { transform: translateY(-1px); box-shadow: 0 12px 22px rgba(249,115,22,0.2); }
 
-.efield__picker, .efield__select {
+.efield__select {
   border-radius: 12px; border: 1px solid rgba(249,115,22,0.35);
   background: rgba(255,255,255,0.9);
   padding: 0.55rem 0.75rem; font-size: 0.95rem; color: #0f172a;
   transition: box-shadow 0.2s ease, border-color 0.2s ease;
 }
-.efield__picker:focus-visible, .efield__select:focus-visible {
+.efield__select:focus-visible {
   outline: none; border-color: #f97316; box-shadow: 0 0 0 3px rgba(249,115,22,0.25);
 }
 

@@ -10,6 +10,7 @@ import VueApexCharts from 'vue3-apexcharts'
 import { useEfmLive } from '@/composables/useEfmLive'
 import { useMagnetometerSeries } from '@/composables/useMagnetometerSeries'
 import { buildDailyMedianBaseline } from '@/utils/timeSeriesBaseline'
+import { durationStringToMs, injectNullGaps } from '@/utils/timeSeriesGaps'
 
 // Props simples para configurarlo desde fuera
 const props = defineProps({
@@ -26,7 +27,8 @@ const props = defineProps({
 const {
   points,
   error,
-  station
+  station,
+  every: aggregation
 } = useEfmLive({
   station: props.station,
   since: props.since,
@@ -49,18 +51,25 @@ const {
   endpoint: '/api/electric-field/series'
 })
 
-const livePoints = computed(() =>
-  points.value
+const livePoints = computed(() => {
+  const rawPoints = points.value
     .map((point) => {
       const timestamp = Number(point?.t ?? point?.time)
-      const value = Number(point?.value)
-      if (!Number.isFinite(timestamp) || !Number.isFinite(value)) {
+
+      if (!Number.isFinite(timestamp)) {
         return null
       }
+
+      const numericValue = Number(point?.value)
+      const value = Number.isFinite(numericValue) ? numericValue : null
+
       return [timestamp, value]
     })
     .filter((entry) => Array.isArray(entry))
-)
+
+  const stepMs = durationStringToMs(aggregation.value ?? props.every)
+  return injectNullGaps(rawPoints, stepMs)
+})
 
 const baselinePoints = computed(() =>
   buildDailyMedianBaseline({
