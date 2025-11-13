@@ -3,9 +3,10 @@
     <div class="kp-header">
       <div class="kp-title">
         <strong>Índice geomagnético Kp</strong>
-        <small class="muted">Serie de barras de 3 h. Fuente: {{ provider }}</small>
       </div>
-      <small class="muted" v-if="updatedAt">Actualizado: {{ fmtLocal(updatedAt) }}</small>
+      <small class="muted" v-if="updatedAt">
+        Actualizado: {{ fmtLocal(updatedAt) }}<span v-if="provider"> · Fuente: {{ provider }}</span>
+      </small>
     </div>
 
     <div class="kp-body">
@@ -20,12 +21,12 @@
 
       <!-- Leyenda NOAA -->
       <div class="noaa-scale">
-        <div class="seg" :style="{background: NOOA_COLORS.base}"><span>Kp &lt; 5</span></div>
-        <div class="seg" :style="{background: NOOA_COLORS.k5}"><span>Kp = 5 (G1)</span></div>
-        <div class="seg" :style="{background: NOOA_COLORS.k6}"><span>Kp = 6 (G2)</span></div>
-        <div class="seg" :style="{background: NOOA_COLORS.k7}"><span>Kp = 7 (G3)</span></div>
-        <div class="seg" :style="{background: NOOA_COLORS.k8_9}"><span>Kp = 8, 9 (G4)</span></div>
-        <div class="seg" :style="{background: NOOA_COLORS.k9o}"><span>Kp = 9o (G5)</span></div>
+        <div class="seg" :style="{background: NOOA_COLORS.base}" aria-label="G0"><span>G0</span></div>
+        <div class="seg" :style="{background: NOOA_COLORS.k5}" aria-label="G1"><span>G1</span></div>
+        <div class="seg" :style="{background: NOOA_COLORS.k6}" aria-label="G2"><span>G2</span></div>
+        <div class="seg" :style="{background: NOOA_COLORS.k7}" aria-label="G3"><span>G3</span></div>
+        <div class="seg" :style="{background: NOOA_COLORS.k8_9}" aria-label="G4"><span>G4</span></div>
+        <div class="seg" :style="{background: NOOA_COLORS.k9o}" aria-label="G5"><span>G5</span></div>
       </div>
     </div>
   </div>
@@ -47,9 +48,13 @@ function fmtLocal(iso) { try { return new Date(iso).toLocaleString() } catch { r
 
 async function reload () {
   try {
-    const res = await fetch(`/api/kp?days=${DAYS}`)
+    const res = await fetch(`/api/kp?days=${DAYS}`, { cache: 'no-store' })
     const j = await res.json()
-    raw.value       = Array.isArray(j.points) ? j.points : []
+    const points = Array.isArray(j.points)
+      ? j.points.filter(p => p && Number.isFinite(new Date(p.ts).getTime())).slice()
+      : []
+    points.sort((a, b) => new Date(a.ts).getTime() - new Date(b.ts).getTime())
+    raw.value       = points
     updatedAt.value = j?.meta?.lastUpdated ?? null
     provider.value  = j?.meta?.provider ?? '—'
   } catch (e) {
