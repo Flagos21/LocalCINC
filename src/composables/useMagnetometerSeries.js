@@ -77,8 +77,13 @@ export function useMagnetometerSeries({
 
     const searchParams = new URLSearchParams();
 
-    if (stationRef.value) {
-      searchParams.set('station', stationRef.value);
+    const stationValueRaw = stationRef.value;
+    const stationValue = typeof stationValueRaw === 'string'
+      ? stationValueRaw.trim()
+      : stationValueRaw;
+
+    if (stationValue && stationValue !== '*') {
+      searchParams.set('station', stationValue);
     }
 
     if (everyRef.value) {
