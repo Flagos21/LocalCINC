@@ -4,6 +4,7 @@ import VueApexCharts from 'vue3-apexcharts'
 import { useEfmLive } from '@/composables/useEfmLive'
 import { useMagnetometerSeries } from '@/composables/useMagnetometerSeries'
 import { buildDailyMedianBaseline } from '@/utils/timeSeriesBaseline'
+import { durationStringToMs, injectNullGaps } from '@/utils/timeSeriesGaps'
 
 const {
   points, error,
@@ -11,9 +12,9 @@ const {
   refresh
 } = useEfmLive({
   station: '*',
-  since: '10m',
-  every: '5s',
-  refreshMs: 2000
+  range: '1d',
+  every: '1m',
+  refreshMs: 5000
 })
 
 const BASELINE_NAME = 'Mediana últimos 7 días'
@@ -31,26 +32,35 @@ const {
   endpoint: '/api/electric-field/series'
 })
 
-const chartSeries = computed(() => {
-  const livePoints = points.value
+const livePoints = computed(() => {
+  const rawPoints = points.value
     .map((point) => {
       const timestamp = Number(point?.t ?? point?.time)
-      const value = Number(point?.value)
-      if (!Number.isFinite(timestamp) || !Number.isFinite(value)) {
+
+      if (!Number.isFinite(timestamp)) {
         return null
       }
+
+      const numericValue = Number(point?.value)
+      const value = Number.isFinite(numericValue) ? numericValue : null
+
       return [timestamp, value]
     })
     .filter((entry) => Array.isArray(entry))
 
-  if (!livePoints.length) {
+  const stepMs = durationStringToMs(agg.value)
+  return injectNullGaps(rawPoints, stepMs)
+})
+
+const chartSeries = computed(() => {
+  if (!livePoints.value.length) {
     return []
   }
 
   const baselinePoints = buildDailyMedianBaseline({
     referenceTimestamps: baselineLabels.value,
     referenceValues: baselineValues.value,
-    targetTimestamps: livePoints.map(([timestamp]) => timestamp)
+    targetTimestamps: livePoints.value.map(([timestamp]) => timestamp)
   })
 
   const hasBaseline = baselinePoints.some(([, value]) => Number.isFinite(value))
@@ -58,10 +68,10 @@ const chartSeries = computed(() => {
   return hasBaseline
     ? [
         { name: BASELINE_NAME, data: baselinePoints },
-        { name: 'E_z', data: livePoints }
+        { name: 'E_z', data: livePoints.value }
       ]
     : [
-        { name: 'E_z', data: livePoints }
+        { name: 'E_z', data: livePoints.value }
       ]
 })
 
@@ -123,17 +133,10 @@ function isActive(r) { return range.value === r }
       <div class="ctrl-group">
         <span class="ctrl-label">Ventana</span>
         <div class="quick">
-          <button class="quick-btn" :class="{active:isActive('since:10m')}" @click="setQuickRange('since:10m')">10 min</button>
-          <button class="quick-btn" :class="{active:isActive('1h')}"        @click="setQuickRange('1h')">1 h</button>
-          <button class="quick-btn" :class="{active:isActive('6h')}"        @click="setQuickRange('6h')">6 h</button>
-          <button class="quick-btn" :class="{active:isActive('24h')}"       @click="setQuickRange('24h')">24 h</button>
-          <button class="quick-btn" :class="{active:isActive('today')}"     @click="setQuickRange('today')">Hoy</button>
+          <button class="quick-btn" :class="{active:isActive('1d')}" @click="setQuickRange('1d')">1 día</button>
+          <button class="quick-btn" :class="{active:isActive('3d')}" @click="setQuickRange('3d')">3 días</button>
+          <button class="quick-btn" :class="{active:isActive('7d')}" @click="setQuickRange('7d')">7 días</button>
         </div>
-      </div>
-
-      <div class="ctrl-group">
-        <span class="ctrl-label">Estación</span>
-        <input class="picker" v-model="station" placeholder="*, CHI, etc." />
       </div>
 
       <div class="ctrl-group">
@@ -213,7 +216,7 @@ function isActive(r) { return range.value === r }
   box-shadow: 0 10px 25px rgba(249, 115, 22, 0.25);
 }
 
-.picker, .select {
+.select {
   border:1px solid rgba(249,115,22,.35); background:#fff; color:#0f172a;
   border-radius:10px; padding:.35rem .55rem; min-width: 9rem;
 }
@@ -238,6 +241,6 @@ function isActive(r) { return range.value === r }
 .efield-home__error { margin-top:.4rem; color:#b91c1c; text-align:center; }
 
 @media (max-width: 600px) {
-  .picker, .select { min-width: 7rem; }
+  .select { min-width: 7rem; }
 }
 </style>

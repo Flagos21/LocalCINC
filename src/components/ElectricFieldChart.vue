@@ -5,6 +5,7 @@ import VueApexCharts from 'vue3-apexcharts'
 import { useEfmLive } from '@/composables/useEfmLive'
 import { useMagnetometerSeries } from '@/composables/useMagnetometerSeries'
 import { buildDailyMedianBaseline } from '@/utils/timeSeriesBaseline'
+import { durationStringToMs, injectNullGaps } from '@/utils/timeSeriesGaps'
 
 const MIN_AXIS_MAGNITUDE = 0.1
 const FALLBACK_AXIS_MAGNITUDE = 0.4
@@ -12,11 +13,9 @@ const RANGE_PADDING_RATIO = 0.15
 const BASELINE_NAME = 'Mediana últimos 7 días'
 
 const QUICK_RANGES = [
-  { value: 'since:10m', label: '10 min' },
-  { value: '1h', label: '1 h' },
-  { value: '6h', label: '6 h' },
-  { value: '24h', label: '24 h' },
-  { value: 'today', label: 'Hoy' }
+  { value: '1d', label: '1 día' },
+  { value: '3d', label: '3 días' },
+  { value: '7d', label: '7 días' }
 ]
 
 const AGG_OPTIONS = ['1s', '2s', '5s', '10s', '30s', '1m']
@@ -38,9 +37,9 @@ const {
   refresh
 } = useEfmLive({
   station: '*',
-  since: '10m',
-  every: '5s',
-  refreshMs: 2000
+  range: '1d',
+  every: '1m',
+  refreshMs: 5000
 })
 
 const {
@@ -56,18 +55,25 @@ const {
   endpoint: '/api/electric-field/series'
 })
 
-const livePoints = computed(() =>
-  points.value
+const livePoints = computed(() => {
+  const rawPoints = points.value
     .map((point) => {
       const timestamp = Number(point?.t ?? point?.time)
-      const value = Number(point?.value)
-      if (!Number.isFinite(timestamp) || !Number.isFinite(value)) {
+
+      if (!Number.isFinite(timestamp)) {
         return null
       }
+
+      const numericValue = Number(point?.value)
+      const value = Number.isFinite(numericValue) ? numericValue : null
+
       return [timestamp, value]
     })
     .filter((entry) => Array.isArray(entry))
-)
+
+  const stepMs = durationStringToMs(aggregation.value)
+  return injectNullGaps(rawPoints, stepMs)
+})
 
 const baselinePoints = computed(() =>
   buildDailyMedianBaseline({
@@ -234,16 +240,6 @@ function isActiveRange(value) {
       </div>
 
       <div class="ctrl-group">
-        <span class="ctrl-label">Estación</span>
-        <input
-          class="text-input"
-          v-model="station"
-          placeholder="*, CHI, etc."
-          spellcheck="false"
-        />
-      </div>
-
-      <div class="ctrl-group">
         <span class="ctrl-label">Agregación</span>
         <select v-model="aggregation" class="select">
           <option v-for="option in AGG_OPTIONS" :key="option">{{ option }}</option>
@@ -395,7 +391,6 @@ function isActiveRange(value) {
   opacity: 1;
 }
 
-.text-input,
 .select {
   min-width: 8rem;
   border: 1px solid #cbd5e1;
@@ -407,7 +402,6 @@ function isActiveRange(value) {
   transition: border-color 0.2s ease, box-shadow 0.2s ease;
 }
 
-.text-input:focus,
 .select:focus {
   outline: none;
   border-color: rgba(249, 115, 22, 0.65);
