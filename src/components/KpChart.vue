@@ -214,19 +214,36 @@ const options = computed(() => {
 
 const dayLabels = computed(() => {
   const firstSeries = series.value?.[0]?.data ?? []
-  const seen = new Set()
-  return firstSeries
-    .map((point) => {
-      const stamp = Number(point?.x)
-      if (!Number.isFinite(stamp)) return null
-      const d = new Date(stamp)
-      if (Number.isNaN(d.getTime())) return null
-      const midnight = Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate())
-      if (seen.has(midnight)) return null
-      seen.add(midnight)
-      return formatUtcLabel(new Date(midnight))
-    })
-    .filter(Boolean)
+  const stamps = firstSeries
+    .map((point) => Number(point?.x))
+    .filter((stamp) => Number.isFinite(stamp))
+
+  if (!stamps.length) return []
+
+  stamps.sort((a, b) => a - b)
+
+  const first = new Date(stamps[0])
+  const last = new Date(stamps[stamps.length - 1])
+
+  if (Number.isNaN(first.getTime()) || Number.isNaN(last.getTime())) return []
+
+  const startMidnight = Date.UTC(
+    first.getUTCFullYear(),
+    first.getUTCMonth(),
+    first.getUTCDate()
+  )
+  const endMidnight = Date.UTC(last.getUTCFullYear(), last.getUTCMonth(), last.getUTCDate())
+
+  const labels = []
+  for (
+    let cursor = startMidnight;
+    cursor <= endMidnight;
+    cursor += 24 /* hours */ * 3600 * 1000
+  ) {
+    labels.push(formatUtcLabel(new Date(cursor)))
+  }
+
+  return labels
 })
 </script>
 
@@ -263,6 +280,7 @@ const dayLabels = computed(() => {
   flex: 1 1 0;
   text-align: center;
   font-weight: 500;
+  white-space: nowrap;
 }
 .kp-empty {
   color: #6b7280;
