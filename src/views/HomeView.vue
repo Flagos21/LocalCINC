@@ -51,11 +51,6 @@ function fmtUTC(value) {
 
 <template>
   <section class="home">
-    <header class="home__header">
-      <h2>Panel principal</h2>
-      <p>Visualiza aquí los indicadores clave cuando estén disponibles.</p>
-    </header>
-
     <div class="home__grid">
       <div class="home__grid-top">
         <!-- Rayos X / Dst / Kp -->
