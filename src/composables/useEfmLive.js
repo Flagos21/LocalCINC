@@ -34,6 +34,7 @@ export function useEfmLive(opts = {}) {
 
   const points = ref([]);
   const error  = ref(null);
+  const isFetching = ref(false);
   let timer;
 
   function computeSinceForRange(rng) {
@@ -53,6 +54,7 @@ export function useEfmLive(opts = {}) {
 
   async function fetchNow() {
     try {
+      isFetching.value = true;
       const url = new URL('/api/efm/live', baseUrl);
       url.searchParams.set('station', station.value || '*');
       url.searchParams.set('since', computeSinceForRange(range.value));
@@ -66,6 +68,9 @@ export function useEfmLive(opts = {}) {
       error.value = null;
     } catch (e) {
       error.value = e?.message ?? String(e);
+      points.value = [];
+    } finally {
+      isFetching.value = false;
     }
   }
 
@@ -86,6 +91,7 @@ export function useEfmLive(opts = {}) {
 
   return {
     points, error,
+    isFetching,
     range, every, refreshMs, station,
     refresh: fetchNow
   };
