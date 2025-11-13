@@ -44,6 +44,7 @@ let timer=null
 const mode = ref(props.mode)
 let animFrameId=null
 let animButtonEl=null
+let modeSwitchEl=null
 
 const mapStyles = computed(() => {
   const styles = {}
@@ -216,6 +217,15 @@ function redrawAll(date = new Date()){
 }
 
 /* ---------- controles ---------- */
+function updateModeButtons(){
+  if (!modeSwitchEl) return
+  modeSwitchEl.querySelectorAll('button').forEach(btn => {
+    const isActive = btn.dataset?.k === mode.value
+    btn.classList.toggle('active', isActive)
+    btn.setAttribute('aria-pressed', String(!!isActive))
+  })
+}
+
 function addModeSwitch(){
   const C = L.Control.extend({
     options: { position:'topright' },
@@ -230,11 +240,9 @@ function addModeSwitch(){
         const k = e.target?.dataset?.k
         if (!k || k===mode.value) return
         mode.value = k
-        // reconstruir capas
-        makeBaseAndLabels(mode.value)
-        // asegurar que rótulos queden arriba tras redibujar
-        redrawAll()
       })
+      modeSwitchEl = el
+      updateModeButtons()
       return el
     }
   })
@@ -400,9 +408,22 @@ onMounted(() => {
 onBeforeUnmount(() => {
   stopAnimation()
   stopTimer(); if (map?.__ro) map.__ro.disconnect(); map?.remove()
+  modeSwitchEl=null
 })
 watch(() => props.autoRefreshMs, () => { stopTimer(); startTimer() })
 watch(isAnimating, updateAnimButton)
+watch(mode, (next) => {
+  if (map) {
+    makeBaseAndLabels(next)
+    redrawAll()
+  }
+  updateModeButtons()
+})
+watch(() => props.mode, (next) => {
+  if (next && next !== mode.value) {
+    mode.value = next
+  }
+})
 </script>
 
 <template>
