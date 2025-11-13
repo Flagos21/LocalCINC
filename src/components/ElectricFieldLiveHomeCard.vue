@@ -2,6 +2,8 @@
 import { computed } from 'vue'
 import VueApexCharts from 'vue3-apexcharts'
 import { useEfmLive } from '@/composables/useEfmLive'
+import { useMagnetometerSeries } from '@/composables/useMagnetometerSeries'
+import { buildDailyMedianBaseline } from '@/utils/timeSeriesBaseline'
 
 const {
   points, error,
@@ -14,10 +16,73 @@ const {
   refreshMs: 2000
 })
 
-const series = computed(() => [{
-  name: 'E_z',
-  data: points.value.map(p => [p.t, p.value])
-}])
+const {
+  labels: baselineLabels,
+  series: baselineSeries
+} = useMagnetometerSeries({
+  range: '7d',
+  every: '',
+  unit: '',
+  station,
+  from: '',
+  to: '',
+  endpoint: '/api/electric-field/series'
+})
+
+function toTimestamp(value) {
+  if (typeof value === 'number') {
+    return Number.isFinite(value) ? value : null
+  }
+
+  const numeric = new Date(value).getTime()
+  return Number.isFinite(numeric) ? numeric : null
+}
+
+const chartPoints = computed(() =>
+  points.value
+    .map((point) => {
+      const timestamp = toTimestamp(point.t)
+      const numericValue = Number(point.value)
+
+      if (!Number.isFinite(numericValue) || timestamp === null) {
+        return null
+      }
+
+      return [timestamp, numericValue]
+    })
+    .filter((entry) => Array.isArray(entry))
+)
+
+const baselinePoints = computed(() =>
+  buildDailyMedianBaseline({
+    referenceTimestamps: baselineLabels.value,
+    referenceValues: baselineSeries.value,
+    targetTimestamps: chartPoints.value.map(([timestamp]) => timestamp)
+  })
+)
+
+const hasBaseline = computed(() =>
+  baselinePoints.value.some(([, value]) => Number.isFinite(value))
+)
+
+const series = computed(() => {
+  const mainSeries = {
+    name: 'E_z',
+    data: chartPoints.value
+  }
+
+  if (hasBaseline.value) {
+    return [
+      {
+        name: 'Mediana últimos 7 días',
+        data: baselinePoints.value
+      },
+      mainSeries
+    ]
+  }
+
+  return [mainSeries]
+})
 
 const chartOptions = computed(() => ({
   chart: {
@@ -31,8 +96,12 @@ const chartOptions = computed(() => ({
     foreColor: '#0f172a',
     zoom: { enabled: true, type: 'x' }
   },
-  colors: ['#f97316'],
-  stroke: { width: 2, curve: 'straight' },
+  colors: hasBaseline.value ? ['#d1d5db', '#f97316'] : ['#f97316'],
+  stroke: {
+    width: hasBaseline.value ? [2, 2] : 2,
+    curve: 'straight',
+    dashArray: hasBaseline.value ? [4, 0] : 0
+  },
   markers: { size: 0, strokeWidth: 2, hover: { sizeOffset: 3 } },
   xaxis: { type: 'datetime', labels: { datetimeUTC: true } },
   yaxis: {
@@ -49,7 +118,8 @@ const chartOptions = computed(() => ({
     x: { format: 'yyyy-MM-dd HH:mm:ss' },
     y: { formatter: v => (Number.isFinite(v) ? `${v.toFixed(2)} kV/m` : '—') }
   },
-  noData: { text: 'Cargando campo eléctrico…', style: { color: '#64748b', fontSize: '14px' } }
+  noData: { text: 'Cargando campo eléctrico…', style: { color: '#64748b', fontSize: '14px' } },
+  legend: { show: hasBaseline.value }
 }))
 
 function setQuickRange(r) { range.value = r }

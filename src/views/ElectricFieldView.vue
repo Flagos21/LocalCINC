@@ -1,18 +1,8 @@
 <template>
-  <section class="electric-field">
-    <ElectricFieldChart />
-  </section>
+  <ElectricFieldLiveView />
 </template>
 
 <script setup>
-import ElectricFieldChart from '@/components/ElectricFieldChart.vue'
+import ElectricFieldLiveView from './ElectricFieldLiveView.vue'
 </script>
 
-<style scoped>
-.electric-field {
-  display: flex;
-  flex: 1;
-  flex-direction: column;
-  min-height: 0;
-}
-</style>
