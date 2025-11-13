@@ -14,6 +14,10 @@
       />
       <div v-else class="kp-empty">Sin datos.</div>
 
+      <div v-if="dayLabels.length" class="kp-day-labels">
+        <span v-for="label in dayLabels" :key="label">{{ label }}</span>
+      </div>
+
       <!-- Leyenda NOAA -->
       <div class="noaa-scale">
         <div class="seg" :style="{ background: NOOA_COLORS.base }"><span>G0</span></div>
@@ -102,8 +106,14 @@ const series = computed(() => {
 const DATE_FMT = new Intl.DateTimeFormat('es-CL', {
   day: '2-digit',
   month: 'short',
+  year: 'numeric',
   timeZone: 'UTC',
 })
+
+function formatUtcLabel(date) {
+  const raw = DATE_FMT.format(date)
+  return raw.replace(/(^|\s)([a-záéíóúñ])/g, (match, p1, p2) => p1 + p2.toUpperCase())
+}
 const options = computed(() => {
   return {
     chart: {
@@ -150,7 +160,7 @@ const options = computed(() => {
           if (!Number.isFinite(time)) return ''
           const date = new Date(time)
           if (Number.isNaN(date.getTime()) || date.getUTCHours() !== 0) return ''
-          return DATE_FMT.format(date)
+          return formatUtcLabel(date)
         },
         style: {
           fontSize: '11px',
@@ -161,8 +171,8 @@ const options = computed(() => {
       axisBorder: { show: false },
       axisTicks: { show: true, color: '#d1d5db' },
       title: {
-        text: 'Universal Time',
-        style: { fontSize: '12px', color: '#6b7280' },
+        text: 'time (UTC)',
+        style: { fontSize: '12px', color: '#6b7280', fontWeight: 500 },
       },
     },
 
@@ -201,6 +211,23 @@ const options = computed(() => {
     },
   }
 })
+
+const dayLabels = computed(() => {
+  const firstSeries = series.value?.[0]?.data ?? []
+  const seen = new Set()
+  return firstSeries
+    .map((point) => {
+      const stamp = Number(point?.x)
+      if (!Number.isFinite(stamp)) return null
+      const d = new Date(stamp)
+      if (Number.isNaN(d.getTime())) return null
+      const midnight = Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate())
+      if (seen.has(midnight)) return null
+      seen.add(midnight)
+      return formatUtcLabel(new Date(midnight))
+    })
+    .filter(Boolean)
+})
 </script>
 
 <style scoped>
@@ -220,6 +247,22 @@ const options = computed(() => {
 }
 .kp-body {
   padding: 8px 12px 12px;
+}
+
+.kp-day-labels {
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+  margin-top: 6px;
+  padding: 0 4px;
+  font-size: 12px;
+  color: #4b5563;
+}
+
+.kp-day-labels span {
+  flex: 1 1 0;
+  text-align: center;
+  font-weight: 500;
 }
 .kp-empty {
   color: #6b7280;
@@ -255,10 +298,11 @@ const options = computed(() => {
 
 :deep(.apexcharts-toolbar) {
   backdrop-filter: none;
-  background: rgba(255, 255, 255, 0.92);
+  background: #ffffff;
   border-radius: 0.5rem;
+  border: 1px solid #cbd5f5;
   padding: 0.2rem;
-  box-shadow: 0 6px 20px rgba(15, 23, 42, 0.2);
+  box-shadow: none;
 }
 
 :deep(.apexcharts-toolbar svg) {
