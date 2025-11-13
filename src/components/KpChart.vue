@@ -1,11 +1,7 @@
 <template>
   <div class="kp-card">
-    <div class="kp-header">
-      <div class="kp-title">
-        <strong>Índice geomagnético Kp</strong>
-        <small class="muted">Serie de barras de 3 h. Fuente: {{ provider }}</small>
-      </div>
-      <small class="muted" v-if="updatedAt">Actualizado: {{ fmtLocal(updatedAt) }}</small>
+    <div class="kp-meta" v-if="updatedAt">
+      <small class="muted">Actualizado: {{ fmtLocal(updatedAt) }}</small>
     </div>
 
     <div class="kp-body">
@@ -20,12 +16,12 @@
 
       <!-- Leyenda NOAA -->
       <div class="noaa-scale">
-        <div class="seg" :style="{background: NOOA_COLORS.base}"><span>Kp &lt; 5</span></div>
-        <div class="seg" :style="{background: NOOA_COLORS.k5}"><span>Kp = 5 (G1)</span></div>
-        <div class="seg" :style="{background: NOOA_COLORS.k6}"><span>Kp = 6 (G2)</span></div>
-        <div class="seg" :style="{background: NOOA_COLORS.k7}"><span>Kp = 7 (G3)</span></div>
-        <div class="seg" :style="{background: NOOA_COLORS.k8_9}"><span>Kp = 8, 9 (G4)</span></div>
-        <div class="seg" :style="{background: NOOA_COLORS.k9o}"><span>Kp = 9o (G5)</span></div>
+        <div class="seg" :style="{background: NOOA_COLORS.base}"><span>G0</span></div>
+        <div class="seg" :style="{background: NOOA_COLORS.k5}"><span>G1</span></div>
+        <div class="seg" :style="{background: NOOA_COLORS.k6}"><span>G2</span></div>
+        <div class="seg" :style="{background: NOOA_COLORS.k7}"><span>G3</span></div>
+        <div class="seg" :style="{background: NOOA_COLORS.k8_9}"><span>G4</span></div>
+        <div class="seg" :style="{background: NOOA_COLORS.k9o}"><span>G5</span></div>
       </div>
     </div>
   </div>
@@ -38,7 +34,6 @@ import ApexChart from 'vue3-apexcharts'
 const props = defineProps({ height: { type: [Number, String], default: 300 } })
 
 const updatedAt = ref(null)
-const provider  = ref('—')
 const raw       = ref([]) // [{ ts, kp }]
 const DAYS      = 3
 const AUTO_REFRESH_MS = 10 * 60 * 1000
@@ -47,11 +42,10 @@ function fmtLocal(iso) { try { return new Date(iso).toLocaleString() } catch { r
 
 async function reload () {
   try {
-    const res = await fetch(`/api/kp?days=${DAYS}`)
+    const res = await fetch(`/api/kp?days=${DAYS}`, { cache: 'no-store' })
     const j = await res.json()
     raw.value       = Array.isArray(j.points) ? j.points : []
     updatedAt.value = j?.meta?.lastUpdated ?? null
-    provider.value  = j?.meta?.provider ?? '—'
   } catch (e) {
     console.error('kp reload failed:', e)
   }
@@ -168,11 +162,9 @@ xaxis: {
 
 <style scoped>
 .kp-card  { background:#fff; border:1px solid #e5e7eb; border-radius:10px; overflow:hidden; }
-.kp-header{ display:flex; justify-content:space-between; align-items:flex-start; padding:10px 12px; border-bottom:1px solid #e5e7eb; }
-.kp-title { display:flex; flex-direction:column; gap:2px; }
-.kp-title strong { color:#111827; } /* Título en negro */
+.kp-meta  { display:flex; justify-content:flex-end; padding:10px 12px 0; }
 .muted    { color:#6b7280; }
-.kp-body  { padding:10px 12px 12px; }
+.kp-body  { padding:8px 12px 12px; }
 .kp-empty { color:#6b7280; font-size:13px; padding:16px 0; text-align:center; }
 
 .noaa-scale { display:flex; margin-top:10px; border:1px solid #d1d5db; border-radius:6px; overflow:hidden; }
