@@ -53,7 +53,11 @@ function normalizeTo3h(points) {
       d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate(), h, 0, 0
     )).toISOString().replace('.000Z', 'Z');
     const v = Number(p.kp);
-    if (Number.isFinite(v)) kept.push({ ts, kp: v, source: p.source || 'norm' });
+    if (Number.isFinite(v)) {
+      const entry = { ts, kp: v, source: p.source || 'norm' };
+      if (p.status != null) entry.status = p.status;
+      kept.push(entry);
+    }
   }
   return dedupeKeepLast(kept);
 }
@@ -95,7 +99,12 @@ async function fetchGfzRangeUTC(startISO, endISO) {
         throw new Error('GFZ shape unexpected');
       }
       const pts = json.datetime
-        .map((ts, i) => ({ ts, kp: Number(json.Kp[i]), source: 'GFZ' }))
+        .map((ts, i) => ({
+          ts,
+          kp: Number(json.Kp[i]),
+          source: 'GFZ',
+          status: Array.isArray(json.status) ? json.status[i] : undefined
+        }))
         .filter(p => Number.isFinite(p.kp));
       return dedupeKeepLast(pts);
     } catch (e) {
@@ -129,11 +138,27 @@ export async function refreshNow() {
   // GFZ primero
   try {
     const gfz = await fetchGfzRangeUTC(start.toISOString(), end.toISOString());
-    const pts = normalizeTo3h(gfz); // sin promedios
+    let pts = normalizeTo3h(gfz); // sin promedios
+
+    // Complementa con NOAA cuando haya una muestra más reciente
+    try {
+      const noaa = normalizeTo3h(await fetchNoaa3h());
+      const gfzLatest = pts.at(-1)?.ts ?? null;
+      const extras = noaa.filter(p => !gfzLatest || p.ts > gfzLatest);
+      if (extras.length) {
+        pts = dedupeKeepLast([...pts, ...extras]);
+        state.provider = 'GFZ+NOAA';
+      } else {
+        state.provider = 'GFZ';
+      }
+    } catch (noaaErr) {
+      state.provider = 'GFZ';
+      console.warn('[Kp] NOAA complemento falló:', noaaErr.message);
+    }
+
     state.points = pts;
     state.lastUpdated = Date.now();
-    state.provider = 'GFZ';
-    console.log(`[Kp] Actualizado desde GFZ con ${pts.length} puntos.`);
+    console.log(`[Kp] Actualizado desde ${state.provider} con ${pts.length} puntos.`);
     return;
   } catch (e) {
     console.warn('[Kp] GFZ falló:', e.message);
@@ -156,7 +181,12 @@ export async function refreshNow() {
   try {
     const raw = await fs.readFile(new URL('../data/kp.json', import.meta.url), 'utf8');
     const j = JSON.parse(raw);
-    const ptsRaw = (j.datetime||[]).map((ts,i)=>({ ts, kp: Number(j.Kp[i]), source: 'LOCAL' }))
+    const ptsRaw = (j.datetime || []).map((ts, i) => ({
+      ts,
+      kp: Number(j.Kp[i]),
+      source: 'LOCAL',
+      status: Array.isArray(j.status) ? j.status[i] : undefined
+    }))
       .filter(p=>Number.isFinite(p.kp));
     state.points = normalizeTo3h(ptsRaw);
     state.provider = 'LOCAL';
@@ -182,14 +212,24 @@ export function mountKpApi(app, basePath = '/api/kp') {
         await refreshNow();
       }
       const pts = filterSince(state.points, since);
-      res.json({
+      const lastUpdatedIso = new Date(state.lastUpdated).toISOString();
+      const payload = {
         meta: {
           provider: state.provider,
-          lastUpdated: new Date(state.lastUpdated).toISOString(),
+          lastUpdated: lastUpdatedIso,
           cadence: '3h'
         },
         points: pts
-      });
+      };
+      payload.updatedAt = lastUpdatedIso;
+      payload.provider = state.provider;
+      payload.series = pts.map(p => ({
+        time: p.ts,
+        value: p.kp,
+        status: p.status,
+        source: p.source
+      }));
+      res.json(payload);
     } catch (e) {
       res.status(500).json({ error: e.message });
     }

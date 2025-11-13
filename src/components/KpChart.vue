@@ -38,7 +38,16 @@ const raw       = ref([]) // [{ ts, kp }]
 const DAYS      = 3
 const AUTO_REFRESH_MS = 10 * 60 * 1000
 
-function fmtLocal(iso) { try { return new Date(iso).toLocaleString() } catch { return iso } }
+function fmtLocal(iso) {
+  try {
+    return new Date(iso).toLocaleString('es-CL', {
+      dateStyle: 'medium',
+      timeStyle: 'short'
+    })
+  } catch {
+    return iso
+  }
+}
 
 async function reload () {
   try {
@@ -80,53 +89,62 @@ const series = computed(() => {
   return [{ name: 'Kp', data }]
 })
 
+const DATE_FMT = new Intl.DateTimeFormat('es-CL', { day: '2-digit', month: 'short' })
+
 const options = computed(() => ({
   chart: {
     animations: { enabled: true },
-    toolbar: { show: false },
+    toolbar: {
+      show: true,
+      tools: {
+        download: true,
+        selection: false,
+        zoom: false,
+        zoomin: false,
+        zoomout: false,
+        pan: false,
+        reset: false
+      },
+      export: {
+        csv: {
+          filename: 'kp-index',
+          headerCategory: 'Inicio ventana (UTC)',
+          headerValue: 'Kp'
+        },
+        svg: { filename: 'kp-index' },
+        png: { filename: 'kp-index' }
+      }
+    },
     zoom: { enabled: false },
     foreColor: '#4b5563'
   },
-  plotOptions: { bar: { columnWidth: '65%', borderRadius: 2, distributed: false } },
+  plotOptions: { bar: { columnWidth: '55%', borderRadius: 0, distributed: false } },
   fill: { type: 'solid', opacity: 1 },
   colors: ['#8fd26e'],
   dataLabels: { enabled: false },
   grid: { borderColor: '#e5e7eb', strokeDashArray: 4 },
   legend: { show: false },
 
-  // 🔹 Reemplaza solo desde aquí:
-xaxis: {
-  type: 'datetime',
-  tickAmount: 24,           // fuerza ticks regulares
-  tickPlacement: 'on',      // ticks sobre las barras
-  labels: {
-    datetimeUTC: true,
-    rotate: 0,
-    formatter: (val, timestamp, opts) => {
-      const d = new Date(Number(val))
-      const hour = String(d.getUTCHours()).padStart(2, '0') + ':00'
-      const dayChange = d.getUTCHours() === 0
-      // fecha solo cuando cambia el día
-      if (dayChange) {
-        const dateLbl = new Intl.DateTimeFormat('en-GB', {
-          day: 'numeric',
-          month: 'short',
-          timeZone: 'UTC'
-        }).format(d)
-        return `${dateLbl}\n${hour}`  // fecha arriba, hora abajo
+  xaxis: {
+    type: 'datetime',
+    tickPlacement: 'between',
+    labels: {
+      datetimeUTC: true,
+      rotate: 0,
+      formatter: (val, timestamp, opts) => {
+        const d = new Date(Number(val))
+        if (Number.isNaN(d.getTime())) return ''
+        return d.getUTCHours() === 0 ? DATE_FMT.format(d) : ''
+      },
+      style: {
+        fontSize: '11px',
+        colors: '#4b5563',
+        fontWeight: 500
       }
-      return hour                    // resto solo hora
     },
-    style: {
-      fontSize: '11px',
-      colors: '#4b5563',
-      fontWeight: 500,
-      whiteSpace: 'pre'              // permite el salto de línea
-    }
-  },
-  axisBorder: { show: false },
-  axisTicks:  { show: true, color: '#d1d5db' },
-  title: {
+    axisBorder: { show: false },
+    axisTicks:  { show: true, color: '#d1d5db' },
+    title: {
     text: 'Universal Time',
     style: { fontSize: '12px', color: '#6b7280' }
   }
@@ -147,7 +165,7 @@ xaxis: {
         if (!Number.isFinite(n)) return ''
         const start = new Date(n)
         const end   = new Date(n + 3*3600*1000)
-        const fmtStart = new Intl.DateTimeFormat('en-GB', {
+        const fmtStart = new Intl.DateTimeFormat('es-CL', {
           weekday:'short', day:'2-digit', month:'short', year:'numeric',
           hour:'2-digit', minute:'2-digit', hour12:false, timeZone:'UTC'
         }).format(start)
