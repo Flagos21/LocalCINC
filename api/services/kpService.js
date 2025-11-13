@@ -18,7 +18,7 @@ async function fetchWithTimeout(url, opts = {}) {
     const res = await fetch(url, {
       ...rest,
       signal: signal ?? ctrl.signal,
-      headers: { 'accept': '*/*', ...(rest.headers || {}) }
+      headers: { 'accept': 'application/json, text/plain, */*', ...(rest.headers || {}) }
     });
     return res;
   } finally {
@@ -93,7 +93,15 @@ async function fetchGfzRangeUTC(startISO, endISO) {
     try {
       const res = await fetchWithTimeout(url);
       if (!res.ok) throw new Error(`GFZ HTTP ${res.status}`);
-      const json = await res.json();
+      const contentType = res.headers.get('content-type') || '';
+      const bodyText = await res.text();
+      let json;
+      try {
+        json = JSON.parse(bodyText);
+      } catch {
+        const snippet = bodyText.slice(0, 120).replace(/\s+/g, ' ').trim();
+        throw new Error(`GFZ invalid JSON (${contentType || 'no content-type'}): ${snippet}`);
+      }
       // Esperado: { meta, datetime:[], Kp:[] }
       if (!json || !Array.isArray(json.datetime) || !Array.isArray(json.Kp)) {
         throw new Error('GFZ shape unexpected');

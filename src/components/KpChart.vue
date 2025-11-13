@@ -131,8 +131,10 @@ const options = computed(() => ({
     labels: {
       datetimeUTC: true,
       rotate: 0,
-      formatter: (val, timestamp, opts) => {
-        const d = new Date(Number(val))
+      formatter: (val, timestamp) => {
+        const time = Number(timestamp)
+        if (!Number.isFinite(time)) return ''
+        const d = new Date(time)
         if (Number.isNaN(d.getTime())) return ''
         return d.getUTCHours() === 0 ? DATE_FMT.format(d) : ''
       },
