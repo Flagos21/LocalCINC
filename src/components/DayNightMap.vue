@@ -45,6 +45,7 @@ const mode = ref(props.mode)
 let animFrameId=null
 let animButtonEl=null
 let modeSwitchEl=null
+let modeSwitchButtons=[]
 
 const mapStyles = computed(() => {
   const styles = {}
@@ -217,9 +218,15 @@ function redrawAll(date = new Date()){
 }
 
 /* ---------- controles ---------- */
+function setMode(next){
+  if (!next || next === mode.value) return
+  mode.value = next
+  updateModeButtons()
+}
+
 function updateModeButtons(){
-  if (!modeSwitchEl) return
-  modeSwitchEl.querySelectorAll('button').forEach(btn => {
+  if (!modeSwitchButtons.length) return
+  modeSwitchButtons.forEach(btn => {
     const isActive = btn.dataset?.k === mode.value
     btn.classList.toggle('active', isActive)
     btn.setAttribute('aria-pressed', String(!!isActive))
@@ -231,16 +238,26 @@ function addModeSwitch(){
     options: { position:'topright' },
     onAdd(){
       const el = L.DomUtil.create('div','mode-switch')
-      el.innerHTML = `
-        <button data-k="map" class="btn ${mode.value==='map'?'active':''}">Mapa</button>
-        <button data-k="satellite" class="btn ${mode.value==='satellite'?'active':''}">Satélite</button>
-      `
       L.DomEvent.disableClickPropagation(el)
-      el.addEventListener('click', (e)=>{
-        const k = e.target?.dataset?.k
-        if (!k || k===mode.value) return
-        mode.value = k
+
+      modeSwitchButtons = [
+        { key:'map', label:'Mapa' },
+        { key:'satellite', label:'Satélite' },
+      ].map(({ key, label }) => {
+        const btn = L.DomUtil.create('button','btn', el)
+        btn.type = 'button'
+        btn.dataset.k = key
+        btn.textContent = label
+        btn.addEventListener('click', () => setMode(key))
+        btn.addEventListener('keydown', (event) => {
+          if (event.key === ' ' || event.key === 'Space' || event.key === 'Enter') {
+            event.preventDefault()
+            setMode(key)
+          }
+        })
+        return btn
       })
+
       modeSwitchEl = el
       updateModeButtons()
       return el
@@ -409,6 +426,7 @@ onBeforeUnmount(() => {
   stopAnimation()
   stopTimer(); if (map?.__ro) map.__ro.disconnect(); map?.remove()
   modeSwitchEl=null
+  modeSwitchButtons=[]
 })
 watch(() => props.autoRefreshMs, () => { stopTimer(); startTimer() })
 watch(isAnimating, updateAnimButton)
@@ -421,7 +439,7 @@ watch(mode, (next) => {
 })
 watch(() => props.mode, (next) => {
   if (next && next !== mode.value) {
-    mode.value = next
+    setMode(next)
   }
 })
 </script>
