@@ -88,11 +88,10 @@ const xrayRanges = [
             <div class="xray__controls">
               <div class="xray__timestamps">
                 <div class="xray__clock">
-                  <span class="tag">UTC ahora:</span>
                   <span class="mono">{{ fmtUTC(utcNow) }}</span>
                 </div>
                 <small v-if="lastPointTime" class="xray__updated">
-                  Actualizado: {{ fmtUTC(lastPointTime) }}
+                  {{ fmtUTC(lastPointTime) }}
                 </small>
               </div>
 
