@@ -1,5 +1,5 @@
 <script setup>
-import { ref, onMounted, onBeforeUnmount } from 'vue'
+import { computed, ref, onMounted, onBeforeUnmount } from 'vue'
 
 import SunViewer from '@/components/SunViewer.vue'
 import IonogramLatest from '@/components/IonogramLatest.vue'
@@ -11,6 +11,7 @@ import DstCard from '@/components/DstCard.vue'
 import KpChart from '@/components/KpChart.vue'
 import { useGoesXrays } from '@/composables/useGoesXrays'
 import DayNightMap from '@/components/DayNightMap.vue'
+import { formatUtcDateTime } from '@/utils/formatUtcDate'
 
 const {
   isLoading: xrLoading,
@@ -35,17 +36,25 @@ onMounted(() => {
 onBeforeUnmount(() => { if (clockTimer) clearInterval(clockTimer) })
 
 function fmtUTC(value) {
-  if (!value) return '—'
-  return new Intl.DateTimeFormat('en-GB', {
-    timeZone: 'UTC',
-    hour12: false,
-    year: 'numeric',
-    month: '2-digit',
-    day: '2-digit',
-    hour: '2-digit',
-    minute: '2-digit',
-    second: '2-digit',
-  }).format(value) + ' UTC'
+  return formatUtcDateTime(value)
+}
+
+function findLatestFlux(seriesBySat) {
+  const entries = Object.values(seriesBySat || {})
+    .flatMap((pairs) => (Array.isArray(pairs) ? pairs : []))
+    .map(([ts, val]) => ({ ts: Number(ts), value: Number(val) }))
+    .filter((item) => Number.isFinite(item.ts) && Number.isFinite(item.value))
+    .sort((a, b) => a.ts - b.ts)
+
+  return entries.at(-1) || null
+}
+
+const lastLongFlux = computed(() => findLatestFlux(longBySat.value))
+const lastShortFlux = computed(() => findLatestFlux(shortBySat.value))
+
+function formatFluxLabel(value) {
+  if (!Number.isFinite(value)) return '—'
+  return `${value.toExponential(2)} W/m²`
 }
 </script>
 
@@ -69,6 +78,20 @@ function fmtUTC(value) {
               <div class="xray__clock">
                 <span class="tag">Última muestra:</span>
                 <span class="mono">{{ fmtUTC(lastPointTime) }}</span>
+              </div>
+
+              <div class="xray__latest">
+                <span class="tag">Últimos valores</span>
+                <div class="xray__latest-grid">
+                  <div class="xray__pill">
+                    <span class="pill-label">0.1–0.8 nm</span>
+                    <span class="pill-value">{{ formatFluxLabel(lastLongFlux?.value) }}</span>
+                  </div>
+                  <div class="xray__pill">
+                    <span class="pill-label">0.05–0.4 nm</span>
+                    <span class="pill-value">{{ formatFluxLabel(lastShortFlux?.value) }}</span>
+                  </div>
+                </div>
               </div>
 
               <label class="xray__range">
@@ -438,6 +461,11 @@ function fmtUTC(value) {
 .xray__title h3 { margin-bottom: .25rem; }
 .xray__controls { display:flex; gap:.5rem; align-items:center; flex-wrap:wrap; justify-content:flex-end; }
 .xray__clock { display:flex; gap:.35rem; align-items:baseline; }
+.xray__latest { display:flex; flex-direction:column; gap:.2rem; min-width: 18rem; }
+.xray__latest-grid { display:grid; grid-template-columns: repeat(auto-fit, minmax(8.5rem, 1fr)); gap:.35rem; }
+.xray__pill { border:1px solid #cbd5e1; background:#f8fafc; border-radius:0.65rem; padding:0.35rem 0.55rem; display:flex; flex-direction:column; gap:0.1rem; }
+.pill-label { color:#475569; font-size:0.8rem; }
+.pill-value { font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, 'Liberation Mono', monospace; color:#0f172a; font-weight:600; }
 .xray__range select { border-radius: 0.5rem; padding: 0.3rem 0.45rem; border: 1px solid #cbd5e1; }
 .tag { color:#0f0f10; font-size:.85rem; }
 .mono { font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, 'Liberation Mono', monospace; color:#0f0f10; }
