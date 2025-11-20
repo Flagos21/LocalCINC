@@ -212,9 +212,9 @@ function isActive(r) { return range.value === r }
 .efield-home__head h3 { font-size: 1.05rem; font-weight: 600; color: #1f2933; }
 .efield-home__head p  { color:#69707d; margin-top:.15rem; font-size:.9rem; }
 .efield-home__summary { display:flex; flex-direction:column; gap:0.15rem; align-items:flex-end; min-width: 11rem; }
-.efield-home__label { font-size:0.8rem; color:#b45309; text-transform:uppercase; letter-spacing:0.05em; }
-.efield-home__value { font-size:1.35rem; font-weight:700; color:#0f172a; line-height:1.2; }
-.efield-home__time { color:#475569; font-size:0.9rem; }
+.efield-home__label { font-size:0.85rem; color:#475569; text-transform:none; letter-spacing:0; }
+.efield-home__value { font-size:1.65rem; font-weight:600; color:#0f172a; line-height:1.2; }
+.efield-home__time { color:#475569; font-size:0.85rem; }
 
 /* Controles compactos */
 .efield-home__controls { display: flex; gap: .75rem; flex-wrap: wrap; align-items: center; }

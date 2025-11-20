@@ -578,19 +578,20 @@ onMounted(() => {
 .magneto-home__latest .magneto-home__label {
   text-transform: none;
   letter-spacing: 0;
-  font-size: 0.95rem;
+  font-size: 0.85rem;
   color: #475569;
 }
 
 .magneto-home__latest .magneto-home__value {
-  font-size: 1.85rem;
-  font-weight: 800;
-  color: #0f766e;
-  line-height: 1.05;
+  font-size: 1.65rem;
+  font-weight: 600;
+  color: #0f172a;
+  line-height: 1.2;
 }
 
 .magneto-home__latest .magneto-home__time {
-  font-size: 0.95rem;
+  font-size: 0.85rem;
+  color: #475569;
 }
 
 .magneto-home__chart {

@@ -209,19 +209,19 @@ const options = computed(() => ({
 }
 
 .kp-label {
-  font-size: 0.9rem;
+  font-size: 0.85rem;
   color: #475569;
 }
 
 .kp-value {
-  font-size: 1.6rem;
-  font-weight: 800;
-  color: #047857;
-  line-height: 1.1;
+  font-size: 1.65rem;
+  font-weight: 600;
+  color: #0f172a;
+  line-height: 1.2;
 }
 
 .kp-time {
-  font-size: 0.9rem;
+  font-size: 0.85rem;
   color: #475569;
 }
 

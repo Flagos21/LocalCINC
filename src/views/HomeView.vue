@@ -35,9 +35,8 @@ function fmtUTC(value) {
   return formatUtcDateTime(value)
 }
 
-function findLatestFlux(seriesBySat) {
-  const entries = Object.values(seriesBySat || {})
-    .flatMap((pairs) => (Array.isArray(pairs) ? pairs : []))
+function findLatestFlux(pairs) {
+  const entries = (Array.isArray(pairs) ? pairs : [])
     .map(([ts, val]) => ({ ts: Number(ts), value: Number(val) }))
     .filter((item) => Number.isFinite(item.ts) && Number.isFinite(item.value))
     .sort((a, b) => a.ts - b.ts)
@@ -45,8 +44,20 @@ function findLatestFlux(seriesBySat) {
   return entries.at(-1) || null
 }
 
-const lastLongFlux = computed(() => findLatestFlux(longBySat.value))
-const lastShortFlux = computed(() => findLatestFlux(shortBySat.value))
+const latestFluxRows = computed(() => {
+  const rows = []
+
+  for (const sat of sats.value) {
+    const long = findLatestFlux(longBySat.value?.[sat])
+    const short = findLatestFlux(shortBySat.value?.[sat])
+
+    if (long || short) {
+      rows.push({ sat, long, short })
+    }
+  }
+
+  return rows
+})
 
 function formatFluxLabel(value) {
   if (!Number.isFinite(value)) return '—'
@@ -80,15 +91,22 @@ const xrayRanges = [
               </div>
 
               <div class="xray__latest">
-                <span class="tag">Últimos valores</span>
+                <span class="last-label">Últimos valores</span>
                 <div class="xray__latest-grid">
-                  <div class="xray__pill">
-                    <span class="pill-label">0.1–0.8 nm</span>
-                    <span class="pill-value">{{ formatFluxLabel(lastLongFlux?.value) }}</span>
-                  </div>
-                  <div class="xray__pill">
-                    <span class="pill-label">0.05–0.4 nm</span>
-                    <span class="pill-value">{{ formatFluxLabel(lastShortFlux?.value) }}</span>
+                  <div
+                    v-for="row in latestFluxRows"
+                    :key="row.sat"
+                    class="xray__latest-column"
+                  >
+                    <span class="last-hint">GOES-{{ row.sat }}</span>
+                    <div class="xray__latest-pair" v-if="row.long">
+                      <span class="last-hint">0.1–0.8 nm</span>
+                      <span class="last-value">{{ formatFluxLabel(row.long.value) }}</span>
+                    </div>
+                    <div class="xray__latest-pair" v-if="row.short">
+                      <span class="last-hint">0.05–0.4 nm</span>
+                      <span class="last-value">{{ formatFluxLabel(row.short.value) }}</span>
+                    </div>
                   </div>
                 </div>
               </div>
@@ -447,11 +465,13 @@ const xrayRanges = [
 .xray__title h3 { margin-bottom: .25rem; }
 .xray__controls { display:flex; gap:.5rem; align-items:center; flex-wrap:wrap; justify-content:flex-end; }
 .xray__clock { display:flex; gap:.35rem; align-items:baseline; }
-.xray__latest { display:flex; flex-direction:column; gap:.2rem; min-width: 18rem; }
-.xray__latest-grid { display:grid; grid-template-columns: repeat(auto-fit, minmax(8.5rem, 1fr)); gap:.35rem; }
-.xray__pill { border:1px solid #cbd5e1; background:#f8fafc; border-radius:0.65rem; padding:0.35rem 0.55rem; display:flex; flex-direction:column; gap:0.1rem; }
-.pill-label { color:#475569; font-size:0.8rem; }
-.pill-value { font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, 'Liberation Mono', monospace; color:#0f172a; font-weight:600; }
+.xray__latest { display:flex; flex-direction:column; gap:.25rem; min-width: 18rem; }
+.xray__latest-grid { display:grid; grid-template-columns: repeat(auto-fit, minmax(10rem, 1fr)); gap:.4rem; align-items:flex-start; }
+.xray__latest-column { border:1px solid #e2e8f0; background:#f8fafc; border-radius:0.65rem; padding:0.4rem 0.55rem; display:flex; flex-direction:column; gap:0.2rem; align-items:flex-end; }
+.xray__latest-pair { display:flex; flex-direction:column; align-items:flex-end; gap:0.05rem; }
+.last-label { font-size:0.85rem; color:#475569; text-align:right; }
+.last-hint { color:#475569; font-size:0.85rem; }
+.last-value { font-size:1.35rem; font-weight:700; color:#0f172a; line-height:1.2; font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, 'Liberation Mono', monospace; }
 .xray__ranges { display:flex; gap:0.45rem; flex-wrap:wrap; justify-content:flex-end; }
 .xray__range-btn { border:1px solid rgba(15,23,42,0.12); background:rgba(248,250,252,0.9); color:#0f172a; border-radius:999px; padding:0.35rem 0.95rem; font-weight:600; cursor:pointer; transition: background .15s ease, color .15s ease, box-shadow .15s ease; }
 .xray__range-btn:hover, .xray__range-btn:focus-visible { background:#f97316; color:#fff; outline:none; }
