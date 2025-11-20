@@ -1,332 +1,208 @@
-<template>
-  <div class="kp-card">
-    <div class="kp-meta" v-if="updatedAt">
-      <small class="muted">Actualizado: {{ fmtLocal(updatedAt) }}</small>
-    </div>
-
-    <div class="kp-body">
-      <ApexChart
-        v-if="series.length && series[0].data.length"
-        type="bar"
-        :height="height"
-        :options="options"
-        :series="series"
-      />
-      <div v-else class="kp-empty">Sin datos.</div>
-
-      <div v-if="dayLabels.length" class="kp-day-labels">
-        <span v-for="label in dayLabels" :key="label">{{ label }}</span>
-      </div>
-
-      <!-- Leyenda NOAA -->
-      <div class="noaa-scale">
-        <div class="seg" :style="{ background: NOOA_COLORS.base }"><span>G0</span></div>
-        <div class="seg" :style="{ background: NOOA_COLORS.k5 }"><span>G1</span></div>
-        <div class="seg" :style="{ background: NOOA_COLORS.k6 }"><span>G2</span></div>
-        <div class="seg" :style="{ background: NOOA_COLORS.k7 }"><span>G3</span></div>
-        <div class="seg" :style="{ background: NOOA_COLORS.k8_9 }"><span>G4</span></div>
-        <div class="seg" :style="{ background: NOOA_COLORS.k9o }"><span>G5</span></div>
-      </div>
-    </div>
-  </div>
-</template>
-
 <script setup>
-import { ref, computed, onMounted, onBeforeUnmount } from 'vue'
-import ApexChart from 'vue3-apexcharts'
+import { computed, ref, onMounted, onBeforeUnmount } from 'vue'
+import VueApexCharts from 'vue3-apexcharts'
 
-const props = defineProps({ height: { type: [Number, String], default: 300 } })
+const props = defineProps({
+  height: { type: [Number, String], default: 300 },
+  days: { type: Number, default: 3 }
+})
 
+const raw = ref([])
 const updatedAt = ref(null)
-const raw = ref([]) // [{ ts, kp }]
-const DAYS = 3
-const AUTO_REFRESH_MS = 10 * 60 * 1000
+const REFRESH_MS = 10 * 60 * 1000
 
-function fmtLocal(iso) {
-  try {
-    return new Date(iso).toLocaleString('es-CL', {
-      dateStyle: 'medium',
-      timeStyle: 'short',
-    })
-  } catch {
-    return iso
-  }
+// NOAA COLORS
+const NOOA = {
+  base: '#8fd26e',
+  k5: '#ffe81a',
+  k6: '#ffd200',
+  k7: '#ff9900',
+  k8_9: '#ff0000',
+  k9o: '#990000'
+}
+
+function colorForKp(k) {
+  k = Math.round(Number(k) || 0)
+  if (k >= 8) return NOOA.k8_9
+  if (k === 7) return NOOA.k7
+  if (k === 6) return NOOA.k6
+  if (k === 5) return NOOA.k5
+  return NOOA.base
 }
 
 async function reload() {
   try {
-    const res = await fetch(`/api/kp?days=${DAYS}`, { cache: 'no-store' })
+    const res = await fetch(`/api/kp?days=${props.days}`, { cache: 'no-store' })
     const j = await res.json()
-    raw.value = Array.isArray(j.points) ? j.points : []
-    updatedAt.value = j?.meta?.lastUpdated ?? null
-  } catch (e) {
-    console.error('kp reload failed:', e)
+    raw.value = j.points || []
+    updatedAt.value = j.meta?.lastUpdated || null
+  } catch (err) {
+    console.error('Kp load error:', err)
   }
 }
 
 let timer = null
 onMounted(() => {
   reload()
-  timer = setInterval(reload, AUTO_REFRESH_MS)
+  timer = setInterval(reload, REFRESH_MS)
 })
-onBeforeUnmount(() => {
-  if (timer) clearInterval(timer)
-})
+onBeforeUnmount(() => timer && clearInterval(timer))
 
-// Paleta NOAA
-const NOOA_COLORS = {
-  base: '#8fd26e',
-  k5: '#ffe81a',
-  k6: '#ffd200',
-  k7: '#ff9900',
-  k8_9: '#ff0000',
-  k9o: '#990000',
-}
-function colorForKp(v) {
-  const k = Math.max(0, Math.min(9, Math.round(Number(v) || 0)))
-  if (k >= 8) return NOOA_COLORS.k8_9
-  if (k === 7) return NOOA_COLORS.k7
-  if (k === 6) return NOOA_COLORS.k6
-  if (k === 5) return NOOA_COLORS.k5
-  return NOOA_COLORS.base
-}
-
-// Serie (idéntica a tu flujo, sin min/max forzados)
-const series = computed(() => {
-  const data = raw.value
-    .filter((p) => p && p.ts != null)
-    .map((p) => {
-      const x = new Date(p.ts).getTime()
-      const y = Number(p.kp)
-      return { x, y, fillColor: colorForKp(y), strokeColor: '#ffffff' }
-    })
-  return [{ name: 'Kp', data }]
-})
-
-const DATE_FMT = new Intl.DateTimeFormat('es-CL', {
-  day: '2-digit',
-  month: 'short',
-  year: 'numeric',
-  timeZone: 'UTC',
-})
-
-function formatUtcLabel(date) {
-  const raw = DATE_FMT.format(date)
-  return raw.replace(/(^|\s)([a-záéíóúñ])/g, (match, p1, p2) => p1 + p2.toUpperCase())
-}
-const options = computed(() => {
-  return {
-    chart: {
-      animations: { enabled: true },
-      toolbar: {
-        show: true,
-        tools: {
-          download: true,
-          selection: false,
-          zoom: false,
-          zoomin: false,
-          zoomout: false,
-          pan: false,
-          reset: false,
-        },
-        export: {
-          csv: {
-            filename: 'kp-index',
-            headerCategory: 'Inicio ventana (UTC)',
-            headerValue: 'Kp',
-          },
-          svg: { filename: 'kp-index' },
-          png: { filename: 'kp-index' },
-        },
-      },
-      zoom: { enabled: false },
-      foreColor: '#4b5563',
-    },
-    plotOptions: { bar: { columnWidth: '55%', borderRadius: 0, distributed: false } },
-    fill: { type: 'solid', opacity: 1 },
-    colors: ['#8fd26e'],
-    dataLabels: { enabled: false },
-    grid: { borderColor: '#e5e7eb', strokeDashArray: 4 },
-    legend: { show: false },
-
-    xaxis: {
-      type: 'datetime',
-      tickPlacement: 'on',
-      labels: {
-        datetimeUTC: true,
-        rotate: 0,
-        formatter: (val, timestamp) => {
-          const time = Number(timestamp)
-          if (!Number.isFinite(time)) return ''
-          const date = new Date(time)
-          if (Number.isNaN(date.getTime()) || date.getUTCHours() !== 0) return ''
-          return formatUtcLabel(date)
-        },
-        style: {
-          fontSize: '11px',
-          colors: '#4b5563',
-          fontWeight: 500,
-        },
-      },
-      axisBorder: { show: false },
-      axisTicks: { show: true, color: '#d1d5db' },
-      title: {
-        text: 'time (UTC)',
-        style: { fontSize: '12px', color: '#6b7280', fontWeight: 500 },
-      },
-    },
-
-    yaxis: {
-      min: 0,
-      max: 9,
-      tickAmount: 9,
-      labels: { formatter: (v) => Number(v).toFixed(0) },
-      title: { text: 'Kp index', style: { fontSize: '12px', color: '#6b7280' } },
-    },
-
-    tooltip: {
-      shared: false,
-      intersect: false,
-      x: {
-        formatter: (ts) => {
-          const n = typeof ts === 'number' ? ts : Number(ts)
-          if (!Number.isFinite(n)) return ''
-          const start = new Date(n)
-          const end = new Date(n + 3 * 3600 * 1000)
-          const fmtStart = new Intl.DateTimeFormat('es-CL', {
-            weekday: 'short',
-            day: '2-digit',
-            month: 'short',
-            year: 'numeric',
-            hour: '2-digit',
-            minute: '2-digit',
-            hour12: false,
-            timeZone: 'UTC',
-          }).format(start)
-          const hhmmEnd = end.toISOString().slice(11, 16)
-          return `${fmtStart} – ${hhmmEnd} UTC`
-        },
-      },
-      y: { formatter: (v) => Number(v).toFixed(1) },
-    },
+// ========= BAR SERIES =========
+const series = computed(() => [
+  {
+    name: 'Kp',
+    data: raw.value.map(p => ({
+      x: new Date(p.ts).getTime(),
+      y: Number(p.kp),
+      fillColor: colorForKp(p.kp)
+    }))
   }
-})
+])
 
-const dayLabels = computed(() => {
-  const firstSeries = series.value?.[0]?.data ?? []
-  const seen = new Set()
-  return firstSeries
-    .map((point) => {
-      const stamp = Number(point?.x)
-      if (!Number.isFinite(stamp)) return null
-      const d = new Date(stamp)
-      if (Number.isNaN(d.getTime())) return null
-      const midnight = Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate())
-      if (seen.has(midnight)) return null
-      seen.add(midnight)
-      return formatUtcLabel(new Date(midnight))
-    })
-    .filter(Boolean)
-})
+// ========= CHART OPTIONS (estilo Dst pero barras) =========
+const options = computed(() => ({
+  chart: {
+    type: 'bar',
+    height: '100%',
+    toolbar: { show: false },
+    animations: { enabled: true, easing: 'easeinout', speed: 300 },
+    background: 'transparent',
+    foreColor: '#0f172a'
+  },
+  plotOptions: {
+    bar: {
+      columnWidth: '60%',
+      borderRadius: 0
+    }
+  },
+  stroke: { width: 0 },
+  dataLabels: { enabled: false },
+
+  xaxis: {
+    type: 'datetime',
+    labels: {
+      datetimeUTC: true,
+      style: { colors: '#475569', fontSize: '11px' }
+    },
+    tooltip: { enabled: false }
+  },
+
+  yaxis: {
+    min: 0,
+    max: 9,
+    tickAmount: 9,
+    labels: {
+      formatter: v => Number(v).toFixed(0)
+    },
+    title: { text: 'Kp' }
+  },
+
+  grid: {
+    borderColor: '#e2e8f0',
+    strokeDashArray: 4,
+    padding: { left: 12, right: 12 }
+  },
+
+  tooltip: {
+    theme: 'dark',
+    x: {
+      formatter(ts) {
+        const d = new Date(ts)
+        return d.toUTCString().replace(' GMT', ' UTC')
+      }
+    },
+    y: {
+      formatter(v) {
+        return `${v.toFixed(1)}`
+      }
+    }
+  },
+
+  legend: { show: false }
+}))
 </script>
+
+<template>
+  <div class="kp-card">
+    <!-- Solo mostramos la hora de actualización pequeña arriba a la derecha -->
+    <header class="kp-header" v-if="updatedAt">
+      <small class="kp-upd">
+        Actualizado (UTC): {{ new Date(updatedAt).toUTCString().replace(' GMT', ' UTC') }}
+      </small>
+    </header>
+
+    <div class="kp-body">
+      <VueApexCharts type="bar" :options="options" :series="series" :height="height" />
+
+      <div class="kp-x-title">time (UTC)</div>
+
+      <!-- NOAA SCALE (texto SIEMPRE negro) -->
+      <div class="kp-scale">
+        <div style="background:#8fd26e">G0</div>
+        <div style="background:#ffe81a">G1</div>
+        <div style="background:#ffd200">G2</div>
+        <div style="background:#ff9900">G3</div>
+        <div style="background:#ff0000">G4</div>
+        <div style="background:#990000">G5</div>
+      </div>
+    </div>
+  </div>
+</template>
 
 <style scoped>
 .kp-card {
   background: #fff;
   border: 1px solid #e5e7eb;
-  border-radius: 10px;
-  overflow: hidden;
+  border-radius: 0.75rem;
+  padding: 0.75rem;
 }
-.kp-meta {
+
+.kp-header {
   display: flex;
   justify-content: flex-end;
-  padding: 10px 12px 0;
+  margin-bottom: 0.3rem;
 }
-.muted {
-  color: #6b7280;
+
+.kp-upd {
+  color: #475569;
+  font-size: 0.85rem;
 }
+
 .kp-body {
-  padding: 8px 12px 12px;
+  display: flex;
+  flex-direction: column;
 }
 
-.kp-day-labels {
+.kp-x-title {
+  text-align: center;
+  font-size: 11px;
+  color: #64748b;
+  margin-top: 4px;
+}
+
+/* Escala NOAA */
+.kp-scale {
   display: flex;
-  justify-content: space-between;
-  gap: 8px;
   margin-top: 6px;
-  padding: 0 4px;
-  font-size: 12px;
-  color: #4b5563;
-}
-
-.kp-day-labels span {
-  flex: 1 1 0;
-  text-align: center;
-  font-weight: 500;
-}
-.kp-empty {
-  color: #6b7280;
-  font-size: 13px;
-  padding: 16px 0;
-  text-align: center;
-}
-
-.noaa-scale {
-  display: flex;
-  margin-top: 10px;
-  border: 1px solid #d1d5db;
+  height: 28px;
   border-radius: 6px;
   overflow: hidden;
+  border: 1px solid #d1d5db;
 }
-.noaa-scale .seg {
-  flex: 1 1 0%;
+
+.kp-scale > div {
+  flex: 1;
   display: flex;
   align-items: center;
   justify-content: center;
-  height: 28px;
   font-size: 12px;
-  color: #111827;
   font-weight: 600;
-  border-right: 1px solid rgba(0, 0, 0, 0.08);
-}
-.noaa-scale .seg:nth-child(6) {
-  color: #fff;
-}
-.noaa-scale .seg:last-child {
-  border-right: 0;
+  color: #111827;          /* texto negro para todos */
+  border-right: 1px solid rgba(0,0,0,0.08);
 }
 
-:deep(.apexcharts-toolbar) {
-  backdrop-filter: none;
-  background: #ffffff;
-  border-radius: 0.5rem;
-  border: 1px solid #cbd5f5;
-  padding: 0.2rem;
-  box-shadow: none;
-}
-
-:deep(.apexcharts-toolbar svg) {
-  fill: #0f172a;
-  transition: fill 0.2s ease;
-}
-
-:deep(.apexcharts-toolbar svg:hover) {
-  fill: #0369a1;
-}
-
-:deep(.apexcharts-menu) {
-  background: #0f172a;
-  border: 1px solid #1e293b;
-  border-radius: 0.5rem;
-  box-shadow: 0 15px 30px rgba(15, 23, 42, 0.35);
-}
-
-:deep(.apexcharts-menu-item) {
-  color: #f8fafc;
-  font-weight: 500;
-}
-
-:deep(.apexcharts-menu-item:hover) {
-  background: rgba(148, 163, 184, 0.3);
+.kp-scale > div:last-child {
+  border-right: none;
 }
 </style>
