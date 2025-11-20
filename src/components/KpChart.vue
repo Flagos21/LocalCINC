@@ -68,7 +68,7 @@ const lastValueLabel = computed(() => {
 
 const lastTimeLabel = computed(() => {
   if (!lastPoint.value) return '—'
-  return formatUtcDateTime(lastPoint.value.ts, { includeSeconds: false })
+  return formatUtcDateTime(lastPoint.value.ts)
 })
 
 // ========= BAR SERIES =========
@@ -151,7 +151,7 @@ const options = computed(() => ({
     <!-- Solo mostramos la hora de actualización pequeña arriba a la derecha -->
     <header class="kp-header">
       <div class="kp-summary">
-        <span class="kp-label">Último Kp</span>
+        <span class="kp-label">Último (Kp)</span>
         <span class="kp-value">{{ lastValueLabel }}</span>
         <span class="kp-time">{{ lastTimeLabel }}</span>
       </div>
@@ -203,24 +203,25 @@ const options = computed(() => ({
 .kp-summary {
   display: flex;
   flex-direction: column;
-  align-items: flex-start;
+  align-items: flex-end;
   gap: 0.1rem;
+  text-align: right;
 }
 
 .kp-label {
-  font-size: 0.85rem;
+  font-size: 0.9rem;
   color: #475569;
 }
 
 .kp-value {
-  font-size: 1.25rem;
-  font-weight: 700;
-  color: #0f172a;
-  line-height: 1.2;
+  font-size: 1.6rem;
+  font-weight: 800;
+  color: #047857;
+  line-height: 1.1;
 }
 
 .kp-time {
-  font-size: 0.85rem;
+  font-size: 0.9rem;
   color: #475569;
 }
 

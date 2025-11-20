@@ -20,11 +20,7 @@ const {
   longBySat,
   shortBySat,
   sats,
-  lastPointTime,
-  autoRefresh,
-  toggleAuto,
   range: xrRange,
-  refresh,
 } = useGoesXrays({ range: '6h', pollMs: 60000, auto: true })
 
 const utcNow = ref(new Date())
@@ -56,6 +52,13 @@ function formatFluxLabel(value) {
   if (!Number.isFinite(value)) return '—'
   return `${value.toExponential(2)} W/m²`
 }
+
+const xrayRanges = [
+  { id: '6h', label: '6 h' },
+  { id: '1d', label: '1 día' },
+  { id: '3d', label: '3 días' },
+  { id: '7d', label: '7 días' }
+]
 </script>
 
 <template>
@@ -75,10 +78,6 @@ function formatFluxLabel(value) {
                 <span class="tag">UTC ahora:</span>
                 <span class="mono">{{ fmtUTC(utcNow) }}</span>
               </div>
-              <div class="xray__clock">
-                <span class="tag">Última muestra:</span>
-                <span class="mono">{{ fmtUTC(lastPointTime) }}</span>
-              </div>
 
               <div class="xray__latest">
                 <span class="tag">Últimos valores</span>
@@ -94,28 +93,18 @@ function formatFluxLabel(value) {
                 </div>
               </div>
 
-              <label class="xray__range">
-                <span class="tag">Intervalo:</span>
-                <select v-model="xrRange">
-                  <option value="6h">6 h</option>
-                  <option value="1d">1 día</option>
-                  <option value="3d">3 días</option>
-                  <option value="7d">7 días</option>
-                </select>
-              </label>
-
-              <button
-                class="toggle"
-                :class="{ 'is-on': autoRefresh }"
-                @click="toggleAuto"
-                type="button"
-                :aria-pressed="autoRefresh"
-              >
-                <span class="knob"></span>
-                <span class="label">{{ autoRefresh ? 'Auto-refresh ON' : 'Auto-refresh OFF' }}</span>
-              </button>
-
-              <button class="ghost" type="button" @click="refresh">Refrescar</button>
+              <div class="xray__ranges" role="group" aria-label="Rango de rayos X">
+                <button
+                  v-for="range in xrayRanges"
+                  :key="range.id"
+                  type="button"
+                  class="xray__range-btn"
+                  :class="{ 'is-active': xrRange === range.id }"
+                  @click="xrRange = range.id"
+                >
+                  {{ range.label }}
+                </button>
+              </div>
             </div>
           </header>
 
@@ -149,9 +138,6 @@ function formatFluxLabel(value) {
                 · Pts totales Short: {{
                   sats.reduce((acc, s) => acc + (shortBySat[s]?.length || 0), 0)
                 }}
-                <template v-if="lastPointTime">
-                  · Último ts: {{ new Date(lastPointTime).toISOString() }}
-                </template>
               </small>
             </template>
 
@@ -466,19 +452,12 @@ function formatFluxLabel(value) {
 .xray__pill { border:1px solid #cbd5e1; background:#f8fafc; border-radius:0.65rem; padding:0.35rem 0.55rem; display:flex; flex-direction:column; gap:0.1rem; }
 .pill-label { color:#475569; font-size:0.8rem; }
 .pill-value { font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, 'Liberation Mono', monospace; color:#0f172a; font-weight:600; }
-.xray__range select { border-radius: 0.5rem; padding: 0.3rem 0.45rem; border: 1px solid #cbd5e1; }
+.xray__ranges { display:flex; gap:0.45rem; flex-wrap:wrap; justify-content:flex-end; }
+.xray__range-btn { border:1px solid rgba(15,23,42,0.12); background:rgba(248,250,252,0.9); color:#0f172a; border-radius:999px; padding:0.35rem 0.95rem; font-weight:600; cursor:pointer; transition: background .15s ease, color .15s ease, box-shadow .15s ease; }
+.xray__range-btn:hover, .xray__range-btn:focus-visible { background:#f97316; color:#fff; outline:none; }
+.xray__range-btn.is-active { background:#f97316; color:#fff; box-shadow:0 10px 25px rgba(249, 115, 22, 0.25); }
 .tag { color:#0f0f10; font-size:.85rem; }
 .mono { font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, 'Liberation Mono', monospace; color:#0f0f10; }
-
-.toggle {
-  position: relative; display:inline-flex; align-items:center; gap:.5rem;
-  border:1px solid #cbd5e1; background:#f8fafc; border-radius:9999px;
-  padding:.25rem .6rem .25rem .25rem; cursor:pointer; color:#0f0f10;
-}
-.toggle .knob { width:1.25rem; height:1.25rem; border-radius:9999px; background:#94a3b8; transition:all .2s ease; }
-.toggle.is-on { border-color:#2563eb; background:#eff6ff; }
-.toggle.is-on .knob { background:#2563eb; transform: translateX(1.1rem); }
-.toggle .label { font-size:.85rem; color:#0f0f10; }
 
 .ghost { background:transparent; border:1px solid #cbd5e1; color:#0f0f10; padding:.35rem .6rem; border-radius:.5rem; cursor:pointer; }
 .ghost:hover { background:#f1f5f9; }
