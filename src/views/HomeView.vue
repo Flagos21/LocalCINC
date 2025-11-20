@@ -20,6 +20,7 @@ const {
   longBySat,
   shortBySat,
   sats,
+  lastPointTime,
   range: xrRange,
 } = useGoesXrays({ range: '6h', pollMs: 60000, auto: true })
 
@@ -85,9 +86,14 @@ const xrayRanges = [
             </div>
 
             <div class="xray__controls">
-              <div class="xray__clock">
-                <span class="tag">UTC ahora:</span>
-                <span class="mono">{{ fmtUTC(utcNow) }}</span>
+              <div class="xray__timestamps">
+                <div class="xray__clock">
+                  <span class="tag">UTC ahora:</span>
+                  <span class="mono">{{ fmtUTC(utcNow) }}</span>
+                </div>
+                <small v-if="lastPointTime" class="xray__updated">
+                  Actualizado: {{ fmtUTC(lastPointTime) }}
+                </small>
               </div>
 
               <div class="xray__latest">
@@ -99,13 +105,15 @@ const xrayRanges = [
                     class="xray__latest-column"
                   >
                     <span class="last-hint">GOES-{{ row.sat }}</span>
-                    <div class="xray__latest-pair" v-if="row.long">
-                      <span class="last-hint">0.1–0.8 nm</span>
-                      <span class="last-value">{{ formatFluxLabel(row.long.value) }}</span>
-                    </div>
-                    <div class="xray__latest-pair" v-if="row.short">
-                      <span class="last-hint">0.05–0.4 nm</span>
-                      <span class="last-value">{{ formatFluxLabel(row.short.value) }}</span>
+                    <div class="xray__latest-row" v-if="row.long || row.short">
+                      <div class="xray__latest-pair" v-if="row.long">
+                        <span class="last-hint">0.1–0.8 nm</span>
+                        <span class="last-value">{{ formatFluxLabel(row.long.value) }}</span>
+                      </div>
+                      <div class="xray__latest-pair" v-if="row.short">
+                        <span class="last-hint">0.05–0.4 nm</span>
+                        <span class="last-value">{{ formatFluxLabel(row.short.value) }}</span>
+                      </div>
                     </div>
                   </div>
                 </div>
@@ -463,12 +471,15 @@ const xrayRanges = [
 
 .xray__head { gap: .75rem; }
 .xray__title h3 { margin-bottom: .25rem; }
-.xray__controls { display:flex; gap:.5rem; align-items:center; flex-wrap:wrap; justify-content:flex-end; }
+.xray__controls { display:flex; gap:.75rem; align-items:flex-start; flex-wrap:wrap; justify-content:flex-end; }
+.xray__timestamps { display:flex; flex-direction:column; align-items:flex-end; gap:0.15rem; min-width: 13rem; }
 .xray__clock { display:flex; gap:.35rem; align-items:baseline; }
+.xray__updated { color:#475569; font-size:0.85rem; }
 .xray__latest { display:flex; flex-direction:column; gap:.25rem; min-width: 18rem; }
-.xray__latest-grid { display:grid; grid-template-columns: repeat(auto-fit, minmax(10rem, 1fr)); gap:.4rem; align-items:flex-start; }
-.xray__latest-column { border:1px solid #e2e8f0; background:#f8fafc; border-radius:0.65rem; padding:0.4rem 0.55rem; display:flex; flex-direction:column; gap:0.2rem; align-items:flex-end; }
-.xray__latest-pair { display:flex; flex-direction:column; align-items:flex-end; gap:0.05rem; }
+.xray__latest-grid { display:flex; flex-wrap:wrap; gap:0.5rem; align-items:stretch; }
+.xray__latest-column { border:1px solid #e2e8f0; background:#f8fafc; border-radius:0.65rem; padding:0.5rem 0.65rem; display:flex; flex-direction:column; gap:0.2rem; min-width: 12.5rem; flex: 1 1 12.5rem; align-items:stretch; }
+.xray__latest-row { display:flex; gap:0.5rem; align-items:flex-start; justify-content:space-between; flex-wrap:wrap; }
+.xray__latest-pair { display:flex; flex-direction:column; align-items:flex-start; gap:0.05rem; min-width: 7rem; }
 .last-label { font-size:0.85rem; color:#475569; text-align:right; }
 .last-hint { color:#475569; font-size:0.85rem; }
 .last-value { font-size:1.35rem; font-weight:700; color:#0f172a; line-height:1.2; font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, 'Liberation Mono', monospace; }

@@ -36,8 +36,18 @@ async function reload() {
   try {
     const res = await fetch(`/api/kp?days=${props.days}`, { cache: 'no-store' })
     const j = await res.json()
-    raw.value = j.points || []
-    updatedAt.value = j.meta?.lastUpdated || null
+    const series = Array.isArray(j.series) ? j.series : j.points
+
+    raw.value = Array.isArray(series)
+      ? series
+        .map((item) => ({
+          ts: Number(item?.ts) || Date.parse(item?.time),
+          kp: Number(item?.kp ?? item?.value)
+        }))
+        .filter((item) => Number.isFinite(item.ts) && Number.isFinite(item.kp))
+      : []
+
+    updatedAt.value = j.updatedAt || j.meta?.lastUpdated || null
   } catch (err) {
     console.error('Kp load error:', err)
   }

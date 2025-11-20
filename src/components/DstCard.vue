@@ -111,19 +111,6 @@ const lastValueLabel = computed(() => {
   return `${Number(lastValue.value).toFixed(0)} nT`
 })
 
-const trendClass = computed(() => {
-  if (lastValue.value == null) {
-    return ''
-  }
-  if (lastValue.value <= -50) {
-    return 'dst-card__value--low'
-  }
-  if (lastValue.value >= 0) {
-    return 'dst-card__value--high'
-  }
-  return ''
-})
-
 const hasChartData = computed(() => chartPoints.value.length > 0)
 
 const errorMessage = computed(() => latestErrorMessage.value || realtimeErrorMessage.value)
@@ -138,7 +125,7 @@ const errorMessage = computed(() => latestErrorMessage.value || realtimeErrorMes
       </div>
       <div class="dst-card__summary" aria-live="polite">
         <span class="dst-card__label">Último (nT)</span>
-        <span class="dst-card__value" :class="trendClass">{{ lastValueLabel }}</span>
+        <span class="dst-card__value">{{ lastValueLabel }}</span>
         <span class="dst-card__time">{{ lastTimestampLabel }}</span>
       </div>
     </header>
@@ -218,14 +205,6 @@ const errorMessage = computed(() => latestErrorMessage.value || realtimeErrorMes
   font-weight: 600;
   color: #0f172a;
   line-height: 1.2;
-}
-
-.dst-card__value--low {
-  color: #b42318;
-}
-
-.dst-card__value--high {
-  color: #047857;
 }
 
 .dst-card__time {
