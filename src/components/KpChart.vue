@@ -82,16 +82,20 @@ const lastTimeLabel = computed(() => {
 })
 
 // ========= BAR SERIES =========
-const series = computed(() => [
-  {
-    name: 'Kp',
-    data: raw.value.map(p => ({
-      x: new Date(p.ts).getTime(),
-      y: Number(p.kp),
-      fillColor: colorForKp(p.kp)
-    }))
-  }
-])
+const series = computed(() => {
+  const sorted = [...raw.value].sort((a, b) => a.ts - b.ts)
+
+  return [
+    {
+      name: 'Kp',
+      data: sorted.map(p => ({
+        x: new Date(p.ts).getTime(),
+        y: Number(p.kp),
+        fillColor: colorForKp(p.kp)
+      }))
+    }
+  ]
+})
 
 // ========= CHART OPTIONS (estilo Dst pero barras) =========
 const options = computed(() => ({
@@ -158,21 +162,32 @@ const options = computed(() => ({
 
 <template>
   <div class="kp-card">
-    <!-- Solo mostramos la hora de actualización pequeña arriba a la derecha -->
     <header class="kp-header">
+      <!-- Título dentro de la tarjeta, estilo Dst -->
+      <div class="kp-title-block">
+        <div class="kp-title">
+          Índice geomagnético Kp (GFZ)
+        </div>
+        <div class="kp-subtitle">
+          Serie de barras de 3 h con colores por severidad.
+        </div>
+      </div>
+
+      <!-- Último valor a la derecha -->
       <div class="kp-summary">
         <span class="kp-label">Último (Kp)</span>
         <span class="kp-value">{{ lastValueLabel }}</span>
         <span class="kp-time">{{ lastTimeLabel }}</span>
       </div>
-
-      <small v-if="updatedAt" class="kp-upd">
-        Actualizado: {{ formatUtcDateTime(updatedAt, { includeSeconds: false }) }}
-      </small>
     </header>
 
     <div class="kp-body">
-      <VueApexCharts type="bar" :options="options" :series="series" :height="height" />
+      <VueApexCharts
+        type="bar"
+        :options="options"
+        :series="series"
+        :height="height"
+      />
 
       <div class="kp-x-title">time (UTC)</div>
 
@@ -194,20 +209,37 @@ const options = computed(() => ({
   background: #fff;
   border: 1px solid #e5e7eb;
   border-radius: 0.75rem;
-  padding: 0.75rem;
+  padding: 0.75rem 0.9rem;
 }
 
 .kp-header {
   display: flex;
   justify-content: space-between;
   align-items: flex-start;
-  gap: 0.5rem;
-  margin-bottom: 0.3rem;
+  gap: 0.75rem;
+  margin-bottom: 0.35rem;
+}
+
+.kp-title-block {
+  display: flex;
+  flex-direction: column;
+  gap: 0.1rem;
+}
+
+.kp-title {
+  font-weight: 600;
+  color: #0f172a;
+}
+
+.kp-subtitle {
+  font-size: 0.85rem;
+  color: #64748b;
 }
 
 .kp-upd {
+  margin-top: 0.1rem;
   color: #475569;
-  font-size: 0.85rem;
+  font-size: 0.8rem;
 }
 
 .kp-summary {

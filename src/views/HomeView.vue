@@ -177,10 +177,6 @@ const xrayRanges = [
 
             <div class="home__tile-subsection home__tile-subsection--kp">
               <header class="home__tile-subhead">
-                <div>
-                  <h4>Índice geomagnético Kp (GFZ)</h4>
-                  <p>Serie de barras de 3 h con colores por severidad. Fuente: GFZ.</p>
-                </div>
               </header>
               <KpChart embedded :height="200" />
             </div>
