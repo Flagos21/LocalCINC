@@ -5,6 +5,7 @@ import VueApexCharts from 'vue3-apexcharts'
 import dayjs from '@/utils/dayjs'
 import { useMagnetometerSeries } from '@/composables/useMagnetometerSeries'
 import { buildDailyMedianBaseline } from '@/utils/timeSeriesBaseline'
+import { formatUtcDateTime } from '@/utils/formatUtcDate'
 
 const presets = [
   { id: '1d', label: '1 día', duration: { amount: 1, unit: 'day' } },
@@ -120,6 +121,27 @@ const metaSummary = computed(() => {
   const resolutionLabel = resolution ? `Resolución: ${resolution}` : ''
 
   return [filesLabel, pointsLabel, resolutionLabel].filter(Boolean).join(' – ')
+})
+
+const lastPoint = computed(() => {
+  const rawPoints = (labels.value || [])
+    .map((t, i) => ({ ts: toTimestamp(t), value: Number((series.value || [])[i]) }))
+    .filter((point) => Number.isFinite(point.ts) && Number.isFinite(point.value))
+    .sort((a, b) => a.ts - b.ts)
+
+  return rawPoints.at(-1) || null
+})
+
+const lastValueLabel = computed(() => {
+  if (!lastPoint.value) return '—'
+
+  const suffix = unit.value || 'nT'
+  return `${lastPoint.value.value.toFixed(1)} ${suffix}`
+})
+
+const lastTimeLabel = computed(() => {
+  if (!lastPoint.value) return '—'
+  return formatUtcDateTime(lastPoint.value.ts)
 })
 
 const chartOptions = computed(() => {
@@ -388,6 +410,12 @@ onMounted(() => {
       </div>
 
       <div class="magneto-home__head-actions">
+        <div class="magneto-home__latest" aria-live="polite">
+          <span class="magneto-home__label">Último ({{ unit }})</span>
+          <span class="magneto-home__value">{{ lastValueLabel }}</span>
+          <span class="magneto-home__time">{{ lastTimeLabel }}</span>
+        </div>
+
         <div class="magneto-home__presets" role="group" aria-label="Intervalos rápidos">
           <button
             v-for="preset in presets"
@@ -401,9 +429,9 @@ onMounted(() => {
           </button>
         </div>
       </div>
-    </header>
+  </header>
 
-    <div class="magneto-home__meta">
+  <div class="magneto-home__meta magneto-home__meta--grid">
       <div class="magneto-home__meta-item">
         <span class="magneto-home__label">Seleccionado</span>
         <span class="magneto-home__value">{{ rangeLabel }}</span>
@@ -459,8 +487,8 @@ onMounted(() => {
 
 .magneto-home__head-actions {
   display: flex;
-  align-items: center;
-  gap: 0.65rem;
+  align-items: flex-start;
+  gap: 0.85rem;
   flex-wrap: wrap;
   justify-content: flex-end;
 }
@@ -483,6 +511,15 @@ onMounted(() => {
   gap: 0.5rem;
   flex-wrap: wrap;
   justify-content: flex-end;
+}
+
+.magneto-home__latest {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 0.15rem;
+  text-align: right;
+  min-width: 11rem;
 }
 
 .magneto-home__preset {
@@ -532,6 +569,28 @@ onMounted(() => {
 
 .magneto-home__value {
   color: #0f172a;
+}
+
+.magneto-home__time {
+  color: #475569;
+}
+
+.magneto-home__latest .magneto-home__label {
+  text-transform: none;
+  letter-spacing: 0;
+  font-size: 0.95rem;
+  color: #475569;
+}
+
+.magneto-home__latest .magneto-home__value {
+  font-size: 1.85rem;
+  font-weight: 800;
+  color: #0f766e;
+  line-height: 1.05;
+}
+
+.magneto-home__latest .magneto-home__time {
+  font-size: 0.95rem;
 }
 
 .magneto-home__chart {
