@@ -5,6 +5,7 @@ import VueApexCharts from 'vue3-apexcharts'
 import dayjs from '@/utils/dayjs'
 import { useMagnetometerSeries } from '@/composables/useMagnetometerSeries'
 import { buildDailyMedianBaseline } from '@/utils/timeSeriesBaseline'
+import { formatUtcDateTime } from '@/utils/formatUtcDate'
 
 const presets = [
   { id: '1d', label: '1 día', duration: { amount: 1, unit: 'day' } },
@@ -120,6 +121,27 @@ const metaSummary = computed(() => {
   const resolutionLabel = resolution ? `Resolución: ${resolution}` : ''
 
   return [filesLabel, pointsLabel, resolutionLabel].filter(Boolean).join(' – ')
+})
+
+const lastPoint = computed(() => {
+  const rawPoints = (labels.value || [])
+    .map((t, i) => ({ ts: toTimestamp(t), value: Number((series.value || [])[i]) }))
+    .filter((point) => Number.isFinite(point.ts) && Number.isFinite(point.value))
+    .sort((a, b) => a.ts - b.ts)
+
+  return rawPoints.at(-1) || null
+})
+
+const lastValueLabel = computed(() => {
+  if (!lastPoint.value) return '—'
+
+  const suffix = unit.value || 'nT'
+  return `${lastPoint.value.value.toFixed(2)} ${suffix}`
+})
+
+const lastTimeLabel = computed(() => {
+  if (!lastPoint.value) return '—'
+  return formatUtcDateTime(lastPoint.value.ts)
 })
 
 const chartOptions = computed(() => {
@@ -401,9 +423,14 @@ onMounted(() => {
           </button>
         </div>
       </div>
-    </header>
+  </header>
 
-    <div class="magneto-home__meta">
+  <div class="magneto-home__meta">
+      <div class="magneto-home__meta-item">
+        <span class="magneto-home__label">Último</span>
+        <span class="magneto-home__value">{{ lastValueLabel }}</span>
+        <span class="magneto-home__time">{{ lastTimeLabel }}</span>
+      </div>
       <div class="magneto-home__meta-item">
         <span class="magneto-home__label">Seleccionado</span>
         <span class="magneto-home__value">{{ rangeLabel }}</span>
@@ -532,6 +559,10 @@ onMounted(() => {
 
 .magneto-home__value {
   color: #0f172a;
+}
+
+.magneto-home__time {
+  color: #475569;
 }
 
 .magneto-home__chart {

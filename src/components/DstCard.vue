@@ -3,6 +3,7 @@ import { computed } from 'vue'
 import VueApexCharts from 'vue3-apexcharts'
 
 import { useDstRealtime, useDstLatest } from '@/composables/useDstRealtime'
+import { formatUtcDateTime } from '@/utils/formatUtcDate'
 
 const POLL_INTERVAL = 60000
 
@@ -126,16 +127,6 @@ const trendClass = computed(() => {
 const hasChartData = computed(() => chartPoints.value.length > 0)
 
 const errorMessage = computed(() => latestErrorMessage.value || realtimeErrorMessage.value)
-
-function formatUtcDateTime(value) {
-  const ts = typeof value === 'number' ? value : Date.parse(value)
-  if (!Number.isFinite(ts)) {
-    return '—'
-  }
-
-  const label = new Date(ts).toUTCString()
-  return label.replace(' GMT', ' UTC')
-}
 </script>
 
 <template>
