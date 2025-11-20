@@ -5,6 +5,7 @@ import { useEfmLive } from '@/composables/useEfmLive'
 import { useMagnetometerSeries } from '@/composables/useMagnetometerSeries'
 import { buildDailyMedianBaseline } from '@/utils/timeSeriesBaseline'
 import { durationStringToMs, injectNullGaps } from '@/utils/timeSeriesGaps'
+import { formatUtcDateTime } from '@/utils/formatUtcDate'
 
 const {
   points, error,
@@ -50,6 +51,26 @@ const livePoints = computed(() => {
 
   const stepMs = durationStringToMs(agg.value)
   return injectNullGaps(rawPoints, stepMs)
+})
+
+const lastPoint = computed(() => {
+  for (let i = livePoints.value.length - 1; i >= 0; i -= 1) {
+    const [ts, value] = livePoints.value[i]
+    if (Number.isFinite(value)) {
+      return { ts, value }
+    }
+  }
+  return null
+})
+
+const lastValueLabel = computed(() => {
+  if (!lastPoint.value) return '—'
+  return `${lastPoint.value.value.toFixed(3)} kV/m`
+})
+
+const lastTimeLabel = computed(() => {
+  if (!lastPoint.value) return '—'
+  return formatUtcDateTime(lastPoint.value.ts)
 })
 
 const chartSeries = computed(() => {
@@ -126,6 +147,11 @@ function isActive(r) { return range.value === r }
         <h3>Campo eléctrico (tiempo real)</h3>
         <p>Streaming E<sub>z</sub> con ventana rápida, controles y límites fijos.</p>
       </div>
+      <div class="efield-home__summary">
+        <span class="efield-home__label">Último</span>
+        <span class="efield-home__value">{{ lastValueLabel }}</span>
+        <span class="efield-home__time">{{ lastTimeLabel }}</span>
+      </div>
     </header>
 
     <!-- Controles -->
@@ -182,8 +208,13 @@ function isActive(r) { return range.value === r }
   height: 100%; min-height: 0;
   padding: 0.9rem 1rem 1rem; /* el tile está sin padding */
 }
+.efield-home__head { display:flex; justify-content: space-between; align-items: flex-start; gap: 0.75rem; }
 .efield-home__head h3 { font-size: 1.05rem; font-weight: 600; color: #1f2933; }
 .efield-home__head p  { color:#69707d; margin-top:.15rem; font-size:.9rem; }
+.efield-home__summary { display:flex; flex-direction:column; gap:0.15rem; align-items:flex-end; min-width: 11rem; }
+.efield-home__label { font-size:0.85rem; color:#475569; text-transform:none; letter-spacing:0; }
+.efield-home__value { font-size:1.65rem; font-weight:600; color:#0f172a; line-height:1.2; }
+.efield-home__time { color:#475569; font-size:0.85rem; }
 
 /* Controles compactos */
 .efield-home__controls { display: flex; gap: .75rem; flex-wrap: wrap; align-items: center; }

@@ -1,5 +1,5 @@
 <script setup>
-import { ref, onMounted, onBeforeUnmount } from 'vue'
+import { computed, ref, onMounted, onBeforeUnmount } from 'vue'
 
 import SunViewer from '@/components/SunViewer.vue'
 import IonogramLatest from '@/components/IonogramLatest.vue'
@@ -11,6 +11,7 @@ import DstCard from '@/components/DstCard.vue'
 import KpChart from '@/components/KpChart.vue'
 import { useGoesXrays } from '@/composables/useGoesXrays'
 import DayNightMap from '@/components/DayNightMap.vue'
+import { formatUtcDateTime } from '@/utils/formatUtcDate'
 
 const {
   isLoading: xrLoading,
@@ -20,10 +21,7 @@ const {
   shortBySat,
   sats,
   lastPointTime,
-  autoRefresh,
-  toggleAuto,
   range: xrRange,
-  refresh,
 } = useGoesXrays({ range: '6h', pollMs: 60000, auto: true })
 
 const utcNow = ref(new Date())
@@ -35,18 +33,44 @@ onMounted(() => {
 onBeforeUnmount(() => { if (clockTimer) clearInterval(clockTimer) })
 
 function fmtUTC(value) {
-  if (!value) return '—'
-  return new Intl.DateTimeFormat('en-GB', {
-    timeZone: 'UTC',
-    hour12: false,
-    year: 'numeric',
-    month: '2-digit',
-    day: '2-digit',
-    hour: '2-digit',
-    minute: '2-digit',
-    second: '2-digit',
-  }).format(value) + ' UTC'
+  return formatUtcDateTime(value)
 }
+
+function findLatestFlux(pairs) {
+  const entries = (Array.isArray(pairs) ? pairs : [])
+    .map(([ts, val]) => ({ ts: Number(ts), value: Number(val) }))
+    .filter((item) => Number.isFinite(item.ts) && Number.isFinite(item.value))
+    .sort((a, b) => a.ts - b.ts)
+
+  return entries.at(-1) || null
+}
+
+const latestFluxRows = computed(() => {
+  const rows = []
+
+  for (const sat of sats.value) {
+    const long = findLatestFlux(longBySat.value?.[sat])
+    const short = findLatestFlux(shortBySat.value?.[sat])
+
+    if (long || short) {
+      rows.push({ sat, long, short })
+    }
+  }
+
+  return rows
+})
+
+function formatFluxLabel(value) {
+  if (!Number.isFinite(value)) return '—'
+  return `${value.toExponential(2)} W/m²`
+}
+
+const xrayRanges = [
+  { id: '6h', label: '6 h' },
+  { id: '1d', label: '1 día' },
+  { id: '3d', label: '3 días' },
+  { id: '7d', label: '7 días' }
+]
 </script>
 
 <template>
@@ -62,37 +86,51 @@ function fmtUTC(value) {
             </div>
 
             <div class="xray__controls">
-              <div class="xray__clock">
-                <span class="tag">UTC ahora:</span>
-                <span class="mono">{{ fmtUTC(utcNow) }}</span>
+              <div class="xray__timestamps">
+                <div class="xray__clock">
+                  <span class="tag">UTC ahora:</span>
+                  <span class="mono">{{ fmtUTC(utcNow) }}</span>
+                </div>
+                <small v-if="lastPointTime" class="xray__updated">
+                  Actualizado: {{ fmtUTC(lastPointTime) }}
+                </small>
               </div>
-              <div class="xray__clock">
-                <span class="tag">Última muestra:</span>
-                <span class="mono">{{ fmtUTC(lastPointTime) }}</span>
+
+              <div class="xray__latest">
+                <span class="last-label">Últimos valores</span>
+                <div class="xray__latest-grid">
+                  <div
+                    v-for="row in latestFluxRows"
+                    :key="row.sat"
+                    class="xray__latest-column"
+                  >
+                    <span class="last-hint">GOES-{{ row.sat }}</span>
+                    <div class="xray__latest-row" v-if="row.long || row.short">
+                      <div class="xray__latest-pair" v-if="row.long">
+                        <span class="last-hint">0.1–0.8 nm</span>
+                        <span class="last-value">{{ formatFluxLabel(row.long.value) }}</span>
+                      </div>
+                      <div class="xray__latest-pair" v-if="row.short">
+                        <span class="last-hint">0.05–0.4 nm</span>
+                        <span class="last-value">{{ formatFluxLabel(row.short.value) }}</span>
+                      </div>
+                    </div>
+                  </div>
+                </div>
               </div>
 
-              <label class="xray__range">
-                <span class="tag">Intervalo:</span>
-                <select v-model="xrRange">
-                  <option value="6h">6 h</option>
-                  <option value="1d">1 día</option>
-                  <option value="3d">3 días</option>
-                  <option value="7d">7 días</option>
-                </select>
-              </label>
-
-              <button
-                class="toggle"
-                :class="{ 'is-on': autoRefresh }"
-                @click="toggleAuto"
-                type="button"
-                :aria-pressed="autoRefresh"
-              >
-                <span class="knob"></span>
-                <span class="label">{{ autoRefresh ? 'Auto-refresh ON' : 'Auto-refresh OFF' }}</span>
-              </button>
-
-              <button class="ghost" type="button" @click="refresh">Refrescar</button>
+              <div class="xray__ranges" role="group" aria-label="Rango de rayos X">
+                <button
+                  v-for="range in xrayRanges"
+                  :key="range.id"
+                  type="button"
+                  class="xray__range-btn"
+                  :class="{ 'is-active': xrRange === range.id }"
+                  @click="xrRange = range.id"
+                >
+                  {{ range.label }}
+                </button>
+              </div>
             </div>
           </header>
 
@@ -126,9 +164,6 @@ function fmtUTC(value) {
                 · Pts totales Short: {{
                   sats.reduce((acc, s) => acc + (shortBySat[s]?.length || 0), 0)
                 }}
-                <template v-if="lastPointTime">
-                  · Último ts: {{ new Date(lastPointTime).toISOString() }}
-                </template>
               </small>
             </template>
 
@@ -436,21 +471,24 @@ function fmtUTC(value) {
 
 .xray__head { gap: .75rem; }
 .xray__title h3 { margin-bottom: .25rem; }
-.xray__controls { display:flex; gap:.5rem; align-items:center; flex-wrap:wrap; justify-content:flex-end; }
+.xray__controls { display:flex; gap:.75rem; align-items:flex-start; flex-wrap:wrap; justify-content:flex-end; }
+.xray__timestamps { display:flex; flex-direction:column; align-items:flex-end; gap:0.15rem; min-width: 13rem; }
 .xray__clock { display:flex; gap:.35rem; align-items:baseline; }
-.xray__range select { border-radius: 0.5rem; padding: 0.3rem 0.45rem; border: 1px solid #cbd5e1; }
+.xray__updated { color:#475569; font-size:0.85rem; }
+.xray__latest { display:flex; flex-direction:column; gap:.25rem; min-width: 18rem; }
+.xray__latest-grid { display:flex; flex-wrap:wrap; gap:0.5rem; align-items:stretch; }
+.xray__latest-column { border:1px solid #e2e8f0; background:#f8fafc; border-radius:0.65rem; padding:0.5rem 0.65rem; display:flex; flex-direction:column; gap:0.2rem; min-width: 12.5rem; flex: 1 1 12.5rem; align-items:stretch; }
+.xray__latest-row { display:flex; gap:0.5rem; align-items:flex-start; justify-content:space-between; flex-wrap:wrap; }
+.xray__latest-pair { display:flex; flex-direction:column; align-items:flex-start; gap:0.05rem; min-width: 7rem; }
+.last-label { font-size:0.85rem; color:#475569; text-align:right; }
+.last-hint { color:#475569; font-size:0.85rem; }
+.last-value { font-size:1.35rem; font-weight:700; color:#0f172a; line-height:1.2; font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, 'Liberation Mono', monospace; }
+.xray__ranges { display:flex; gap:0.45rem; flex-wrap:wrap; justify-content:flex-end; }
+.xray__range-btn { border:1px solid rgba(15,23,42,0.12); background:rgba(248,250,252,0.9); color:#0f172a; border-radius:999px; padding:0.35rem 0.95rem; font-weight:600; cursor:pointer; transition: background .15s ease, color .15s ease, box-shadow .15s ease; }
+.xray__range-btn:hover, .xray__range-btn:focus-visible { background:#f97316; color:#fff; outline:none; }
+.xray__range-btn.is-active { background:#f97316; color:#fff; box-shadow:0 10px 25px rgba(249, 115, 22, 0.25); }
 .tag { color:#0f0f10; font-size:.85rem; }
 .mono { font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, 'Liberation Mono', monospace; color:#0f0f10; }
-
-.toggle {
-  position: relative; display:inline-flex; align-items:center; gap:.5rem;
-  border:1px solid #cbd5e1; background:#f8fafc; border-radius:9999px;
-  padding:.25rem .6rem .25rem .25rem; cursor:pointer; color:#0f0f10;
-}
-.toggle .knob { width:1.25rem; height:1.25rem; border-radius:9999px; background:#94a3b8; transition:all .2s ease; }
-.toggle.is-on { border-color:#2563eb; background:#eff6ff; }
-.toggle.is-on .knob { background:#2563eb; transform: translateX(1.1rem); }
-.toggle .label { font-size:.85rem; color:#0f0f10; }
 
 .ghost { background:transparent; border:1px solid #cbd5e1; color:#0f0f10; padding:.35rem .6rem; border-radius:.5rem; cursor:pointer; }
 .ghost:hover { background:#f1f5f9; }
