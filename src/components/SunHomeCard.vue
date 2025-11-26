@@ -18,5 +18,26 @@ import SunViewer from '@/components/SunViewer.vue'
 </script>
 
 <style scoped>
-.home__tile-visual--sun { min-height: var(--home-bottom-media-height); }
+.home__tile-visual--sun {
+  min-height: var(--home-bottom-media-height);
+  display: flex;
+  align-items: stretch;
+  justify-content: center;
+}
+
+/* El contenido interno del SunViewer debe ocupar todo el espacio */
+.home__tile-visual--sun :deep(img),
+.home__tile-visual--sun :deep(canvas),
+.home__tile-visual--sun :deep(video) {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+}
+
+/* Título y subtítulo en negro (ya lo tenías en el otro mensaje) */
+.home__tile--sun h3,
+.home__tile--sun p {
+  color: #0f172a !important;
+}
 </style>
+

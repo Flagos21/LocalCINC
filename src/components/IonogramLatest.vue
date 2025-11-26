@@ -123,7 +123,7 @@ onBeforeUnmount(() => {
 .ionogram-card__header h3 {
   font-size: 1.1rem;
   font-weight: 600;
-  color: #1f2933;
+  color: #0f172a;     /* mismo color que los demás titulares */
 }
 
 .ionogram-card__header p {

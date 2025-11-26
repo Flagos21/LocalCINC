@@ -1,4 +1,4 @@
-<script setup>
+<script setup> 
 import { computed, ref, onMounted, onBeforeUnmount } from 'vue'
 
 import DstCard from '@/components/DstCard.vue'
@@ -77,12 +77,8 @@ const xrayRanges = [
 
       <div class="xray__controls">
         <div class="xray__timestamps">
-          <div class="xray__clock">
-            <span class="tag">UTC ahora:</span>
-            <span class="mono">{{ fmtUTC(utcNow) }}</span>
-          </div>
           <small v-if="lastPointTime" class="xray__updated">
-            Actualizado: {{ fmtUTC(lastPointTime) }}
+            {{ fmtUTC(lastPointTime) }}
           </small>
         </div>
 
@@ -179,8 +175,8 @@ const xrayRanges = [
 .xray__title h3 { margin-bottom: .25rem; }
 .xray__controls { display:flex; gap:.75rem; align-items:flex-start; flex-wrap:wrap; justify-content:flex-end; }
 .xray__timestamps { display:flex; flex-direction:column; align-items:flex-end; gap:0.15rem; min-width: 13rem; }
-.xray__clock { display:flex; gap:.35rem; align-items:baseline; }
 .xray__updated { color:#475569; font-size:0.85rem; }
+
 .xray__latest { display:flex; flex-direction:column; gap:.25rem; min-width: 18rem; }
 .xray__latest-grid { display:flex; flex-wrap:wrap; gap:0.5rem; align-items:stretch; }
 .xray__latest-column { border:1px solid #e2e8f0; background:#f8fafc; border-radius:0.65rem; padding:0.5rem 0.65rem; display:flex; flex-direction:column; gap:0.2rem; min-width: 12.5rem; flex: 1 1 12.5rem; align-items:stretch; }
@@ -189,12 +185,11 @@ const xrayRanges = [
 .last-label { font-size:0.85rem; color:#475569; text-align:right; }
 .last-hint { color:#475569; font-size:0.85rem; }
 .last-value { font-size:1.35rem; font-weight:700; color:#0f172a; line-height:1.2; font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, 'Liberation Mono', monospace; }
+
 .xray__ranges { display:flex; gap:0.45rem; flex-wrap:wrap; justify-content:flex-end; }
 .xray__range-btn { border:1px solid rgba(15,23,42,0.12); background:rgba(248,250,252,0.9); color:#0f172a; border-radius:999px; padding:0.35rem 0.95rem; font-weight:600; cursor:pointer; transition: background .15s ease, color .15s ease, box-shadow .15s ease; }
 .xray__range-btn:hover, .xray__range-btn:focus-visible { background:#f97316; color:#fff; outline:none; }
 .xray__range-btn.is-active { background:#f97316; color:#fff; box-shadow:0 10px 25px rgba(249, 115, 22, 0.25); }
-.tag { color:#0f0f10; font-size:.85rem; }
-.mono { font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, 'Liberation Mono', monospace; color:#0f0f10; }
 
 .xray__foot { margin-top:.25rem; color:#0f0f10; display:block; }
 
@@ -207,4 +202,10 @@ const xrayRanges = [
 
 .home__tile-state { margin: auto 0; }
 .home__tile-visual { height: clamp(14rem, 24vh, 19rem); }
+
+/* ------------- NUEVO: TÍTULO Y SUBTÍTULO EN NEGRO ------------- */
+.xray__title h3,
+.xray__title p {
+  color: #0f172a !important;
+}
 </style>

@@ -1,4 +1,4 @@
-<script setup>
+...<script setup>
 import { ref, computed, watch, onMounted } from 'vue'
 import VueApexCharts from 'vue3-apexcharts'
 import dayjs from 'dayjs'
