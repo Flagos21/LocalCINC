@@ -1,0 +1,105 @@
+// src/composables/useMagnetometerLive.js
+import { ref, onMounted, onBeforeUnmount, watch } from 'vue'
+
+export function useMagnetometerLive(options = {}) {
+  // Parámetros reactivos
+  const station = ref(options.station ?? 'chi')      // tag en Influx: "chi"
+  const range = ref(options.range ?? '1d')          // since=1d | 3d | 7d...
+  const every = ref(options.every ?? '1m')          // every=1m, etc.
+  const refreshMs = ref(options.refreshMs ?? 60000) // 60 s por defecto
+
+  // Estado
+  const points = ref([])     // [{ t, value }, ...] desde la API
+  const error = ref(null)
+  const isFetching = ref(false)
+
+  let timerId
+
+  async function fetchNow () {
+    isFetching.value = true
+    error.value = null
+
+    try {
+      const params = new URLSearchParams()
+
+      // OJO: esto replica exactamente la URL que probaste en el navegador:
+      // /api/magnetometer-live/live?since=1d&every=1m
+      // Si quieres filtrar por estación más adelante, descomenta la línea de station.
+      if (range.value) params.set('since', range.value)
+      if (every.value) params.set('every', every.value)
+      // Si el backend soporta filtro por estación, podrías usar:
+      // if (station.value) params.set('station', station.value.toLowerCase())
+
+      const resp = await fetch(`/api/magnetometer-live/live?${params.toString()}`)
+
+      if (!resp.ok) {
+        throw new Error(`HTTP ${resp.status} ${resp.statusText}`)
+      }
+
+      const data = await resp.json()
+
+      // Soportar tanto:
+      //   [ {t, value}, ... ]
+      // como:
+      //   { points: [ {t, value}, ... ] }
+      const arr = Array.isArray(data)
+        ? data
+        : Array.isArray(data?.points)
+          ? data.points
+          : []
+
+      points.value = arr
+    } catch (err) {
+      console.error('useMagnetometerLive fetch error:', err)
+      error.value = err?.message ?? String(err)
+      points.value = []
+    } finally {
+      isFetching.value = false
+    }
+  }
+
+  function clearTimer () {
+    if (timerId) {
+      clearInterval(timerId)
+      timerId = undefined
+    }
+  }
+
+  function setupTimer () {
+    clearTimer()
+    const ms = Number(refreshMs.value) || 0
+    if (ms > 0) {
+      timerId = setInterval(fetchNow, ms)
+    }
+  }
+
+  onMounted(() => {
+    fetchNow()
+    setupTimer()
+  })
+
+  onBeforeUnmount(() => {
+    clearTimer()
+  })
+
+  // Si cambias rango / resolución / estación, recargamos
+  watch([range, every, station], () => {
+    fetchNow()
+  })
+
+  // Si cambias el intervalo de refresco, reconfiguramos el timer
+  watch(refreshMs, () => {
+    setupTimer()
+  })
+
+  return {
+    points,
+    error,
+    isFetching,
+    range,
+    every,
+    refreshMs,
+    station,
+    refetch: fetchNow
+  }
+}

@@ -6,6 +6,10 @@ import MagnetometerChartOverview from '@/components/MagnetometerChartOverview.vu
 import ElectricFieldLiveHomeCard from '@/components/ElectricFieldLiveHomeCard.vue' // LIVE con controles
 import XRayHomeCard from '@/components/XRayHomeCard.vue'
 import DayNightMapCard from '@/components/DayNightMapCard.vue'
+// src/views/HomeView.vue
+import MagnetometerLiveHomeCard from '@/components/MagnetometerLiveHomeCard.vue';
+
+
 </script>
 
 <template>
@@ -16,7 +20,8 @@ import DayNightMapCard from '@/components/DayNightMapCard.vue'
 
         <div class="home__grid-top-right">
           <article class="home__tile home__tile--magneto">
-            <MagnetometerChartOverview />
+            <!-- <MagnetometerChartOverview />-->
+             <MagnetometerLiveHomeCard />
           </article>
 
           <article class="home__tile home__tile--electric">

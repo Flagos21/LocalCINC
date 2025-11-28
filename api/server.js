@@ -14,6 +14,7 @@ import createLocalMagnetometerRouter from './routes/localMagnetometerRoutes.js';
 import createElectricFieldRouter from './routes/electricFieldRoutes.js';
 import createEfmRouter from './routes/efmRoutes.js';
 import createMagnetometerRouter from './routes/magnetometerRoutes.js';
+import createMagnetometerLiveRouter from './routes/magnetometerLiveRoutes.js';
 
 const app = express();
 app.use(cors());
@@ -46,7 +47,16 @@ const {
   EFM_STATUS_FIELD = 'status',
   DEFAULT_EFM_SINCE = '30s',
   DEFAULT_EFM_EVERY = '1s',
-  EFM_MAX_POINTS = '2000'
+  EFM_MAX_POINTS = '2000',
+
+  // ------- Configuración Magnetómetro live -------
+  MAGNETO_BUCKET = INFLUX_BUCKET,
+  MAGNETO_MEASUREMENT = 'magnetometer',
+  MAGNETO_TAG_KEY = 'station',
+  MAGNETO_FIELD = 'h',
+  DEFAULT_MAGNETO_SINCE = '1d',
+  DEFAULT_MAGNETO_EVERY = '1m',
+  MAGNETO_MAX_POINTS = '5000'
 } = process.env;
 
 if (!INFLUX_URL || !INFLUX_TOKEN || !INFLUX_ORG || !INFLUX_BUCKET) {
@@ -83,6 +93,24 @@ app.use(
     maxPoints: EFM_MAX_POINTS
   })
 );
+
+// Nuevo: magnetómetro desde InfluxDB (live)
+app.use(
+  '/api/magnetometer-live',
+  createMagnetometerLiveRouter({
+    queryApi,
+    bucket: MAGNETO_BUCKET,
+    measurement: MAGNETO_MEASUREMENT,
+    tagKey: MAGNETO_TAG_KEY,
+    valueField: MAGNETO_FIELD,
+    defaultStation: DEFAULT_STATION,
+    defaultSince: DEFAULT_MAGNETO_SINCE,
+    defaultEvery: DEFAULT_MAGNETO_EVERY,
+    maxPoints: MAGNETO_MAX_POINTS
+  })
+);
+
+// Rutas ya existentes (NO las tocamos)
 app.use(
   '/api',
   createMagnetometerRouter({
