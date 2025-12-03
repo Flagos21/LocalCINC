@@ -1,8 +1,16 @@
+// src/composables/useDstRealtime.js
 import { ref, computed, onMounted, onBeforeUnmount } from 'vue'
 
-const DEFAULT_ENDPOINT = import.meta.env.VITE_DST_API || 'http://localhost:3001/api/dst/chart'
+// Endpoints por defecto: siempre relativos, para que pasen por el proxy de Vite
+const DEFAULT_ENDPOINT =
+  import.meta.env.VITE_DST_API || '/api/dst/chart'
 const DEFAULT_LATEST_ENDPOINT =
-  import.meta.env.VITE_DST_LATEST_API || 'http://localhost:3001/api/dst/realtime/latest'
+  import.meta.env.VITE_DST_LATEST_API || '/api/dst/realtime/latest'
+
+// Detección de soporte en navegadores antiguos (como Smart TV)
+const hasAbortController = typeof AbortController !== 'undefined'
+const hasDomException = typeof DOMException !== 'undefined'
+const hasFetch = typeof fetch === 'function'
 
 function toTimestamp(value) {
   if (value == null) {
@@ -136,6 +144,9 @@ function normalizeEntries(payload) {
   return entries.filter((entry) => entry.timestamp >= monthStart && entry.timestamp <= nowTs)
 }
 
+// ===========================
+// useDstRealtime
+// ===========================
 export function useDstRealtime({ pollMs = 60000, endpoint = DEFAULT_ENDPOINT } = {}) {
   const points = ref([])
   const isLoading = ref(false)
@@ -148,23 +159,35 @@ export function useDstRealtime({ pollMs = 60000, endpoint = DEFAULT_ENDPOINT } =
   let abortController = null
 
   const fetchOnce = async () => {
-    if (abortController) {
+    // Si el navegador ni siquiera tiene fetch (ni con polyfill), no seguimos
+    if (!hasFetch) {
+      errorMessage.value = 'Este navegador no soporta fetch.'
+      return
+    }
+
+    // Cancelar petición anterior si el navegador soporta AbortController
+    if (abortController && hasAbortController) {
       abortController.abort()
     }
 
-    const controller = new AbortController()
+    const controller = hasAbortController ? new AbortController() : null
     abortController = controller
 
     isLoading.value = true
     errorMessage.value = ''
 
     try {
-      const response = await fetch(endpoint, {
+      const fetchOptions = {
         method: 'GET',
-        signal: controller.signal,
         cache: 'no-store',
         headers: { Accept: 'application/json' }
-      })
+      }
+
+      if (controller) {
+        fetchOptions.signal = controller.signal
+      }
+
+      const response = await fetch(endpoint, fetchOptions)
 
       const rawBody = await response.text()
       if (!response.ok) {
@@ -197,7 +220,11 @@ export function useDstRealtime({ pollMs = 60000, endpoint = DEFAULT_ENDPOINT } =
       const normalized = normalizeEntries(payload)
       points.value = normalized
     } catch (error) {
-      if (error instanceof DOMException && error.name === 'AbortError') {
+      const isAbortError =
+        ((hasDomException && error instanceof DOMException) && error.name === 'AbortError') ||
+        error?.name === 'AbortError'
+
+      if (isAbortError) {
         return
       }
 
@@ -233,7 +260,7 @@ export function useDstRealtime({ pollMs = 60000, endpoint = DEFAULT_ENDPOINT } =
       clearInterval(timerId)
       timerId = null
     }
-    if (abortController) {
+    if (abortController && hasAbortController) {
       abortController.abort()
       abortController = null
     }
@@ -249,6 +276,9 @@ export function useDstRealtime({ pollMs = 60000, endpoint = DEFAULT_ENDPOINT } =
   }
 }
 
+// ===========================
+// useDstLatest
+// ===========================
 export function useDstLatest({ pollMs = 60000, endpoint = DEFAULT_LATEST_ENDPOINT } = {}) {
   const point = ref(null)
   const isLoading = ref(false)
@@ -258,23 +288,33 @@ export function useDstLatest({ pollMs = 60000, endpoint = DEFAULT_LATEST_ENDPOIN
   let abortController = null
 
   const fetchOnce = async () => {
-    if (abortController) {
+    if (!hasFetch) {
+      errorMessage.value = 'Este navegador no soporta fetch.'
+      return
+    }
+
+    if (abortController && hasAbortController) {
       abortController.abort()
     }
 
-    const controller = new AbortController()
+    const controller = hasAbortController ? new AbortController() : null
     abortController = controller
 
     isLoading.value = true
     errorMessage.value = ''
 
     try {
-      const response = await fetch(endpoint, {
+      const fetchOptions = {
         method: 'GET',
-        signal: controller.signal,
         cache: 'no-store',
         headers: { Accept: 'application/json' }
-      })
+      }
+
+      if (controller) {
+        fetchOptions.signal = controller.signal
+      }
+
+      const response = await fetch(endpoint, fetchOptions)
 
       const rawBody = await response.text()
       if (!response.ok) {
@@ -311,7 +351,11 @@ export function useDstLatest({ pollMs = 60000, endpoint = DEFAULT_LATEST_ENDPOIN
 
       point.value = entry
     } catch (error) {
-      if (error instanceof DOMException && error.name === 'AbortError') {
+      const isAbortError =
+        ((hasDomException && error instanceof DOMException) && error.name === 'AbortError') ||
+        error?.name === 'AbortError'
+
+      if (isAbortError) {
         return
       }
 
@@ -347,7 +391,7 @@ export function useDstLatest({ pollMs = 60000, endpoint = DEFAULT_LATEST_ENDPOIN
       clearInterval(timerId)
       timerId = null
     }
-    if (abortController) {
+    if (abortController && hasAbortController) {
       abortController.abort()
       abortController = null
     }
