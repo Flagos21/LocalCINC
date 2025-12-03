@@ -240,8 +240,8 @@ function applyPreset(id) {
   <article class="magneto-home panel panel--chart">
     <header class="magneto-home__head">
       <div>
-        <h3>Magnetómetro – Estación única (InfluxDB)</h3>
-        <p>Visualiza la componente H en tiempo real desde InfluxDB.</p>
+        <h3>Magnetómetro - Embrace CHI</h3>
+        <p>Streaming de la componente H en tiempo real con tasa de refresco: 1 min.</p>
       </div>
 
       <div class="magneto-home__head-actions">
