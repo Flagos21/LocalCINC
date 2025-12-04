@@ -25,14 +25,9 @@ const router = createRouter({
       component: () => import('../views/IonogramGalleryView.vue'),
     },
     {
-      path: '/magnetometros/influxdb',
-      name: 'magnetometers-influxdb',
-      component: () => import('../views/MagnetometerInfluxView.vue'),
-    },
-    {
-      path: '/magnetometros/local',
-      name: 'magnetometers-local',
-      component: () => import('../views/MagnetometerLocalView.vue'),
+      path: '/magnetometros/tiempo-real',
+      name: 'magnetometers-live',
+      component: () => import('../views/MagnetometerLiveView.vue'),
     },
     {
       path: '/mapa-dia-noche',
@@ -41,11 +36,11 @@ const router = createRouter({
     },
     {
       path: '/graphs',
-      redirect: { name: 'magnetometers-influxdb' },
+      redirect: { name: 'magnetometers-live' },
     },
     {
       path: '/magnetometros',
-      redirect: { name: 'magnetometers-influxdb' },
+      redirect: { name: 'magnetometers-live' },
     },
     {
       path: '/efm-live',

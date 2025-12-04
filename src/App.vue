@@ -60,15 +60,7 @@ onBeforeUnmount(() => {
               <RouterLink to="/ionograms" class="dropdown-link">Ionosondas</RouterLink>
               <RouterLink to="/efm-live" class="dropdown-link">Campo eléctrico</RouterLink>
               <RouterLink to="/mapa-dia-noche" class="dropdown-link">Mapa día/noche</RouterLink>
-              <div class="dropdown-submenu">
-                <button class="dropdown-link dropdown-link--parent" type="button">
-                  Magnetómetros <span class="nav-caret" aria-hidden="true">▸</span>
-                </button>
-                <div class="dropdown-menu dropdown-menu--nested">
-                  <RouterLink to="/magnetometros/influxdb" class="dropdown-link">InfluxDB</RouterLink>
-                  <RouterLink to="/magnetometros/local" class="dropdown-link">Local</RouterLink>
-                </div>
-              </div>
+              <RouterLink to="/magnetometros/tiempo-real" class="dropdown-link">Magnetómetro (tiempo real)</RouterLink>
             </div>
           </div>
         </nav>
