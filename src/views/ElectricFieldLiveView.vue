@@ -70,11 +70,35 @@ const livePoints = computed(() => {
   return injectNullGaps(rawPoints, stepMs)
 })
 
+const targetTimestamps = computed(() => {
+  const stepMs = durationStringToMs(agg.value)
+  const rawRange = String(range.value ?? '').replace(/^since:/, '')
+  const windowMs = durationStringToMs(rawRange)
+  const liveTimestamps = livePoints.value.map(([ts]) => ts).filter((ts) => Number.isFinite(ts))
+
+  if (!Number.isFinite(stepMs) || stepMs <= 0) {
+    return liveTimestamps
+  }
+
+  const now = Date.now()
+  const end = liveTimestamps.length ? Math.max(liveTimestamps[liveTimestamps.length - 1], now) : now
+  const start = Number.isFinite(windowMs) && windowMs > 0 ? end - windowMs : (liveTimestamps[0] ?? end)
+
+  const timeline = new Set(liveTimestamps)
+
+  for (let ts = end; ts >= start; ts -= stepMs) {
+    timeline.add(Math.round(ts))
+  }
+
+  return Array.from(timeline).sort((a, b) => a - b)
+})
+
 const baselinePoints = computed(() =>
   buildDailyMedianBaseline({
     referenceTimestamps: baselineLabels.value,
     referenceValues: baselineValues.value,
-    targetTimestamps: livePoints.value.map(([timestamp]) => timestamp)
+    targetTimestamps: targetTimestamps.value,
+    bucketSizeMs: durationStringToMs(agg.value)
   })
 )
 
