@@ -4,6 +4,7 @@ import VueApexCharts from 'vue3-apexcharts'
 import dayjs from 'dayjs'
 import { useMagnetometerSeries } from '@/composables/useMagnetometerSeries'
 import { buildDailyMedianBaseline } from '@/utils/timeSeriesBaseline'
+import { durationStringToMs } from '@/utils/timeSeriesGaps'
 
 const props = defineProps({
   range: { type: String, default: '7d' },
@@ -51,7 +52,7 @@ const {
   series: baselineSeries
 } = useMagnetometerSeries({
   range: ref('7d'),
-  every: ref(''),
+  every: everyRef,
   unit: unitRef,
   station: props.station,
   from: ref(''),
@@ -194,7 +195,8 @@ function draw() {
   const baselinePoints = buildDailyMedianBaseline({
     referenceTimestamps: baselineLabels.value,
     referenceValues: baselineSeries.value,
-    targetTimestamps: chartPoints.map(([timestamp]) => timestamp)
+    targetTimestamps: chartPoints.map(([timestamp]) => timestamp),
+    bucketSizeMs: durationStringToMs(everyRef.value)
   })
 
   const baselineHasData = baselinePoints.some(([, value]) => Number.isFinite(value))

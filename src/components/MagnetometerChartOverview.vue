@@ -6,6 +6,7 @@ import dayjs from '@/utils/dayjs'
 import { useMagnetometerSeries } from '@/composables/useMagnetometerSeries'
 import { buildDailyMedianBaseline } from '@/utils/timeSeriesBaseline'
 import { formatUtcDateTime } from '@/utils/formatUtcDate'
+import { durationStringToMs } from '@/utils/timeSeriesGaps'
 
 const presets = [
   { id: '1d', label: '1 día', duration: { amount: 1, unit: 'day' } },
@@ -37,12 +38,30 @@ const { labels, series, isLoading, errorMessage, meta } = useMagnetometerSeries(
   endpoint: ref('/api/local-magnetometer/series')
 })
 
+const baselineBucketSizeMs = computed(() => {
+  const bucketMeta = meta.value?.bucket
+  if (Number.isFinite(bucketMeta?.ms)) {
+    return bucketMeta.ms
+  }
+
+  if (typeof bucketMeta?.size === 'string') {
+    const parsed = durationStringToMs(bucketMeta.size)
+    if (Number.isFinite(parsed)) {
+      return parsed
+    }
+  }
+
+  return undefined
+})
+
+const baselineEvery = computed(() => meta.value?.bucket?.size || '')
+
 const {
   labels: baselineLabels,
   series: baselineSeries
 } = useMagnetometerSeries({
   range: ref('7d'),
-  every: ref(''),
+  every: baselineEvery,
   unit,
   station,
   from: ref(''),
@@ -280,6 +299,24 @@ function applyPreset(id, { anchorEnd } = {}) {
   setWindow({ start, end })
 }
 
+function inferBucketSizeMs(timestamps = []) {
+  const sorted = timestamps
+    .map((value) => Number(value))
+    .filter((value) => Number.isFinite(value))
+    .sort((a, b) => a - b)
+
+  let minDiff = Infinity
+
+  for (let index = 1; index < sorted.length; index += 1) {
+    const diff = sorted[index] - sorted[index - 1]
+    if (diff > 0 && diff < minDiff) {
+      minDiff = diff
+    }
+  }
+
+  return Number.isFinite(minDiff) && minDiff < Infinity ? minDiff : undefined
+}
+
 function draw() {
   const rawPoints = (labels.value || [])
     .map((t, i) => ({ t, v: (series.value || [])[i] }))
@@ -345,10 +382,13 @@ function draw() {
     return
   }
 
+  const bucketSize = baselineBucketSizeMs.value ?? inferBucketSizeMs(chartPoints.map(([timestamp]) => timestamp))
+
   const baselinePoints = buildDailyMedianBaseline({
     referenceTimestamps: baselineLabels.value,
     referenceValues: baselineSeries.value,
-    targetTimestamps: chartPoints.map(([timestamp]) => timestamp)
+    targetTimestamps: chartPoints.map(([timestamp]) => timestamp),
+    bucketSizeMs: bucketSize
   })
 
   const baselineHasData = baselinePoints.some(([, value]) => Number.isFinite(value))
