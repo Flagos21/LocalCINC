@@ -272,9 +272,9 @@ function fmtUTC(value) {
 }
 
 .xray__preset {
-  border: 1px solid rgba(249, 115, 22, 0.35);
-  background: rgba(249, 115, 22, 0.08);
-  color: #9a3412;
+  border: 1px solid #e2e8f0;
+  background: #f8fafc;
+  color: #0f172a;
   border-radius: 999px;
   padding: 0.35rem 0.85rem;
   font-size: 0.82rem;
@@ -285,9 +285,9 @@ function fmtUTC(value) {
 
 .xray__preset:hover,
 .xray__preset:focus-visible {
-  background: rgba(249, 115, 22, 0.18);
-  border-color: #f97316;
-  color: #7c2d12;
+  background: #e2e8f0;
+  border-color: #cbd5e1;
+  color: #0f172a;
   outline: none;
 }
 
@@ -318,8 +318,8 @@ function fmtUTC(value) {
   gap: 0.3rem;
   padding: 0.6rem 0.85rem;
   border-radius: 0.75rem;
-  background: rgba(249, 115, 22, 0.08);
-  border: 1px solid rgba(249, 115, 22, 0.18);
+  background: #f8fafc;
+  border: 1px solid #e2e8f0;
 }
 
 .xray__meta-label {
@@ -327,7 +327,7 @@ function fmtUTC(value) {
   text-transform: uppercase;
   letter-spacing: 0.08em;
   font-weight: 600;
-  color: #ea580c;
+  color: #475569;
 }
 
 .xray__meta-value {
@@ -362,7 +362,7 @@ function fmtUTC(value) {
   gap: 0.6rem;
   padding: 0.35rem 0.85rem 0.35rem 0.45rem;
   border-radius: 999px;
-  border: 1px solid rgba(148, 163, 184, 0.5);
+  border: 1px solid #cbd5e1;
   background: rgba(248, 250, 252, 0.92);
   cursor: pointer;
   transition: border-color 0.2s ease, background 0.2s ease, box-shadow 0.2s ease;
@@ -370,8 +370,8 @@ function fmtUTC(value) {
 
 .toggle:hover,
 .toggle:focus-visible {
-  border-color: #f97316;
-  box-shadow: 0 0 0 3px rgba(249, 115, 22, 0.18);
+  border-color: #94a3b8;
+  box-shadow: 0 0 0 3px rgba(148, 163, 184, 0.25);
   outline: none;
 }
 
@@ -379,34 +379,34 @@ function fmtUTC(value) {
   width: 1.45rem;
   height: 1.45rem;
   border-radius: 999px;
-  background: #f97316;
-  box-shadow: 0 8px 16px rgba(249, 115, 22, 0.25);
+  background: #1d4ed8;
+  box-shadow: 0 8px 16px rgba(37, 99, 235, 0.25);
 }
 
 .toggle .label {
   font-size: 0.75rem;
   font-weight: 600;
-  color: #475569;
+  color: #334155;
 }
 
 .toggle.is-on {
-  border-color: rgba(5, 150, 105, 0.5);
-  background: rgba(16, 185, 129, 0.12);
+  border-color: rgba(59, 130, 246, 0.4);
+  background: rgba(59, 130, 246, 0.1);
 }
 
 .toggle.is-on .knob {
-  background: #0f766e;
-  box-shadow: 0 8px 16px rgba(15, 118, 110, 0.25);
+  background: #1d4ed8;
+  box-shadow: 0 8px 16px rgba(37, 99, 235, 0.25);
 }
 
 .toggle.is-on .label {
-  color: #047857;
+  color: #1e3a8a;
 }
 
 .ghost {
-  border: 1px solid rgba(249, 115, 22, 0.45);
-  background: rgba(249, 115, 22, 0.08);
-  color: #9a3412;
+  border: 1px solid #cbd5e1;
+  background: #f8fafc;
+  color: #0f172a;
   border-radius: 0.75rem;
   padding: 0.45rem 0.9rem;
   font-weight: 600;
@@ -417,9 +417,9 @@ function fmtUTC(value) {
 
 .ghost:hover,
 .ghost:focus-visible {
-  background: rgba(249, 115, 22, 0.18);
-  color: #7c2d12;
-  border-color: #f97316;
+  background: #e2e8f0;
+  color: #0f172a;
+  border-color: #cbd5e1;
   outline: none;
 }
 
@@ -436,8 +436,8 @@ function fmtUTC(value) {
   width: 1.75rem;
   height: 1.75rem;
   border-radius: 50%;
-  border: 3px solid rgba(249, 115, 22, 0.2);
-  border-top-color: #f97316;
+  border: 3px solid rgba(37, 99, 235, 0.2);
+  border-top-color: #2563eb;
   animation: spin 0.9s linear infinite;
 }
 

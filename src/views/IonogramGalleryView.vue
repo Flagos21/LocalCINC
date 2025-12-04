@@ -116,43 +116,49 @@ onBeforeUnmount(() => {
       </label>
     </header>
 
-    <div class="gallery__viewer" :class="{ 'gallery__viewer--empty': !currentImage }">
-      <div v-if="isLoading" class="gallery__status">Cargando ionogramas…</div>
-      <div v-else-if="errorMessage" class="gallery__status gallery__status--error">{{ errorMessage }}</div>
-      <template v-else>
-        <div v-if="currentImage" class="gallery__canvas">
-          <button class="gallery__nav gallery__nav--prev" type="button" @click="goPrevious" :disabled="!hasPrevious">
-            ◀
-          </button>
-          <img :src="currentImage.url" class="gallery__image" :alt="`Ionograma ${formattedSelectedDate} ${formattedTime}`" />
-          <button class="gallery__nav gallery__nav--next" type="button" @click="goNext" :disabled="!hasNext">
-            ▶
+    <div class="gallery__card">
+      <div class="gallery__viewer" :class="{ 'gallery__viewer--empty': !currentImage }">
+        <div v-if="isLoading" class="gallery__status">Cargando ionogramas…</div>
+        <div v-else-if="errorMessage" class="gallery__status gallery__status--error">{{ errorMessage }}</div>
+        <template v-else>
+          <div v-if="currentImage" class="gallery__canvas">
+            <button class="gallery__nav gallery__nav--prev" type="button" @click="goPrevious" :disabled="!hasPrevious">
+              ◀
+            </button>
+            <img :src="currentImage.url" class="gallery__image" :alt="`Ionograma ${formattedSelectedDate} ${formattedTime}`" />
+            <button class="gallery__nav gallery__nav--next" type="button" @click="goNext" :disabled="!hasNext">
+              ▶
+            </button>
+            <div class="gallery__timestamp" v-if="currentImage">
+              <strong>{{ formattedSelectedDate }}</strong>
+              <span v-if="formattedTime">{{ formattedTime }}</span>
+            </div>
+          </div>
+          <p v-else class="gallery__status">No hay ionogramas para esta fecha.</p>
+        </template>
+      </div>
+
+      <footer class="gallery__footer">
+        <div class="gallery__meta" v-if="currentImage">
+          <strong>{{ formattedSelectedDate }}</strong>
+          <span v-if="formattedTime">{{ formattedTime }}</span>
+        </div>
+
+        <div class="gallery__thumbnails" v-if="images.length">
+          <button
+            v-for="(image, index) in images"
+            :key="image.url"
+            class="gallery__thumb"
+            type="button"
+            :class="{ 'gallery__thumb--active': index === currentIndex }"
+            @click="goToIndex(index)"
+          >
+            <img :src="image.url" :alt="`Ionograma ${image.displayTime || image.timestamp || 'sin hora'}`" />
+            <span class="gallery__thumb-time">{{ image.displayTime || (image.timestamp ? dayjs.utc(image.timestamp).format('HH:mm') : '—') }}</span>
           </button>
         </div>
-        <p v-else class="gallery__status">No hay ionogramas para esta fecha.</p>
-      </template>
+      </footer>
     </div>
-
-    <footer class="gallery__footer">
-      <div class="gallery__meta" v-if="currentImage">
-        <strong>{{ formattedSelectedDate }}</strong>
-        <span v-if="formattedTime">{{ formattedTime }}</span>
-      </div>
-
-      <div class="gallery__thumbnails" v-if="images.length">
-        <button
-          v-for="(image, index) in images"
-          :key="image.url"
-          class="gallery__thumb"
-          type="button"
-          :class="{ 'gallery__thumb--active': index === currentIndex }"
-          @click="goToIndex(index)"
-        >
-          <img :src="image.url" :alt="`Ionograma ${image.displayTime || image.timestamp || 'sin hora'}`" />
-          <span class="gallery__thumb-time">{{ image.displayTime || (image.timestamp ? dayjs.utc(image.timestamp).format('HH:mm') : '—') }}</span>
-        </button>
-      </div>
-    </footer>
   </section>
 </template>
 
@@ -160,7 +166,11 @@ onBeforeUnmount(() => {
 .gallery {
   display: flex;
   flex-direction: column;
-  gap: 1.5rem;
+  gap: 1.35rem;
+  flex: 1;
+  min-height: 0;
+  width: min(100%, 74rem);
+  margin: 0 auto;
 }
 
 .gallery__header {
@@ -174,53 +184,67 @@ onBeforeUnmount(() => {
 .gallery__header h2 {
   font-size: 1.75rem;
   font-weight: 600;
-  color: #1f2933;
+  color: #0f172a;
 }
 
-.gallery__header p {
-  color: #52606d;
-}
+.gallery__header p { color: #475569; }
 
 .gallery__date-picker {
   display: inline-flex;
   flex-direction: column;
   gap: 0.35rem;
   font-size: 0.95rem;
-  color: #1f2933;
+  color: #0f172a;
 }
 
 .gallery__date-picker input {
-  border: 1px solid #d1d5db;
-  border-radius: 0.5rem;
-  padding: 0.4rem 0.6rem;
-  background: #ffffff;
+  border: 1px solid #cbd5e1;
+  border-radius: 0.75rem;
+  padding: 0.5rem 0.65rem;
+  background: #f8fafc;
   min-width: 12rem;
+  color: inherit;
+}
+
+.gallery__date-picker input:focus-visible {
+  outline: none;
+  border-color: #2563eb;
+  box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.15);
+}
+
+.gallery__card {
+  background: #ffffff;
+  border-radius: 0.9rem;
+  border: 1px solid #e2e8f0;
+  box-shadow: 0 10px 22px rgba(15, 23, 42, 0.08);
+  padding: 1.1rem;
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
 }
 
 .gallery__viewer {
-  background: #ffffff;
+  background: #f8fafc;
   border-radius: 0.75rem;
-  padding: 1rem;
-  box-shadow: 0 10px 22px rgba(15, 23, 42, 0.08);
+  padding: 1.1rem;
+  border: 1px solid #e2e8f0;
   min-height: 360px;
   display: flex;
+  flex-direction: column;
+  gap: 1rem;
   align-items: center;
   justify-content: center;
 }
 
-.gallery__viewer--empty {
-  background: #f9fafb;
-}
+.gallery__viewer--empty { background: #f8fafc; }
 
 .gallery__status {
-  color: #4b5563;
+  color: #475569;
   font-size: 1rem;
   text-align: center;
 }
 
-.gallery__status--error {
-  color: #dc2626;
-}
+.gallery__status--error { color: #b91c1c; }
 
 .gallery__canvas {
   position: relative;
@@ -230,9 +254,10 @@ onBeforeUnmount(() => {
   display: flex;
   align-items: center;
   justify-content: center;
-  background: #0b1020;
+  background: #ffffff;
   border-radius: 0.75rem;
   overflow: hidden;
+  border: 1px solid #e2e8f0;
 }
 
 .gallery__image {
@@ -245,9 +270,9 @@ onBeforeUnmount(() => {
   position: absolute;
   top: 50%;
   transform: translateY(-50%);
-  border: none;
-  background: rgba(15, 23, 42, 0.55);
-  color: #f9fafb;
+  border: 1px solid #cbd5e1;
+  background: rgba(255, 255, 255, 0.95);
+  color: #0f172a;
   width: 2.5rem;
   height: 2.5rem;
   border-radius: 999px;
@@ -255,23 +280,37 @@ onBeforeUnmount(() => {
   display: grid;
   place-items: center;
   font-size: 1.25rem;
+  transition: background 0.2s ease, border-color 0.2s ease, box-shadow 0.2s ease;
 }
 
-.gallery__nav:hover:not(:disabled) {
-  background: rgba(37, 99, 235, 0.65);
+.gallery__nav:hover:not(:disabled),
+.gallery__nav:focus-visible {
+  background: #e2e8f0;
+  border-color: #94a3b8;
+  outline: none;
+  box-shadow: 0 0 0 3px rgba(148, 163, 184, 0.25);
 }
 
 .gallery__nav:disabled {
-  opacity: 0.4;
+  opacity: 0.35;
   cursor: not-allowed;
 }
 
-.gallery__nav--prev {
-  left: 1rem;
-}
+.gallery__nav--prev { left: 1rem; }
+.gallery__nav--next { right: 1rem; }
 
-.gallery__nav--next {
-  right: 1rem;
+.gallery__timestamp {
+  position: absolute;
+  left: 0;
+  bottom: 0;
+  right: 0;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0.75rem 1rem;
+  background: linear-gradient(180deg, rgba(15, 23, 42, 0) 0%, rgba(15, 23, 42, 0.15) 100%);
+  color: #0f172a;
+  font-size: 0.95rem;
 }
 
 .gallery__footer {
@@ -285,50 +324,59 @@ onBeforeUnmount(() => {
   gap: 1rem;
   align-items: center;
   font-size: 1rem;
-  color: #1f2933;
+  color: #0f172a;
 }
 
 .gallery__thumbnails {
-  display: flex;
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
   gap: 0.75rem;
-  overflow-x: auto;
-  padding-bottom: 0.25rem;
+  width: 100%;
 }
 
 .gallery__thumb {
   position: relative;
-  border: none;
-  background: transparent;
-  padding: 0;
-  border-radius: 0.5rem;
+  border: 1px solid #e2e8f0;
+  background: #ffffff;
+  padding: 0.35rem;
+  border-radius: 0.65rem;
   overflow: hidden;
   cursor: pointer;
-  flex: 0 0 auto;
-  box-shadow: 0 4px 12px rgba(15, 23, 42, 0.15);
+  transition: border-color 0.15s ease, box-shadow 0.15s ease, transform 0.12s ease;
 }
 
 .gallery__thumb img {
   display: block;
-  width: 120px;
-  height: 90px;
+  width: 100%;
+  height: 100%;
   object-fit: cover;
+  border-radius: 0.45rem;
+}
+
+.gallery__thumb:hover,
+.gallery__thumb:focus-visible {
+  border-color: #94a3b8;
+  box-shadow: 0 12px 22px rgba(15, 23, 42, 0.08);
+  transform: translateY(-2px);
+  outline: none;
+}
+
+.gallery__thumb--active {
+  border-color: #2563eb;
+  box-shadow: 0 14px 26px rgba(37, 99, 235, 0.12);
 }
 
 .gallery__thumb-time {
   position: absolute;
   inset: auto 0 0 0;
-  background: rgba(15, 23, 42, 0.7);
-  color: #f9fafb;
-  font-size: 0.75rem;
-  padding: 0.2rem 0.4rem;
+  background: rgba(15, 23, 42, 0.72);
+  color: #f8fafc;
+  font-size: 0.8rem;
+  padding: 0.25rem 0.4rem;
   text-align: center;
 }
 
-.gallery__thumb--active {
-  outline: 3px solid #38bdf8;
-}
-
 .gallery__thumb--active .gallery__thumb-time {
-  background: rgba(56, 189, 248, 0.85);
+  background: rgba(37, 99, 235, 0.85);
 }
 </style>
