@@ -13,6 +13,8 @@
 
 import { ref, onMounted, onBeforeUnmount, watch } from 'vue'
 
+import { durationStringToMs } from '@/utils/timeSeriesGaps'
+
 // convierte ms → "Xs|Xm|Xh|Xd" (lo que entiende tu API / Influx)
 function msToInfluxSince(ms) {
   const s = Math.max(1, Math.round(ms / 1000))
@@ -76,8 +78,21 @@ export function useEfmLive(opts = {}) {
       const url = new URL(`${basePath}/live`, window.location.origin)
 
       url.searchParams.set('station', station.value || '*')
-      url.searchParams.set('since', computeSinceForRange(range.value))
-      url.searchParams.set('every', every.value)
+      const sinceParam = computeSinceForRange(range.value)
+      const everyParam = every.value
+
+      const bucketMs = durationStringToMs(everyParam)
+      const sinceMs = durationStringToMs(sinceParam)
+      const estimatedPoints = Number.isFinite(bucketMs) && Number.isFinite(sinceMs) && bucketMs > 0
+        ? Math.ceil(sinceMs / bucketMs) + 2
+        : null
+
+      url.searchParams.set('since', sinceParam)
+      url.searchParams.set('every', everyParam)
+
+      if (Number.isFinite(estimatedPoints) && estimatedPoints > 0) {
+        url.searchParams.set('maxPoints', String(estimatedPoints))
+      }
 
       const res = await fetch(url.toString(), { cache: 'no-store' })
 
