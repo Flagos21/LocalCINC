@@ -1,25 +1,29 @@
 import dayjs from '@/utils/dayjs'
 
-function computeMedian(values) {
+function computeMode(values) {
   if (!Array.isArray(values) || values.length === 0) {
     return null
   }
 
-  const sorted = values
-    .filter((value) => Number.isFinite(value))
-    .sort((a, b) => a - b)
+  const counts = new Map()
+  let topValue = null
+  let topCount = 0
 
-  if (!sorted.length) {
-    return null
+  for (const value of values) {
+    if (!Number.isFinite(value)) {
+      continue
+    }
+
+    const nextCount = (counts.get(value) ?? 0) + 1
+    counts.set(value, nextCount)
+
+    if (nextCount > topCount) {
+      topValue = value
+      topCount = nextCount
+    }
   }
 
-  const mid = Math.floor(sorted.length / 2)
-
-  if (sorted.length % 2 === 0) {
-    return (sorted[mid - 1] + sorted[mid]) / 2
-  }
-
-  return sorted[mid]
+  return Number.isFinite(topValue) ? topValue : null
 }
 
 function getSecondsKey(date) {
@@ -30,7 +34,7 @@ function getSecondsKey(date) {
   return utc.hour() * 3600 + utc.minute() * 60 + utc.second()
 }
 
-export function buildDailyMedianBaseline({
+export function buildDailyModeBaseline({
   referenceTimestamps = [],
   referenceValues = [],
   targetTimestamps = []
@@ -66,14 +70,14 @@ export function buildDailyMedianBaseline({
     allValues.push(value)
   }
 
-  const fallbackMedian = computeMedian(allValues)
-  const medianBySecond = new Map()
+  const fallbackMode = computeMode(allValues)
+  const modeBySecond = new Map()
 
   for (const [key, bucket] of valuesBySecond.entries()) {
-    medianBySecond.set(key, computeMedian(bucket))
+    modeBySecond.set(key, computeMode(bucket))
   }
 
-  const sortedEntries = Array.from(medianBySecond.entries())
+  const sortedEntries = Array.from(modeBySecond.entries())
     .filter(([, value]) => Number.isFinite(value))
     .sort((a, b) => a[0] - b[0])
 
@@ -82,11 +86,11 @@ export function buildDailyMedianBaseline({
 
   function interpolateBaseline(secondsKey) {
     if (!Number.isFinite(secondsKey)) {
-      return Number.isFinite(fallbackMedian) ? fallbackMedian : null
+      return Number.isFinite(fallbackMode) ? fallbackMode : null
     }
 
     if (!sortedKeys.length) {
-      return Number.isFinite(fallbackMedian) ? fallbackMedian : null
+      return Number.isFinite(fallbackMode) ? fallbackMode : null
     }
 
     if (sortedKeys.length === 1) {
@@ -129,7 +133,7 @@ export function buildDailyMedianBaseline({
     const upperValue = sortedValues[upperIndex]
 
     if (!Number.isFinite(lowerValue) && !Number.isFinite(upperValue)) {
-      return Number.isFinite(fallbackMedian) ? fallbackMedian : null
+      return Number.isFinite(fallbackMode) ? fallbackMode : null
     }
 
     if (!Number.isFinite(lowerValue)) {
@@ -165,4 +169,8 @@ export function buildDailyMedianBaseline({
       return [numericTime, Number.isFinite(baselineValue) ? baselineValue : null]
     })
     .filter((entry) => Array.isArray(entry) && Number.isFinite(entry[0]))
+}
+
+export function buildDailyMedianBaseline(options = {}) {
+  return buildDailyModeBaseline(options)
 }
