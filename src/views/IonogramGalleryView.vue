@@ -120,37 +120,39 @@ onBeforeUnmount(() => {
       <div v-if="isLoading" class="gallery__status">Cargando ionogramas…</div>
       <div v-else-if="errorMessage" class="gallery__status gallery__status--error">{{ errorMessage }}</div>
       <template v-else>
-        <div v-if="currentImage" class="gallery__canvas">
-          <button class="gallery__nav gallery__nav--prev" type="button" @click="goPrevious" :disabled="!hasPrevious">
-            ◀
-          </button>
-          <img :src="currentImage.url" class="gallery__image" :alt="`Ionograma ${formattedSelectedDate} ${formattedTime}`" />
-          <button class="gallery__nav gallery__nav--next" type="button" @click="goNext" :disabled="!hasNext">
-            ▶
-          </button>
+        <div v-if="currentImage" class="gallery__stage">
+          <div class="gallery__canvas">
+            <button class="gallery__nav gallery__nav--prev" type="button" @click="goPrevious" :disabled="!hasPrevious">
+              ◀
+            </button>
+            <img :src="currentImage.url" class="gallery__image" :alt="`Ionograma ${formattedSelectedDate} ${formattedTime}`" />
+            <button class="gallery__nav gallery__nav--next" type="button" @click="goNext" :disabled="!hasNext">
+              ▶
+            </button>
+          </div>
+
+          <aside class="gallery__thumbnails" v-if="images.length">
+            <button
+              v-for="(image, index) in images"
+              :key="image.url"
+              class="gallery__thumb"
+              type="button"
+              :class="{ 'gallery__thumb--active': index === currentIndex }"
+              @click="goToIndex(index)"
+            >
+              <img :src="image.url" :alt="`Ionograma ${image.displayTime || image.timestamp || 'sin hora'}`" />
+              <span class="gallery__thumb-time">{{ image.displayTime || (image.timestamp ? dayjs.utc(image.timestamp).format('HH:mm') : '—') }}</span>
+            </button>
+          </aside>
         </div>
         <p v-else class="gallery__status">No hay ionogramas para esta fecha.</p>
       </template>
     </div>
 
-    <footer class="gallery__footer">
-      <div class="gallery__meta" v-if="currentImage">
+    <footer class="gallery__footer" v-if="currentImage">
+      <div class="gallery__meta">
         <strong>{{ formattedSelectedDate }}</strong>
         <span v-if="formattedTime">{{ formattedTime }}</span>
-      </div>
-
-      <div class="gallery__thumbnails" v-if="images.length">
-        <button
-          v-for="(image, index) in images"
-          :key="image.url"
-          class="gallery__thumb"
-          type="button"
-          :class="{ 'gallery__thumb--active': index === currentIndex }"
-          @click="goToIndex(index)"
-        >
-          <img :src="image.url" :alt="`Ionograma ${image.displayTime || image.timestamp || 'sin hora'}`" />
-          <span class="gallery__thumb-time">{{ image.displayTime || (image.timestamp ? dayjs.utc(image.timestamp).format('HH:mm') : '—') }}</span>
-        </button>
       </div>
     </footer>
   </section>
@@ -202,7 +204,7 @@ onBeforeUnmount(() => {
   border-radius: 0.75rem;
   padding: 1rem;
   box-shadow: 0 10px 22px rgba(15, 23, 42, 0.08);
-  min-height: 360px;
+  min-height: 420px;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -220,6 +222,18 @@ onBeforeUnmount(() => {
 
 .gallery__status--error {
   color: #dc2626;
+}
+
+.gallery__stage {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 1rem;
+  width: 100%;
+  align-items: stretch;
+}
+
+.gallery__stage:has(.gallery__thumbnails) {
+  align-items: start;
 }
 
 .gallery__canvas {
@@ -288,47 +302,63 @@ onBeforeUnmount(() => {
   color: #1f2933;
 }
 
-.gallery__thumbnails {
-  display: flex;
-  gap: 0.75rem;
-  overflow-x: auto;
-  padding-bottom: 0.25rem;
-}
-
 .gallery__thumb {
-  position: relative;
   border: none;
-  background: transparent;
-  padding: 0;
-  border-radius: 0.5rem;
-  overflow: hidden;
+  background: #0f172a;
+  padding: 0.35rem;
+  border-radius: 0.65rem;
   cursor: pointer;
-  flex: 0 0 auto;
-  box-shadow: 0 4px 12px rgba(15, 23, 42, 0.15);
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+  width: 140px;
+  box-shadow: 0 4px 12px rgba(15, 23, 42, 0.12);
 }
 
 .gallery__thumb img {
   display: block;
-  width: 120px;
-  height: 90px;
-  object-fit: cover;
+  width: 100%;
+  height: 100px;
+  object-fit: contain;
+  background: #0b1020;
+  border-radius: 0.5rem;
 }
 
 .gallery__thumb-time {
-  position: absolute;
-  inset: auto 0 0 0;
-  background: rgba(15, 23, 42, 0.7);
-  color: #f9fafb;
-  font-size: 0.75rem;
-  padding: 0.2rem 0.4rem;
+  display: block;
   text-align: center;
+  font-size: 0.8rem;
+  font-weight: 600;
+  color: #e5e7eb;
 }
 
 .gallery__thumb--active {
   outline: 3px solid #38bdf8;
 }
 
-.gallery__thumb--active .gallery__thumb-time {
-  background: rgba(56, 189, 248, 0.85);
+.gallery__thumbnails {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  max-height: 360px;
+  overflow-y: auto;
+  padding-right: 0.25rem;
+}
+
+@media (max-width: 960px) {
+  .gallery__stage {
+    grid-template-columns: 1fr;
+  }
+
+  .gallery__thumbnails {
+    flex-direction: row;
+    max-height: none;
+    overflow-x: auto;
+    overflow-y: hidden;
+  }
+
+  .gallery__thumb {
+    width: 120px;
+  }
 }
 </style>
