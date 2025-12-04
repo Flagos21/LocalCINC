@@ -4,7 +4,7 @@ import VueApexCharts from 'vue3-apexcharts'
 
 import dayjs from '@/utils/dayjs'
 import { useMagnetometerSeries } from '@/composables/useMagnetometerSeries'
-import { buildDailyMedianBaseline } from '@/utils/timeSeriesBaseline'
+import { buildDailyModeBaseline } from '@/utils/timeSeriesBaseline'
 
 const FALLBACK_AXIS_MAGNITUDE = 1
 const MIN_AXIS_MAGNITUDE = 0.1
@@ -38,21 +38,24 @@ const {
   endpoint: ref('/api/electric-field/series')
 })
 
+const baselineFrom = ref('')
+const baselineTo = ref('')
+
 const {
   labels: baselineLabels,
   series: baselineSeries
 } = useMagnetometerSeries({
-  range: ref('7d'),
+  range: ref(''),
   every: ref(''),
   unit: ref(''),
   station: ref(''),
-  from: ref(''),
-  to: ref(''),
+  from: baselineFrom,
+  to: baselineTo,
   endpoint: ref('/api/electric-field/series')
 })
 
 const chartSeries = ref([])
-const BASELINE_NAME = 'Mediana últimos 7 días'
+const BASELINE_NAME = 'Moda últimos 7 días'
 const BASELINE_COLOR = '#d1d5db'
 const xDomain = ref({ min: null, max: null })
 const yDomain = ref({ min: -FALLBACK_AXIS_MAGNITUDE, max: FALLBACK_AXIS_MAGNITUDE })
@@ -237,6 +240,12 @@ function setWindow({ start, end }) {
 
   from.value = clampedStart.utc().format('YYYY-MM-DDTHH:mm:ss[Z]')
   to.value = clampedEnd.utc().format('YYYY-MM-DDTHH:mm:ss[Z]')
+  baselineFrom.value = clampedEnd
+    .clone()
+    .subtract(7, 'day')
+    .utc()
+    .format('YYYY-MM-DDTHH:mm:ss[Z]')
+  baselineTo.value = clampedEnd.utc().format('YYYY-MM-DDTHH:mm:ss[Z]')
   hasInitializedPreset.value = true
 }
 
@@ -286,7 +295,7 @@ function draw() {
 
   visiblePoints.value = chartPoints.length
 
-  const baselinePoints = buildDailyMedianBaseline({
+  const baselinePoints = buildDailyModeBaseline({
     referenceTimestamps: baselineLabels.value,
     referenceValues: baselineSeries.value,
     targetTimestamps: chartPoints.map(([timestamp]) => timestamp)
@@ -320,7 +329,9 @@ function draw() {
 
   const baselineHasData = baselinePoints.some(([, value]) => Number.isFinite(value))
 
-  let xRange = null
+  let xRange = requestedWindow.value
+    ? [requestedWindow.value.start, requestedWindow.value.end]
+    : null
 
   if (chartPoints.length) {
     const start = dayjs(chartPoints[0][0])
@@ -328,10 +339,16 @@ function draw() {
     const hasSpan = end.diff(start) > 0
     const paddedStart = hasSpan ? start : start.subtract(6, 'hour')
     const paddedEnd = hasSpan ? end : end.add(6, 'hour')
-    xRange = [paddedStart, paddedEnd]
-  } else if (requestedWindow.value) {
-    const { start, end } = requestedWindow.value
-    xRange = [start, end]
+
+    if (xRange) {
+      const [requestedStart, requestedEnd] = xRange
+      const hasRequestedSpan = requestedEnd.diff(requestedStart) > 0
+      xRange = hasRequestedSpan
+        ? [requestedStart, requestedEnd]
+        : [requestedStart.subtract(6, 'hour'), requestedEnd.add(6, 'hour')]
+    } else {
+      xRange = [paddedStart, paddedEnd]
+    }
   }
 
   if (!xRange) {
