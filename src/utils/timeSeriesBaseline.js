@@ -94,6 +94,7 @@ export function buildDailyMedianBaseline({
 
   const valuesByBucket = new Map()
   const allAggregatedValues = []
+  const numericReferenceValues = []
 
   for (let index = 0; index < referenceTimestamps.length; index += 1) {
     const timestamp = referenceTimestamps[index]
@@ -103,6 +104,8 @@ export function buildDailyMedianBaseline({
     if (!Number.isFinite(value)) {
       continue
     }
+
+    numericReferenceValues.push(value)
 
     const bucketKey = getBucketKey(timestamp, bucketSizeMs)
     if (bucketKey === null) {
@@ -146,7 +149,10 @@ export function buildDailyMedianBaseline({
     }
   }
 
-  const fallbackMode = computeMode(allAggregatedValues, roundingDecimals) ?? computeMedian(allAggregatedValues)
+  const fallbackMode = computeMode(allAggregatedValues, roundingDecimals)
+    ?? computeMedian(allAggregatedValues)
+    ?? computeMode(numericReferenceValues, roundingDecimals)
+    ?? computeMedian(numericReferenceValues)
 
   const sortedEntries = Array.from(modeByBucket.entries())
     .filter(([, value]) => Number.isFinite(value))
