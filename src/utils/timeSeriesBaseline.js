@@ -93,7 +93,7 @@ export function buildDailyMedianBaseline({
   }
 
   const valuesByBucket = new Map()
-  const allValues = []
+  const allAggregatedValues = []
 
   for (let index = 0; index < referenceTimestamps.length; index += 1) {
     const timestamp = referenceTimestamps[index]
@@ -111,23 +111,42 @@ export function buildDailyMedianBaseline({
 
     let bucket = valuesByBucket.get(bucketKey)
     if (!bucket) {
-      bucket = []
+      bucket = new Map()
       valuesByBucket.set(bucketKey, bucket)
     }
 
-    bucket.push(value)
-    allValues.push(value)
+    const dayKey = dayjs(timestamp).utc().startOf('day').valueOf()
+    let dailyValues = bucket.get(dayKey)
+
+    if (!dailyValues) {
+      dailyValues = []
+      bucket.set(dayKey, dailyValues)
+    }
+
+    dailyValues.push(value)
   }
 
-  const fallbackMode = computeMode(allValues, roundingDecimals) ?? computeMedian(allValues)
   const modeByBucket = new Map()
 
-  for (const [key, bucket] of valuesByBucket.entries()) {
-    modeByBucket.set(
-      key,
-      computeMode(bucket, roundingDecimals) ?? computeMedian(bucket)
-    )
+  for (const [bucketKey, bucket] of valuesByBucket.entries()) {
+    const dailyAggregates = Array.from(bucket.values())
+      .map((values) => computeMode(values, roundingDecimals) ?? computeMedian(values))
+      .filter((value) => Number.isFinite(value))
+
+    if (!dailyAggregates.length) {
+      continue
+    }
+
+    allAggregatedValues.push(...dailyAggregates)
+
+    const bucketMode = computeMode(dailyAggregates, roundingDecimals) ?? computeMedian(dailyAggregates)
+
+    if (Number.isFinite(bucketMode)) {
+      modeByBucket.set(bucketKey, bucketMode)
+    }
   }
+
+  const fallbackMode = computeMode(allAggregatedValues, roundingDecimals) ?? computeMedian(allAggregatedValues)
 
   const sortedEntries = Array.from(modeByBucket.entries())
     .filter(([, value]) => Number.isFinite(value))

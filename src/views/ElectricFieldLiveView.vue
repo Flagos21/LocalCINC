@@ -74,7 +74,8 @@ const baselinePoints = computed(() =>
   buildDailyMedianBaseline({
     referenceTimestamps: baselineLabels.value,
     referenceValues: baselineValues.value,
-    targetTimestamps: livePoints.value.map(([timestamp]) => timestamp)
+    targetTimestamps: livePoints.value.map(([timestamp]) => timestamp),
+    bucketSizeMs: durationStringToMs(agg.value)
   })
 )
 
