@@ -9,6 +9,7 @@ import { buildDailyMedianBaseline } from '@/utils/timeSeriesBaseline'
 const FALLBACK_AXIS_MAGNITUDE = 1
 const MIN_AXIS_MAGNITUDE = 0.1
 const AXIS_PADDING_RATIO = 0.15
+const BASELINE_WINDOW_DAYS = 7
 
 const presets = [
   { id: '1d', label: '1 día', duration: { amount: 1, unit: 'day' } },
@@ -38,16 +39,18 @@ const {
   endpoint: ref('/api/electric-field/series')
 })
 
+const baselineFrom = ref('')
+const baselineTo = ref('')
 const {
   labels: baselineLabels,
   series: baselineSeries
 } = useMagnetometerSeries({
-  range: ref('7d'),
+  range: ref(''),
   every: ref(''),
   unit: ref(''),
   station: ref(''),
-  from: ref(''),
-  to: ref(''),
+  from: baselineFrom,
+  to: baselineTo,
   endpoint: ref('/api/electric-field/series')
 })
 
@@ -237,6 +240,12 @@ function setWindow({ start, end }) {
 
   from.value = clampedStart.utc().format('YYYY-MM-DDTHH:mm:ss[Z]')
   to.value = clampedEnd.utc().format('YYYY-MM-DDTHH:mm:ss[Z]')
+  baselineFrom.value = clampedEnd
+    .subtract(BASELINE_WINDOW_DAYS, 'day')
+    .utc()
+    .startOf('minute')
+    .format('YYYY-MM-DDTHH:mm:ss[Z]')
+  baselineTo.value = clampedEnd.utc().format('YYYY-MM-DDTHH:mm:ss[Z]')
   hasInitializedPreset.value = true
 }
 
@@ -322,16 +331,16 @@ function draw() {
 
   let xRange = null
 
-  if (chartPoints.length) {
+  if (requestedWindow.value) {
+    const { start, end } = requestedWindow.value
+    xRange = [start, end]
+  } else if (chartPoints.length) {
     const start = dayjs(chartPoints[0][0])
     const end = dayjs(chartPoints[chartPoints.length - 1][0])
     const hasSpan = end.diff(start) > 0
     const paddedStart = hasSpan ? start : start.subtract(6, 'hour')
     const paddedEnd = hasSpan ? end : end.add(6, 'hour')
     xRange = [paddedStart, paddedEnd]
-  } else if (requestedWindow.value) {
-    const { start, end } = requestedWindow.value
-    xRange = [start, end]
   }
 
   if (!xRange) {
