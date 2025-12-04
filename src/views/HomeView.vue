@@ -1,13 +1,11 @@
 <script setup>
 import SunHomeCard from '@/components/SunHomeCard.vue'
 import IonogramLatest from '@/components/IonogramLatest.vue'
-import MagnetometerChartOverview from '@/components/MagnetometerChartOverview.vue'
-// import ElectricFieldHomeCard from '@/components/ElectricFieldHomeCard.vue' // histórico (conservado)
-import ElectricFieldLiveHomeCard from '@/components/ElectricFieldLiveHomeCard.vue' // LIVE con controles
+import ElectricFieldLiveHomeCard from '@/components/ElectricFieldLiveHomeCard.vue'
 import XRayHomeCard from '@/components/XRayHomeCard.vue'
 import DayNightMapCard from '@/components/DayNightMapCard.vue'
 // src/views/HomeView.vue
-import MagnetometerLiveHomeCard from '@/components/MagnetometerLiveHomeCard.vue';
+import MagnetometerLiveHomeCard from '@/components/MagnetometerLiveHomeCard.vue'
 
 
 </script>

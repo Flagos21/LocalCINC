@@ -5,7 +5,6 @@ import Litepicker from 'litepicker'
 import 'litepicker/dist/css/litepicker.css'
 import VueApexCharts from 'vue3-apexcharts'
 import { useMagnetometerSeries } from '@/composables/useMagnetometerSeries'
-import { buildDailyMedianBaseline } from '@/utils/timeSeriesBaseline'
 
 const DEFAULT_RANGE_DAYS = 7
 
@@ -35,19 +34,6 @@ const {
   endpoint: ref('/api/local-magnetometer/series')
 })
 
-const {
-  labels: baselineLabels,
-  series: baselineSeries
-} = useMagnetometerSeries({
-  range: ref('7d'),
-  every: ref(''),
-  unit: ref(''),
-  station,
-  from: ref(''),
-  to: ref(''),
-  endpoint: ref('/api/local-magnetometer/series')
-})
-
 const chartSeries = ref([])
 const xDomain = ref({ min: null, max: null })
 const visiblePoints = ref(0)
@@ -57,11 +43,6 @@ const hasValidSelection = computed(() => dayjs(from.value).isValid() && dayjs(to
 const hasVisibleData = computed(() => visiblePoints.value > 0)
 
 const chartOptions = computed(() => {
-  const hasBaselineSeries = chartSeries.value.length > 1
-  const colors = hasBaselineSeries ? ['#d1d5db', '#f97316'] : ['#f97316']
-  const strokeWidth = hasBaselineSeries ? [2, 2] : 2
-  const dashArray = hasBaselineSeries ? [0, 0] : 0
-
   return ({
   chart: {
     type: 'line',
@@ -76,7 +57,7 @@ const chartOptions = computed(() => {
     zoom: { enabled: true, type: 'x' }
   },
   dataLabels: { enabled: false },
-  stroke: { width: strokeWidth, curve: 'straight', dashArray },
+  stroke: { width: 2, curve: 'straight', dashArray: 0 },
   markers: {
     size: 0,
     strokeWidth: 2,
@@ -84,7 +65,7 @@ const chartOptions = computed(() => {
     strokeOpacity: 1,
     hover: { sizeOffset: 3 }
   },
-  colors,
+  colors: ['#f97316'],
   xaxis: {
     type: 'datetime',
     min: Number.isFinite(xDomain.value.min) ? xDomain.value.min : undefined,
@@ -373,14 +354,6 @@ function draw() {
 
   visiblePoints.value = chartPoints.length
 
-  const baselinePoints = buildDailyMedianBaseline({
-    referenceTimestamps: baselineLabels.value,
-    referenceValues: baselineSeries.value,
-    targetTimestamps: chartPoints.map(([timestamp]) => timestamp)
-  })
-
-  const baselineHasData = baselinePoints.some(([, value]) => Number.isFinite(value))
-
   let xRange = null
 
   if (selectionStart && selectionEnd) {
@@ -425,15 +398,7 @@ function draw() {
     data: chartPoints
   }
 
-  chartSeries.value = baselineHasData
-    ? [
-        {
-          name: 'Mediana últimos 7 días',
-          data: baselinePoints
-        },
-        mainSeries
-      ]
-    : [mainSeries]
+  chartSeries.value = [mainSeries]
 }
 
 setDefaultRange()
@@ -608,7 +573,6 @@ watch(meta, () => {
 })
 
 watch([labels, series], draw, { immediate: true })
-watch([baselineLabels, baselineSeries], draw)
 watch([from, to], draw)
 
 watch([from, to], ([start, end]) => {
