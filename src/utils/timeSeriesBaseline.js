@@ -1,5 +1,7 @@
 import dayjs from '@/utils/dayjs'
 
+const DEFAULT_BUCKET_MS = 1000
+
 function computeMedian(values) {
   if (!Array.isArray(values) || values.length === 0) {
     return null
@@ -22,24 +24,67 @@ function computeMedian(values) {
   return sorted[mid]
 }
 
-function getSecondsKey(date) {
+function computeMode(values) {
+  if (!Array.isArray(values) || values.length === 0) {
+    return null
+  }
+
+  const counts = new Map()
+  for (const value of values) {
+    if (!Number.isFinite(value)) {
+      continue
+    }
+    counts.set(value, (counts.get(value) ?? 0) + 1)
+  }
+
+  if (!counts.size) {
+    return null
+  }
+
+  let maxCount = -Infinity
+  const candidates = []
+
+  for (const [value, count] of counts.entries()) {
+    if (count > maxCount) {
+      maxCount = count
+      candidates.length = 0
+      candidates.push(value)
+    } else if (count === maxCount) {
+      candidates.push(value)
+    }
+  }
+
+  if (candidates.length === 1) {
+    return candidates[0]
+  }
+
+  return computeMedian(candidates)
+}
+
+function getBucketKey(date, bucketSizeMs = DEFAULT_BUCKET_MS) {
   const utc = dayjs(date).utc()
   if (!utc.isValid()) {
     return null
   }
-  return utc.hour() * 3600 + utc.minute() * 60 + utc.second()
+
+  const size = Number.isFinite(bucketSizeMs) && bucketSizeMs > 0 ? bucketSizeMs : DEFAULT_BUCKET_MS
+  const startOfDay = utc.startOf('day')
+  const offsetMs = utc.valueOf() - startOfDay.valueOf()
+
+  return Math.floor(offsetMs / size) * size
 }
 
 export function buildDailyMedianBaseline({
   referenceTimestamps = [],
   referenceValues = [],
-  targetTimestamps = []
+  targetTimestamps = [],
+  bucketSizeMs = DEFAULT_BUCKET_MS
 } = {}) {
   if (!Array.isArray(referenceTimestamps) || !Array.isArray(referenceValues) || !Array.isArray(targetTimestamps)) {
     return []
   }
 
-  const valuesBySecond = new Map()
+  const valuesByBucket = new Map()
   const allValues = []
 
   for (let index = 0; index < referenceTimestamps.length; index += 1) {
@@ -51,54 +96,54 @@ export function buildDailyMedianBaseline({
       continue
     }
 
-    const secondsKey = getSecondsKey(timestamp)
-    if (secondsKey === null) {
+    const bucketKey = getBucketKey(timestamp, bucketSizeMs)
+    if (bucketKey === null) {
       continue
     }
 
-    let bucket = valuesBySecond.get(secondsKey)
+    let bucket = valuesByBucket.get(bucketKey)
     if (!bucket) {
       bucket = []
-      valuesBySecond.set(secondsKey, bucket)
+      valuesByBucket.set(bucketKey, bucket)
     }
 
     bucket.push(value)
     allValues.push(value)
   }
 
-  const fallbackMedian = computeMedian(allValues)
-  const medianBySecond = new Map()
+  const fallbackMode = computeMode(allValues) ?? computeMedian(allValues)
+  const modeByBucket = new Map()
 
-  for (const [key, bucket] of valuesBySecond.entries()) {
-    medianBySecond.set(key, computeMedian(bucket))
+  for (const [key, bucket] of valuesByBucket.entries()) {
+    modeByBucket.set(key, computeMode(bucket) ?? computeMedian(bucket))
   }
 
-  const sortedEntries = Array.from(medianBySecond.entries())
+  const sortedEntries = Array.from(modeByBucket.entries())
     .filter(([, value]) => Number.isFinite(value))
     .sort((a, b) => a[0] - b[0])
 
   const sortedKeys = sortedEntries.map(([seconds]) => seconds)
   const sortedValues = sortedEntries.map(([, value]) => value)
 
-  function interpolateBaseline(secondsKey) {
-    if (!Number.isFinite(secondsKey)) {
-      return Number.isFinite(fallbackMedian) ? fallbackMedian : null
+  function interpolateBaseline(bucketKey) {
+    if (!Number.isFinite(bucketKey)) {
+      return Number.isFinite(fallbackMode) ? fallbackMode : null
     }
 
     if (!sortedKeys.length) {
-      return Number.isFinite(fallbackMedian) ? fallbackMedian : null
+      return Number.isFinite(fallbackMode) ? fallbackMode : null
     }
 
     if (sortedKeys.length === 1) {
       return sortedValues[0]
     }
 
-    if (secondsKey <= sortedKeys[0]) {
+    if (bucketKey <= sortedKeys[0]) {
       return sortedValues[0]
     }
 
     const lastIndex = sortedKeys.length - 1
-    if (secondsKey >= sortedKeys[lastIndex]) {
+    if (bucketKey >= sortedKeys[lastIndex]) {
       return sortedValues[lastIndex]
     }
 
@@ -109,11 +154,11 @@ export function buildDailyMedianBaseline({
       const mid = Math.floor((low + high) / 2)
       const midKey = sortedKeys[mid]
 
-      if (midKey === secondsKey) {
+      if (midKey === bucketKey) {
         return sortedValues[mid]
       }
 
-      if (midKey < secondsKey) {
+      if (midKey < bucketKey) {
         low = mid + 1
       } else {
         high = mid - 1
@@ -129,7 +174,7 @@ export function buildDailyMedianBaseline({
     const upperValue = sortedValues[upperIndex]
 
     if (!Number.isFinite(lowerValue) && !Number.isFinite(upperValue)) {
-      return Number.isFinite(fallbackMedian) ? fallbackMedian : null
+      return Number.isFinite(fallbackMode) ? fallbackMode : null
     }
 
     if (!Number.isFinite(lowerValue)) {
@@ -146,14 +191,14 @@ export function buildDailyMedianBaseline({
       return lowerValue
     }
 
-    const ratio = (secondsKey - lowerKey) / span
+    const ratio = (bucketKey - lowerKey) / span
     return lowerValue + (upperValue - lowerValue) * ratio
   }
 
   return targetTimestamps
     .map((rawTimestamp) => {
-      const secondsKey = getSecondsKey(rawTimestamp)
-      const baselineValue = interpolateBaseline(secondsKey)
+      const bucketKey = getBucketKey(rawTimestamp, bucketSizeMs)
+      const baselineValue = interpolateBaseline(bucketKey)
 
       const time = dayjs(rawTimestamp)
       const numericTime = time.isValid() ? time.valueOf() : Number(rawTimestamp)

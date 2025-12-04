@@ -79,7 +79,8 @@ const baselinePoints = computed(() =>
   buildDailyMedianBaseline({
     referenceTimestamps: baselineLabels.value,
     referenceValues: baselineValues.value,
-    targetTimestamps: livePoints.value.map(([timestamp]) => timestamp)
+    targetTimestamps: livePoints.value.map(([timestamp]) => timestamp),
+    bucketSizeMs: durationStringToMs(aggregation.value)
   })
 )
 
@@ -101,7 +102,10 @@ const chartSeries = computed(() => {
 })
 
 const xDomain = computed(() => {
-  const timestamps = livePoints.value.map(([timestamp]) => timestamp).filter((value) => Number.isFinite(value))
+  const timestamps = chartSeries.value
+    .flatMap((series) => series?.data ?? [])
+    .map(([timestamp]) => timestamp)
+    .filter((value) => Number.isFinite(value))
 
   if (!timestamps.length) {
     return { min: null, max: null }
