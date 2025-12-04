@@ -73,22 +73,25 @@ const lastTimeLabel = computed(() => {
   return formatUtcDateTime(lastPoint.value.ts)
 })
 
+const baselinePoints = computed(() =>
+  buildDailyMedianBaseline({
+    referenceTimestamps: baselineLabels.value,
+    referenceValues: baselineValues.value,
+    targetTimestamps: livePoints.value.map(([timestamp]) => timestamp),
+    bucketSizeMs: durationStringToMs(agg.value)
+  })
+)
+
 const chartSeries = computed(() => {
-  if (!livePoints.value.length) {
+  if (!livePoints.value.length && !baselinePoints.value.length) {
     return []
   }
 
-  const baselinePoints = buildDailyMedianBaseline({
-    referenceTimestamps: baselineLabels.value,
-    referenceValues: baselineValues.value,
-    targetTimestamps: livePoints.value.map(([timestamp]) => timestamp)
-  })
-
-  const hasBaseline = baselinePoints.some(([, value]) => Number.isFinite(value))
+  const hasBaseline = baselinePoints.value.some(([, value]) => Number.isFinite(value))
 
   return hasBaseline
     ? [
-        { name: BASELINE_NAME, data: baselinePoints },
+        { name: BASELINE_NAME, data: baselinePoints.value },
         { name: 'E_z', data: livePoints.value }
       ]
     : [
