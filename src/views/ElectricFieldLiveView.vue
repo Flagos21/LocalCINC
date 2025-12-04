@@ -166,9 +166,9 @@ function setQuickRange(r) {
             <span class="efield__label">Ventana rápida</span>
             <div class="efield__controls">
               <div class="efield__quick">
-                <button class="efield__quick-btn" @click="setQuickRange('1d')">1 día</button>
-                <button class="efield__quick-btn" @click="setQuickRange('3d')">3 días</button>
-                <button class="efield__quick-btn" @click="setQuickRange('7d')">7 días</button>
+                <button class="efield__quick-btn" :class="{ active: range === '1d' }" @click="setQuickRange('1d')">1 día</button>
+                <button class="efield__quick-btn" :class="{ active: range === '3d' }" @click="setQuickRange('3d')">3 días</button>
+                <button class="efield__quick-btn" :class="{ active: range === '7d' }" @click="setQuickRange('7d')">7 días</button>
               </div>
             </div>
           </div>
@@ -214,76 +214,130 @@ function setQuickRange(r) {
 </template>
 
 <style scoped>
-/* === Mismo look & feel que tu componente histórico === */
-.efield { padding: 1.5rem; }
+.efield {
+  display: flex;
+  flex-direction: column;
+  gap: 1.35rem;
+  flex: 1;
+  min-height: 0;
+  width: min(100%, 74rem);
+  margin: 0 auto;
+}
+
 .efield__card {
-  margin: 0 auto; max-width: 1120px;
-  background: linear-gradient(150deg, #ffffff 0%, #f6f8ff 50%, #edf2ff 100%);
-  border-radius: 24px;
-  border: 1px solid rgba(15, 23, 42, 0.08);
-  box-shadow: 0 24px 50px rgba(15, 23, 42, 0.12);
-  display: flex; flex-direction: column; gap: 1.5rem; overflow: hidden;
+  margin: 0 auto;
+  width: 100%;
+  background: #ffffff;
+  border-radius: 0.95rem;
+  border: 1px solid #e2e8f0;
+  box-shadow: 0 10px 24px rgba(15, 23, 42, 0.08);
+  display: flex;
+  flex-direction: column;
+  gap: 1.35rem;
+  overflow: hidden;
+  padding: 1.35rem 1.5rem 1.4rem;
 }
+
 .efield__header {
-  display: flex; flex-direction: column; gap: 1.75rem;
-  padding: 2rem 2.5rem 1.5rem;
-  background: rgba(255, 255, 255, 0.7);
-  backdrop-filter: blur(12px);
+  display: flex;
+  flex-direction: column;
+  gap: 1.15rem;
 }
-.efield__title { font-size: 2rem; font-weight: 600; color: #0f172a; }
-.efield__description { max-width: 48ch; color: #475569; font-size: 0.95rem; line-height: 1.5; }
 
-.efield__filters { display: flex; flex-wrap: wrap; gap: 1.25rem; align-items: center; }
-.efield__field { display: flex; flex-direction: column; gap: 0.35rem; min-width: 260px; }
-.efield__label { font-size: 0.85rem; font-weight: 600; text-transform: uppercase; color: #b45309; }
-.efield__label--mini { font-size: 0.8rem; color: #b45309; margin-left: 0.25rem; }
+.efield__title { font-size: 1.8rem; font-weight: 600; color: #0f172a; }
+.efield__description { max-width: 54ch; color: #475569; font-size: 0.95rem; line-height: 1.55; }
 
-.efield__controls { display: flex; gap: 0.5rem; align-items: center; flex-wrap: wrap; }
+.efield__filters { display: flex; flex-wrap: wrap; gap: 1.1rem; align-items: center; }
+.efield__field { display: flex; flex-direction: column; gap: 0.4rem; min-width: 260px; }
+.efield__label { font-size: 0.82rem; font-weight: 700; text-transform: uppercase; color: #1f2937; letter-spacing: 0.04em; }
+.efield__label--mini { font-size: 0.82rem; color: #475569; margin-left: 0.25rem; }
 
-.efield__quick { display: inline-flex; gap: 0.35rem; flex-wrap: wrap; }
+.efield__controls { display: flex; gap: 0.55rem; align-items: center; flex-wrap: wrap; }
+
+.efield__quick { display: inline-flex; gap: 0.4rem; flex-wrap: wrap; }
 .efield__quick-btn {
-  border: 1px solid rgba(249,115,22,0.35); background: rgba(255,255,255,0.9);
-  padding: 0.45rem 0.8rem; border-radius: 12px; cursor: pointer;
-  transition: transform .15s ease, box-shadow .15s ease, border-color .2s ease;
+  border: 1px solid #cbd5e1;
+  background: #f8fafc;
+  padding: 0.45rem 0.9rem;
+  border-radius: 0.75rem;
+  cursor: pointer;
+  font-weight: 600;
+  color: #0f172a;
+  transition: transform 0.12s ease, box-shadow 0.15s ease, border-color 0.2s ease, background 0.2s ease;
 }
-.efield__quick-btn:hover { transform: translateY(-1px); box-shadow: 0 12px 22px rgba(249,115,22,0.2); }
+
+.efield__quick-btn:hover,
+.efield__quick-btn:focus-visible {
+  transform: translateY(-1px);
+  box-shadow: 0 10px 20px rgba(15, 23, 42, 0.08);
+  border-color: #94a3b8;
+  outline: none;
+}
+
+.efield__quick-btn:active { transform: translateY(0); }
+
+.efield__quick-btn.active {
+  background: #1d4ed8;
+  color: #ffffff;
+  border-color: #1d4ed8;
+  box-shadow: 0 12px 22px rgba(37, 99, 235, 0.2);
+}
 
 .efield__select {
-  border-radius: 12px; border: 1px solid rgba(249,115,22,0.35);
-  background: rgba(255,255,255,0.9);
-  padding: 0.55rem 0.75rem; font-size: 0.95rem; color: #0f172a;
+  border-radius: 0.75rem;
+  border: 1px solid #cbd5e1;
+  background: #f8fafc;
+  padding: 0.55rem 0.75rem;
+  font-size: 0.95rem;
+  color: #0f172a;
   transition: box-shadow 0.2s ease, border-color 0.2s ease;
 }
+
 .efield__select:focus-visible {
-  outline: none; border-color: #f97316; box-shadow: 0 0 0 3px rgba(249,115,22,0.25);
+  outline: none;
+  border-color: #2563eb;
+  box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.2);
 }
 
 .efield__apply {
-  border: none; border-radius: 12px; font-weight: 600; padding: 0.6rem 1.1rem; cursor: pointer;
-  background: #f97316; color: #ffffff; box-shadow: 0 10px 20px rgba(249,115,22,0.25);
-  transition: transform .15s ease, box-shadow .15s ease;
+  border: 1px solid #2563eb;
+  border-radius: 0.75rem;
+  font-weight: 700;
+  padding: 0.6rem 1.1rem;
+  cursor: pointer;
+  background: #1d4ed8;
+  color: #ffffff;
+  box-shadow: 0 12px 24px rgba(37, 99, 235, 0.2);
+  transition: transform 0.12s ease, box-shadow 0.12s ease, background 0.2s ease, border-color 0.2s ease;
 }
-.efield__apply:hover { transform: translateY(-1px); box-shadow: 0 14px 24px rgba(249,115,22,0.35); }
 
-.efield__body { padding: 0 2.5rem 2.25rem; display: flex; flex-direction: column; gap: 1rem; }
-.efield__chart-wrapper {
-  position: relative; border-radius: 18px; overflow: hidden;
-  border: 1px solid rgba(15,23,42,0.08); background: #ffffff;
+.efield__apply:hover,
+.efield__apply:focus-visible {
+  transform: translateY(-1px);
+  box-shadow: 0 14px 26px rgba(37, 99, 235, 0.24);
+  outline: none;
 }
-.efield__chart { width: 100%; }
+
+.efield__apply:active { transform: translateY(0); }
+
+.efield__body { padding: 0; display: flex; flex-direction: column; gap: 1rem; }
+
+.efield__chart-wrapper {
+  position: relative;
+  border-radius: 0.85rem;
+  overflow: hidden;
+  border: 1px solid #e2e8f0;
+  background: #f8fafc;
+  padding: 0.4rem;
+}
+.efield__chart { width: 100%; background: #ffffff; border-radius: 0.65rem; }
 
 .efield__error { text-align: center; color: #b91c1c; font-size: 0.95rem; font-weight: 500; }
 
 @media (max-width: 768px) {
-  .efield { padding: 1rem; }
-  .efield__card { border-radius: 20px; }
-  .efield__header { padding: 1.5rem 1.75rem 1.25rem; }
-  .efield__body { padding: 0 1.75rem 1.75rem; }
+  .efield__card { padding: 1.1rem 1.15rem 1.25rem; }
+  .efield__title { font-size: 1.55rem; }
   .efield__filters { flex-direction: column; align-items: stretch; }
   .efield__field, .efield__summary { width: 100%; }
-}
-@media (max-width: 520px) {
-  .efield__card { gap: 1.25rem; }
-  .efield__title { font-size: 1.65rem; }
 }
 </style>

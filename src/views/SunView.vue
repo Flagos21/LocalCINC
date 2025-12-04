@@ -7,8 +7,10 @@
       </div>
     </header>
 
-    <div class="sun__viewer">
-      <SunViewer />
+    <div class="sun__card">
+      <div class="sun__surface">
+        <SunViewer />
+      </div>
     </div>
   </section>
 </template>
@@ -21,32 +23,40 @@ import SunViewer from '@/components/SunViewer.vue'
 .sun {
   display: flex;
   flex-direction: column;
-  gap: 1.5rem;
+  gap: 1.35rem;
   flex: 1;
   min-height: 0;
-  width: min(100%, 68rem);
+  width: min(100%, 72rem);
   margin: 0 auto;
 }
 
 .sun__header h2 {
   font-size: 1.75rem;
   font-weight: 600;
-  color: #1f2933;
+  color: #0f172a;
 }
 
 .sun__header p {
-  color: #52606d;
-  margin-top: 0.25rem;
+  color: #475569;
+  margin-top: 0.3rem;
+  max-width: 48ch;
 }
 
-.sun__viewer {
-  flex: 1;
-  min-height: 0;
-  padding: 1.25rem;
+.sun__card {
   background: #ffffff;
+  border-radius: 0.85rem;
+  border: 1px solid #e2e8f0;
+  box-shadow: 0 10px 22px rgba(15, 23, 42, 0.08);
+  padding: 1.1rem;
+}
+
+.sun__surface {
   border-radius: 0.75rem;
-  box-shadow: 0 1px 2px rgba(15, 23, 42, 0.08), 0 4px 12px rgba(15, 23, 42, 0.06);
-  display: flex;
-  justify-content: center;
+  border: 1px solid #e2e8f0;
+  background: #f8fafc;
+  padding: 0.5rem;
+  display: grid;
+  place-items: center;
+  min-height: clamp(22rem, 50vh, 34rem);
 }
 </style>
