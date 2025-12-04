@@ -1,6 +1,7 @@
 import dayjs from '@/utils/dayjs'
 
 const DEFAULT_BUCKET_MS = 1000
+const DEFAULT_ROUNDING_DECIMALS = 3
 
 function computeMedian(values) {
   if (!Array.isArray(values) || values.length === 0) {
@@ -24,17 +25,23 @@ function computeMedian(values) {
   return sorted[mid]
 }
 
-function computeMode(values) {
+function computeMode(values, roundingDecimals = DEFAULT_ROUNDING_DECIMALS) {
   if (!Array.isArray(values) || values.length === 0) {
     return null
   }
+
+  const decimals = Number.isInteger(roundingDecimals) && roundingDecimals >= 0
+    ? roundingDecimals
+    : DEFAULT_ROUNDING_DECIMALS
 
   const counts = new Map()
   for (const value of values) {
     if (!Number.isFinite(value)) {
       continue
     }
-    counts.set(value, (counts.get(value) ?? 0) + 1)
+
+    const rounded = Number(value.toFixed(decimals))
+    counts.set(rounded, (counts.get(rounded) ?? 0) + 1)
   }
 
   if (!counts.size) {
@@ -78,7 +85,8 @@ export function buildDailyMedianBaseline({
   referenceTimestamps = [],
   referenceValues = [],
   targetTimestamps = [],
-  bucketSizeMs = DEFAULT_BUCKET_MS
+  bucketSizeMs = DEFAULT_BUCKET_MS,
+  roundingDecimals = DEFAULT_ROUNDING_DECIMALS
 } = {}) {
   if (!Array.isArray(referenceTimestamps) || !Array.isArray(referenceValues) || !Array.isArray(targetTimestamps)) {
     return []
@@ -111,11 +119,14 @@ export function buildDailyMedianBaseline({
     allValues.push(value)
   }
 
-  const fallbackMode = computeMode(allValues) ?? computeMedian(allValues)
+  const fallbackMode = computeMode(allValues, roundingDecimals) ?? computeMedian(allValues)
   const modeByBucket = new Map()
 
   for (const [key, bucket] of valuesByBucket.entries()) {
-    modeByBucket.set(key, computeMode(bucket) ?? computeMedian(bucket))
+    modeByBucket.set(
+      key,
+      computeMode(bucket, roundingDecimals) ?? computeMedian(bucket)
+    )
   }
 
   const sortedEntries = Array.from(modeByBucket.entries())
