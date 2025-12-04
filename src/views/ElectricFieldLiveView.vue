@@ -5,7 +5,6 @@
 <script setup>
 import { computed } from 'vue'
 import VueApexCharts from 'vue3-apexcharts'
-import { useBaselineSeries } from '@/composables/useBaselineSeries'
 import { useEfmLive } from '@/composables/useEfmLive'
 import { durationStringToMs, injectNullGaps } from '@/utils/timeSeriesGaps'
 
@@ -25,7 +24,7 @@ const {
   points,
   error,
   range,   // '1h' | '6h' | '24h' | 'today' | 'since:<dur>'
-  every: agg, refreshMs, station,
+  every: agg, refreshMs,
   refresh
 } = useEfmLive({
   station: props.station,
@@ -33,8 +32,6 @@ const {
   every:   props.every,
   refreshMs: props.refreshMs
 })
-
-const BASELINE_NAME = 'Mediana últimos 7 días'
 
 const livePoints = computed(() => {
   const rawPoints = points.value
@@ -56,57 +53,15 @@ const livePoints = computed(() => {
   return injectNullGaps(rawPoints, stepMs)
 })
 
-const targetTimestamps = computed(() => {
-  const stepMs = durationStringToMs(agg.value)
-  const rawRange = String(range.value ?? '').replace(/^since:/, '')
-  const windowMs = durationStringToMs(rawRange)
-  const liveTimestamps = livePoints.value.map(([ts]) => ts).filter((ts) => Number.isFinite(ts))
-
-  if (!Number.isFinite(stepMs) || stepMs <= 0) {
-    return liveTimestamps
-  }
-
-  const now = Date.now()
-  const end = liveTimestamps.length ? Math.max(liveTimestamps[liveTimestamps.length - 1], now) : now
-  const start = Number.isFinite(windowMs) && windowMs > 0 ? end - windowMs : (liveTimestamps[0] ?? end)
-
-  const timeline = new Set(liveTimestamps)
-
-  for (let ts = end; ts >= start; ts -= stepMs) {
-    timeline.add(Math.round(ts))
-  }
-
-  return Array.from(timeline).sort((a, b) => a - b)
-})
-
-const { baselineSeries } = useBaselineSeries({
-  station,
-  every: agg,
-  endpoint: '/api/electric-field/series',
-  targetTimestamps,
-  bucketSizeMs: computed(() => durationStringToMs(agg.value))
-})
-
-const baselinePoints = computed(() => baselineSeries.value)
-
 const chartSeries = computed(() => {
-  if (!livePoints.value.length && !baselinePoints.value.length) {
+  if (!livePoints.value.length) {
     return []
   }
 
-  const hasBaseline = baselinePoints.value.some(([, value]) => Number.isFinite(value))
-
-  return hasBaseline
-    ? [
-        { name: BASELINE_NAME, data: baselinePoints.value },
-        { name: 'E_z', data: livePoints.value }
-      ]
-    : [
-        { name: 'E_z', data: livePoints.value }
-      ]
+  return [
+    { name: 'E_z', data: livePoints.value }
+  ]
 })
-
-const hasBaselineSeries = computed(() => chartSeries.value.some((series) => series?.name === BASELINE_NAME))
 
 // Opciones Apex
 const chartOptions = computed(() => ({
@@ -122,11 +77,11 @@ const chartOptions = computed(() => ({
     foreColor: '#0f172a',
     zoom: { enabled: true, type: 'x' }
   },
-  colors: hasBaselineSeries.value ? ['#d1d5db', '#f97316'] : ['#f97316'],
+  colors: ['#f97316'],
   stroke: {
-    width: hasBaselineSeries.value ? [2, 2] : 2,
+    width: 2,
     curve: 'straight',
-    dashArray: hasBaselineSeries.value ? [0, 0] : 0
+    dashArray: 0
   },
   markers: { size: 0, strokeWidth: 2, hover: { sizeOffset: 3 } },
   xaxis: { type: 'datetime', labels: { datetimeUTC: true }, axisBorder: { color: '#cbd5f5' }, axisTicks: { color: '#cbd5f5' } },
@@ -147,7 +102,7 @@ const chartOptions = computed(() => ({
     x: { format: 'yyyy-MM-dd HH:mm:ss' },
     y: { formatter: (v) => (Number.isFinite(v) ? `${v.toFixed(2)} kV/m` : '—') }
   },
-  legend: { show: hasBaselineSeries.value },
+  legend: { show: false },
   noData: { text: 'Cargando campo eléctrico…', style: { color: '#64748b', fontSize: '14px' } }
 }))
 

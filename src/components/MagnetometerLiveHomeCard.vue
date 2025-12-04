@@ -1,9 +1,8 @@
 <script setup>
-import { ref, computed } from 'vue';
+import { ref, computed, watch } from 'vue';
 import VueApexCharts from 'vue3-apexcharts';
 import dayjs from '@/utils/dayjs';
 import { useMagnetometerLive } from '@/composables/useMagnetometerLive';
-import { buildDailyMedianBaseline } from '@/utils/timeSeriesBaseline';
 import { formatUtcDateTime } from '@/utils/formatUtcDate';
 
 const presets = [
@@ -18,10 +17,7 @@ const {
   points,
   error,
   isFetching,
-  range,
-  every,
-  refreshMs,
-  station
+  range
 } = useMagnetometerLive({
   station: 'chi',
   range: '1d',
@@ -34,13 +30,11 @@ const visiblePoints = ref(0);
 const dataExtent = ref(null);
 const xDomain = ref({ min: null, max: null });
 
-const BASELINE_NAME = 'Mediana últimos 7 días';
-const BASELINE_COLOR = '#d1d5db';
 const LINE_COLOR = '#2563eb';
 
 // Normalizamos puntos [{t, value}] → [[ts, val], ...]
 const livePoints = computed(() => {
-  const raw = (points.value || [])
+  return (points.value || [])
     .map((p) => {
       const ts = Number(p?.t ?? p?.time);
       const val = Number(p?.value);
@@ -49,10 +43,12 @@ const livePoints = computed(() => {
     })
     .filter((entry) => entry !== null)
     .sort((a, b) => a[0] - b[0]);
+});
 
-  if (raw.length) {
-    const start = dayjs(raw[0][0]);
-    const end = dayjs(raw[raw.length - 1][0]);
+watch(livePoints, (value) => {
+  if (value.length) {
+    const start = dayjs(value[0][0]);
+    const end = dayjs(value[value.length - 1][0]);
     dataExtent.value = {
       start: start.toISOString(),
       end: end.toISOString()
@@ -61,13 +57,12 @@ const livePoints = computed(() => {
     dataExtent.value = null;
   }
 
-  visiblePoints.value = raw.length;
+  visiblePoints.value = value.length;
 
-  // Dominio X con algo de padding
   let xRange;
-  if (raw.length) {
-    const start = dayjs(raw[0][0]);
-    const end = dayjs(raw[raw.length - 1][0]);
+  if (value.length) {
+    const start = dayjs(value[0][0]);
+    const end = dayjs(value[value.length - 1][0]);
     const hasSpan = end.diff(start) > 0;
     const paddedStart = hasSpan ? start : start.subtract(6, 'hour');
     const paddedEnd = hasSpan ? end : end.add(6, 'hour');
@@ -81,45 +76,15 @@ const livePoints = computed(() => {
     min: Number.isFinite(xRange[0]?.valueOf?.()) ? xRange[0].valueOf() : null,
     max: Number.isFinite(xRange[1]?.valueOf?.()) ? xRange[1].valueOf() : null
   };
-
-  return raw;
-});
-
-// Baseline aproximada con los mismos datos como referencia
-const baselinePoints = computed(() => {
-  if (!livePoints.value.length) return [];
-  const timestamps = livePoints.value.map(([ts]) => ts);
-  const values = livePoints.value.map(([, v]) => v);
-
-  return buildDailyMedianBaseline({
-    referenceTimestamps: timestamps,
-    referenceValues: values,
-    targetTimestamps: timestamps
-  });
-});
+}, { immediate: true });
 
 const chartSeries = computed(() => {
-  if (!livePoints.value.length && !baselinePoints.value.length) return [];
+  if (!livePoints.value.length) return [];
 
-  const baselineHasData = baselinePoints.value.some(([, v]) =>
-    Number.isFinite(v)
-  );
-
-  return baselineHasData
-    ? [
-        { name: BASELINE_NAME, data: baselinePoints.value },
-        { name: 'h', data: livePoints.value }
-      ]
-    : [{ name: 'h', data: livePoints.value }];
+  return [{ name: 'h', data: livePoints.value }];
 });
 
-const hasBaselineSeries = computed(() =>
-  chartSeries.value.some((s) => s?.name === BASELINE_NAME)
-);
-
-const chartColors = computed(() =>
-  hasBaselineSeries.value ? [BASELINE_COLOR, LINE_COLOR] : [LINE_COLOR]
-);
+const chartColors = computed(() => [LINE_COLOR]);
 
 const hasVisibleData = computed(() => visiblePoints.value > 0);
 
@@ -160,7 +125,6 @@ const lastTimeLabel = computed(() => {
 });
 
 const chartOptions = computed(() => {
-  const strokeWidth = hasBaselineSeries.value ? [2, 2] : 2;
   const noDataText = error.value
     ? `Error al cargar: ${error.value}`
     : isFetching.value
@@ -176,7 +140,7 @@ const chartOptions = computed(() => {
       background: 'transparent',
       foreColor: '#0f172a'
     },
-    stroke: { width: strokeWidth, curve: 'straight' },
+    stroke: { width: 2, curve: 'straight' },
     dataLabels: { enabled: false },
     markers: {
       size: 0,
