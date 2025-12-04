@@ -2,9 +2,8 @@
 import { computed } from 'vue'
 import VueApexCharts from 'vue3-apexcharts'
 
+import { useBaselineSeries } from '@/composables/useBaselineSeries'
 import { useEfmLive } from '@/composables/useEfmLive'
-import { useMagnetometerSeries } from '@/composables/useMagnetometerSeries'
-import { buildDailyMedianBaseline } from '@/utils/timeSeriesBaseline'
 import { durationStringToMs, injectNullGaps } from '@/utils/timeSeriesGaps'
 
 const MIN_AXIS_MAGNITUDE = 0.1
@@ -42,19 +41,6 @@ const {
   refreshMs: 5000
 })
 
-const {
-  labels: baselineLabels,
-  series: baselineValues
-} = useMagnetometerSeries({
-  range: '7d',
-  every: '',
-  unit: '',
-  station,
-  from: '',
-  to: '',
-  endpoint: '/api/electric-field/series'
-})
-
 const livePoints = computed(() => {
   const rawPoints = points.value
     .map((point) => {
@@ -76,13 +62,16 @@ const livePoints = computed(() => {
 })
 
 const baselinePoints = computed(() =>
-  buildDailyMedianBaseline({
-    referenceTimestamps: baselineLabels.value,
-    referenceValues: baselineValues.value,
-    targetTimestamps: livePoints.value.map(([timestamp]) => timestamp),
-    bucketSizeMs: durationStringToMs(aggregation.value)
-  })
+  baselineSeries.value
 )
+
+const { baselineSeries } = useBaselineSeries({
+  station,
+  every: aggregation,
+  endpoint: '/api/electric-field/series',
+  targetTimestamps: computed(() => livePoints.value.map(([timestamp]) => timestamp)),
+  bucketSizeMs: computed(() => durationStringToMs(aggregation.value))
+})
 
 const chartSeries = computed(() => {
   if (!livePoints.value.length && !baselinePoints.value.length) {

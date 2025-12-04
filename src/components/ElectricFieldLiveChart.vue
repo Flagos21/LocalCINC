@@ -7,9 +7,8 @@
 <script setup>
 import { computed } from 'vue'
 import VueApexCharts from 'vue3-apexcharts'
+import { useBaselineSeries } from '@/composables/useBaselineSeries'
 import { useEfmLive } from '@/composables/useEfmLive'
-import { useMagnetometerSeries } from '@/composables/useMagnetometerSeries'
-import { buildDailyMedianBaseline } from '@/utils/timeSeriesBaseline'
 import { durationStringToMs, injectNullGaps } from '@/utils/timeSeriesGaps'
 
 // Props simples para configurarlo desde fuera
@@ -38,19 +37,6 @@ const {
 })
 
 const BASELINE_NAME = 'Mediana últimos 7 días'
-
-const {
-  labels: baselineLabels,
-  series: baselineValues
-} = useMagnetometerSeries({
-  range: '7d',
-  every: '',
-  unit: '',
-  station,
-  from: '',
-  to: '',
-  endpoint: '/api/electric-field/series'
-})
 
 const livePoints = computed(() => {
   const rawPoints = points.value
@@ -95,13 +81,16 @@ const targetTimestamps = computed(() => {
   return Array.from(timeline).sort((a, b) => a - b)
 })
 
+const { baselineSeries } = useBaselineSeries({
+  station,
+  every: aggregation,
+  endpoint: '/api/electric-field/series',
+  targetTimestamps,
+  bucketSizeMs: computed(() => durationStringToMs(aggregation.value ?? props.every))
+})
+
 const baselinePoints = computed(() =>
-  buildDailyMedianBaseline({
-    referenceTimestamps: baselineLabels.value,
-    referenceValues: baselineValues.value,
-    targetTimestamps: targetTimestamps.value,
-    bucketSizeMs: durationStringToMs(aggregation.value ?? props.every)
-  })
+  baselineSeries.value
 )
 
 const chartSeries = computed(() => {

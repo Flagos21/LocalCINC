@@ -4,7 +4,8 @@ import VueApexCharts from 'vue3-apexcharts'
 
 import dayjs from '@/utils/dayjs'
 import { useMagnetometerSeries } from '@/composables/useMagnetometerSeries'
-import { buildDailyMedianBaseline } from '@/utils/timeSeriesBaseline'
+import { buildDailyMedianBaseline } from '@/utils/baseline'
+import { durationStringToMs } from '@/utils/timeSeriesGaps'
 
 const FALLBACK_AXIS_MAGNITUDE = 1
 const MIN_AXIS_MAGNITUDE = 0.1
@@ -37,6 +38,22 @@ const {
   unit: ref(''),
   station: ref(''),
   endpoint: ref('/api/electric-field/series')
+})
+
+const baselineBucketSizeMs = computed(() => {
+  const bucketMeta = meta.value?.bucket
+  if (Number.isFinite(bucketMeta?.ms)) {
+    return bucketMeta.ms
+  }
+
+  if (typeof bucketMeta?.size === 'string') {
+    const parsed = durationStringToMs(bucketMeta.size)
+    if (Number.isFinite(parsed)) {
+      return parsed
+    }
+  }
+
+  return undefined
 })
 
 const baselineFrom = ref('')
@@ -264,6 +281,24 @@ function applyPreset(id, { anchorEnd } = {}) {
   setWindow({ start, end })
 }
 
+function inferBucketSizeMs(timestamps = []) {
+  const sorted = timestamps
+    .map((value) => Number(value))
+    .filter((value) => Number.isFinite(value))
+    .sort((a, b) => a - b)
+
+  let minDiff = Infinity
+
+  for (let index = 1; index < sorted.length; index += 1) {
+    const diff = sorted[index] - sorted[index - 1]
+    if (diff > 0 && diff < minDiff) {
+      minDiff = diff
+    }
+  }
+
+  return Number.isFinite(minDiff) && minDiff < Infinity ? minDiff : undefined
+}
+
 function draw() {
   const rawPoints = (labels.value || [])
     .map((t, i) => ({ t, v: (series.value || [])[i] }))
@@ -295,10 +330,13 @@ function draw() {
 
   visiblePoints.value = chartPoints.length
 
+  const bucketSize = baselineBucketSizeMs.value ?? inferBucketSizeMs(chartPoints.map(([timestamp]) => timestamp))
+
   const baselinePoints = buildDailyMedianBaseline({
     referenceTimestamps: baselineLabels.value,
     referenceValues: baselineSeries.value,
-    targetTimestamps: chartPoints.map(([timestamp]) => timestamp)
+    targetTimestamps: chartPoints.map(([timestamp]) => timestamp),
+    bucketSizeMs: bucketSize
   })
 
   const baselineValues = baselinePoints
